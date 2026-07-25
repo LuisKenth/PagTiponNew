@@ -24,3 +24,260 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* =========================================
+   PRINT REPORT
+   ========================================= */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  :root {
+    --background: #ffffff;
+    --foreground: #000000;
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /*
+   * Hide everything in the application first.
+   * This also removes the Provincial sidebar
+   * from the printed report.
+   */
+  body * {
+    visibility: hidden;
+  }
+
+  /*
+   * Show only the report and everything
+   * inside the report.
+   */
+  #printable-report,
+  #printable-report * {
+    visibility: visible;
+  }
+
+  /*
+   * Move the printable report to the
+   * beginning of the printed page.
+   */
+  #printable-report {
+    position: absolute;
+    top: 0;
+    left: 0;
+
+    width: 100% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /*
+   * Remove screen shadows when printing.
+   */
+  #printable-report .shadow-sm,
+  #printable-report .shadow,
+  #printable-report .shadow-md,
+  #printable-report .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  /*
+   * Keep important background colors.
+   */
+  #printable-report,
+  #printable-report * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /*
+   * Prevent horizontal scrolling containers
+   * from cutting content in the printed page.
+   */
+  #printable-report .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /*
+   * Tables
+   */
+  #printable-report table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9px !important;
+  }
+
+  #printable-report thead {
+    display: table-header-group;
+  }
+
+  #printable-report tfoot {
+    display: table-footer-group;
+  }
+
+  #printable-report tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #printable-report th,
+  #printable-report td {
+    padding: 6px !important;
+  }
+
+  /*
+   * Charts / SVG
+   */
+  #printable-report svg {
+    max-width: 100% !important;
+    height: auto;
+  }
+
+  /*
+   * Images
+   */
+  #printable-report img {
+    max-width: 100% !important;
+  }
+
+  /*
+   * Avoid splitting smaller cards between pages.
+   */
+  #printable-report .rounded-xl {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /*
+   * Links should look like normal text
+   * when printed.
+   */
+  #printable-report a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  /*
+   * Anything explicitly marked print:hidden
+   * should never appear.
+   */
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+/* =========================================
+   COMPACT PRINT LAYOUT
+   ========================================= */
+
+#printable-report {
+  font-size: 11px !important;
+}
+
+/* Reduce vertical spacing between report sections */
+#printable-report.space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px !important;
+}
+
+/* Compact report cards */
+#printable-report .p-6 {
+  padding: 14px !important;
+}
+
+#printable-report .p-5 {
+  padding: 12px !important;
+}
+
+#printable-report .p-4 {
+  padding: 10px !important;
+}
+
+/* Smaller headings */
+#printable-report h1 {
+  font-size: 20px !important;
+}
+
+#printable-report h2 {
+  font-size: 15px !important;
+}
+
+#printable-report h3 {
+  font-size: 13px !important;
+}
+
+/* Smaller text */
+#printable-report .text-3xl {
+  font-size: 22px !important;
+}
+
+#printable-report .text-2xl {
+  font-size: 18px !important;
+}
+
+#printable-report .text-xl {
+  font-size: 16px !important;
+}
+
+/* Reduce gaps */
+#printable-report .gap-6 {
+  gap: 10px !important;
+}
+
+#printable-report .gap-5 {
+  gap: 10px !important;
+}
+
+#printable-report .gap-4 {
+  gap: 8px !important;
+}
+
+/* Let large report sections continue onto the next page */
+#printable-report > div {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+/* But don't split individual cards */
+#printable-report .rounded-xl {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* Prevent headings from being stranded at bottom of page */
+#printable-report h1,
+#printable-report h2,
+#printable-report h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+/* Compact tables */
+#printable-report table {
+  font-size: 8px !important;
+}
+
+#printable-report th,
+#printable-report td {
+  padding: 4px !important;
+}
+
+/* Reduce chart size */
+#printable-report svg {
+  max-height: 260px !important;
+}
