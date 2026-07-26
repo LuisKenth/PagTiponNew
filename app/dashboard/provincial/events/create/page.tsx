@@ -2,8 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
 import { MUNICIPALITIES } from "@/lib/municipalities";
+
+import CreateEventHeader from "./components/CreateEventHeader";
+import EventDetailsSection from "./components/EventDetailsSection";
+import EventScheduleSection from "./components/EventScheduleSection";
+import MemoUploadSection from "./components/MemoUploadSection";
+import MunicipalitySelector from "./components/MunicipalitySelector";
+import CreateEventActions from "./components/CreateEventActions";
+
+type SubmitAction = "draft" | "published" | null;
+
+type UploadedMemo = {
+  file_name: string;
+  file_url: string;
+  file_path: string;
+  file_size: number;
+  file_type: string | null;
+};
 
 export default function CreateProvincialEventPage() {
   const router = useRouter();
@@ -12,11 +30,14 @@ export default function CreateProvincialEventPage() {
   const [description, setDescription] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
-  const [memoFile, setMemoFile] = useState<File | null>(null);
-  const [selectedMunicipalities, setSelectedMunicipalities] = useState<
-    string[]
-  >([]);
-  const [loading, setLoading] = useState(false);
+
+  const [memoFiles, setMemoFiles] = useState<File[]>([]);
+
+  const [selectedMunicipalities, setSelectedMunicipalities] =
+    useState<string[]>([]);
+
+  const [submitAction, setSubmitAction] =
+    useState<SubmitAction>(null);
 
   const toggleMunicipality = (municipality: string) => {
     setSelectedMunicipalities((prev) =>
@@ -27,137 +48,329 @@ export default function CreateProvincialEventPage() {
   };
 
   const toggleAllMunicipalities = () => {
-    if (selectedMunicipalities.length === MUNICIPALITIES.length) {
+    if (
+      selectedMunicipalities.length === MUNICIPALITIES.length
+    ) {
       setSelectedMunicipalities([]);
     } else {
       setSelectedMunicipalities(MUNICIPALITIES);
     }
   };
 
-  const uploadMemo = async (userId: string) => {
-    if (!memoFile) {
-      return {
-        memoUrl: null,
-        memoFilename: null,
-      };
-    }
+  /*
+   * Upload all memo files after the event has been created.
+   */
+  const uploadMemos = async (
+    userId: string,
+    eventId: string
+  ): Promise<UploadedMemo[]> => {
+    const uploadedMemos: UploadedMemo[] = [];
 
-    const safeFileName = memoFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const filePath = `${userId}/${Date.now()}-${safeFileName}`;
+    for (let index = 0; index < memoFiles.length; index++) {
+      const file = memoFiles[index];
 
-    const { error: uploadError } = await supabase.storage
-      .from("official-memos")
-      .upload(filePath, memoFile, {
-        cacheControl: "3600",
-        upsert: true,
+      const safeFileName = file.name.replace(
+        /[^a-zA-Z0-9.-]/g,
+        "_"
+      );
+
+      const filePath =
+        `${userId}/${eventId}/` +
+        `${Date.now()}-${index}-${safeFileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("official-memos")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("official-memos")
+        .getPublicUrl(filePath);
+
+      uploadedMemos.push({
+        file_name: file.name,
+        file_url: publicUrlData.publicUrl,
+        file_path: filePath,
+        file_size: file.size,
+        file_type: file.type || null,
       });
-
-    if (uploadError) {
-      throw uploadError;
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from("official-memos")
-      .getPublicUrl(filePath);
-
-    return {
-      memoUrl: publicUrlData.publicUrl,
-      memoFilename: memoFile.name,
-    };
+    return uploadedMemos;
   };
 
-  const handleCreateEvent = async (statusToSave: "draft" | "published") => {
+  const convertToISO = (value: string, fieldName: string) => {
+    if (!value) {
+      return null;
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      throw new Error(`Invalid ${fieldName}. Please select the date and time again.`);
+    }
+
+    return date.toISOString();
+  };
+
+  const handleCreateEvent = async (
+    statusToSave: "draft" | "published"
+  ) => {
+    /*
+     * Basic validation
+     */
     if (!title.trim()) {
       alert("Please enter event title.");
       return;
     }
 
+    /*
+     * Additional requirements before publishing.
+     */
     if (statusToSave === "published") {
       if (!description.trim()) {
-        alert("Please enter event description before publishing.");
+        alert(
+          "Please enter event description before publishing."
+        );
         return;
       }
 
       if (!startAt) {
-        alert("Please select start date and time before publishing.");
+        alert(
+          "Please select start date and time before publishing."
+        );
         return;
       }
 
       if (!endAt) {
-        alert("Please select end date and time before publishing.");
+        alert(
+          "Please select end date and time before publishing."
+        );
         return;
       }
 
-      if (new Date(endAt) <= new Date(startAt)) {
-        alert("End date and time must be after start date and time.");
+      const startDate = new Date(startAt);
+      const endDate = new Date(endAt);
+      const currentDate = new Date();
+
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        alert("Please select a valid event schedule.");
         return;
       }
 
-      if (!memoFile) {
-        alert("Please upload official memo before publishing.");
+      if (startDate <= currentDate) {
+        alert(
+          "Event start date and time must be later than the current time."
+        );
+        return;
+      }
+
+      if (endDate <= startDate) {
+        alert(
+          "End date and time must be after start date and time."
+        );
+        return;
+      }
+
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        alert("Please select valid start and end date/time.");
+        return;
+      }
+
+      if (endDate <= startDate) {
+        alert(
+          "End date and time must be after start date and time."
+        );
+        return;
+      }
+
+      if (memoFiles.length === 0) {
+        alert(
+          "Please upload at least one official memo before publishing."
+        );
         return;
       }
 
       if (selectedMunicipalities.length === 0) {
-        alert("Please select at least one municipality before publishing.");
+        alert(
+          "Please select at least one municipality before publishing."
+        );
         return;
       }
     }
 
-    if (startAt && endAt && new Date(endAt) <= new Date(startAt)) {
-      alert("End date and time must be after start date and time.");
-      return;
+    /*
+     * Also validate schedule when saving a draft if both
+     * dates were entered.
+     */
+    if (startAt && endAt) {
+      const startDate = new Date(startAt);
+      const endDate = new Date(endAt);
+
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        alert("Please select valid start and end date/time.");
+        return;
+      }
+
+      if (endDate <= startDate) {
+        alert(
+          "End date and time must be after start date and time."
+        );
+        return;
+      }
     }
 
-    setLoading(true);
+    setSubmitAction(statusToSave);
 
     try {
+      /*
+       * Get logged-in provincial user.
+       */
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        throw new Error("User not found. Please login again.");
+        throw new Error(
+          "User not found. Please login again."
+        );
       }
 
-      const uploadedMemo = await uploadMemo(user.id);
+      /*
+       * STEP 1:
+       * Create the event first.
+       *
+       * Legacy memo_url and memo_filename are initially null.
+       * We will later store the first memo there so old pages
+       * that still use those columns continue working.
+       */
+      const { data: eventData, error: eventError } =
+        await supabase
+          .from("events")
+          .insert({
+            title: title.trim(),
+            description: description.trim() || null,
 
-      const { data: eventData, error: eventError } = await supabase
-        .from("events")
-        .insert({
-          title: title.trim(),
-          description: description.trim() || null,
-          start_at: startAt ? new Date(startAt).toISOString() : null,
-          end_at: endAt ? new Date(endAt).toISOString() : null,
-          memo_url: uploadedMemo.memoUrl,
-          memo_filename: uploadedMemo.memoFilename,
-          created_by: user.id,
-          status: statusToSave,
-        })
-        .select("id")
-        .single();
+            start_at: convertToISO(
+              startAt,
+              "start date and time"
+            ),
+
+            end_at: convertToISO(
+              endAt,
+              "end date and time"
+            ),
+
+            memo_url: null,
+            memo_filename: null,
+
+            created_by: user.id,
+            status: statusToSave,
+          })
+          .select("id")
+          .single();
 
       if (eventError) {
         throw eventError;
       }
 
-      if (selectedMunicipalities.length > 0) {
-        const municipalityRows = selectedMunicipalities.map((municipality) => ({
+      /*
+       * STEP 2:
+       * Upload all selected memo files.
+       */
+      if (memoFiles.length > 0) {
+        const uploadedMemos = await uploadMemos(
+          user.id,
+          eventData.id
+        );
+
+        /*
+         * STEP 3:
+         * Save every uploaded memo into event_memos.
+         */
+        const memoRows = uploadedMemos.map((memo) => ({
           event_id: eventData.id,
-          municipality,
-          municipal_status: "pending",
+          file_name: memo.file_name,
+          file_url: memo.file_url,
+          file_path: memo.file_path,
+          file_size: memo.file_size,
+          file_type: memo.file_type,
         }));
 
-        const { error: municipalityError } = await supabase
-          .from("event_municipalities")
-          .insert(municipalityRows);
+        const { error: memoInsertError } = await supabase
+          .from("event_memos")
+          .insert(memoRows);
+
+        if (memoInsertError) {
+          throw memoInsertError;
+        }
+
+        /*
+         * Temporary backward compatibility:
+         *
+         * Keep the FIRST memo inside events.memo_url and
+         * events.memo_filename because existing pages may
+         * still be using these old columns.
+         */
+        const firstMemo = uploadedMemos[0];
+
+        const { error: legacyMemoError } = await supabase
+          .from("events")
+          .update({
+            memo_url: firstMemo.file_url,
+            memo_filename: firstMemo.file_name,
+          })
+          .eq("id", eventData.id);
+
+        if (legacyMemoError) {
+          console.warn(
+            "Legacy memo fields were not updated:",
+            legacyMemoError.message
+          );
+        }
+      }
+
+      /*
+       * STEP 4:
+       * Create municipality assignments.
+       */
+      if (selectedMunicipalities.length > 0) {
+        const municipalityRows =
+          selectedMunicipalities.map((municipality) => ({
+            event_id: eventData.id,
+            municipality,
+            municipal_status: "pending",
+          }));
+
+        const { error: municipalityError } =
+          await supabase
+            .from("event_municipalities")
+            .insert(municipalityRows);
 
         if (municipalityError) {
           throw municipalityError;
         }
       }
 
+      /*
+       * Success
+       */
       alert(
         statusToSave === "draft"
           ? "Event saved as draft."
@@ -166,177 +379,79 @@ export default function CreateProvincialEventPage() {
 
       router.push("/dashboard/provincial/events");
       router.refresh();
-    } catch (error: any) {
-      console.error("Create event error:", error.message);
-      alert(error.message || "Failed to save event.");
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to save event.";
+
+      console.error("Create event error:", message);
+
+      alert(message);
     } finally {
-      setLoading(false);
+      setSubmitAction(null);
     }
   };
 
+  const goBackToEvents = () => {
+    router.push("/dashboard/provincial/events");
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">
-            Create New Provincial Event
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Save the event as draft or publish it when ready.
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-6xl space-y-5 pb-24">
+      <CreateEventHeader onBack={goBackToEvents} />
 
-        <form
-          onSubmit={(e) => e.preventDefault()}
-          className="space-y-6 rounded-2xl bg-white p-6 shadow-sm"
-        >
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Event Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter event title"
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900"
-            />
-          </div>
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="space-y-5"
+      >
+        <EventDetailsSection
+          title={title}
+          description={description}
+          onTitleChange={setTitle}
+          onDescriptionChange={setDescription}
+        />
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Event Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter event description"
-              rows={5}
-              className="w-full resize-none rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900"
-            />
-          </div>
+        <EventScheduleSection
+          startAt={startAt}
+          endAt={endAt}
+          onStartAtChange={setStartAt}
+          onEndAtChange={setEndAt}
+        />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Start Date and Time
-              </label>
-              <input
-                type="datetime-local"
-                value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900"
-              />
-            </div>
+        <MemoUploadSection
+          memoFiles={memoFiles}
+          onMemoFilesChange={setMemoFiles}
+        />
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                End Date and Time
-              </label>
-              <input
-                type="datetime-local"
-                value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900"
-              />
-            </div>
-          </div>
+        <MunicipalitySelector
+          municipalities={MUNICIPALITIES}
+          selectedMunicipalities={
+            selectedMunicipalities
+          }
+          onToggleMunicipality={
+            toggleMunicipality
+          }
+          onToggleAll={toggleAllMunicipalities}
+        />
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Upload Official Memo
-            </label>
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-              onChange={(e) => setMemoFile(e.target.files?.[0] || null)}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm"
-            />
-
-            {memoFile && (
-              <p className="mt-2 text-sm text-slate-500">
-                Selected file:{" "}
-                <span className="font-medium text-slate-700">
-                  {memoFile.name}
-                </span>
-              </p>
-            )}
-
-            <p className="mt-1 text-xs text-slate-500">
-              Required only when publishing. Draft events can be saved without a
-              memo.
-            </p>
-          </div>
-
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <label className="block text-sm font-medium text-slate-700">
-                Target Municipalities
-              </label>
-
-              <button
-                type="button"
-                onClick={toggleAllMunicipalities}
-                className="text-sm font-medium text-slate-900 hover:underline"
-              >
-                {selectedMunicipalities.length === MUNICIPALITIES.length
-                  ? "Unselect All"
-                  : "Select All"}
-              </button>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {MUNICIPALITIES.map((municipality) => (
-                <label
-                  key={municipality}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedMunicipalities.includes(municipality)}
-                    onChange={() => toggleMunicipality(municipality)}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-slate-700">{municipality}</span>
-                </label>
-              ))}
-            </div>
-
-            <p className="mt-3 text-sm text-slate-500">
-              Selected: {selectedMunicipalities.length} municipality
-              {selectedMunicipalities.length === 1 ? "" : "ies"}
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-5">
-            <button
-              type="button"
-              onClick={() => router.push("/dashboard/provincial/events")}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleCreateEvent("draft")}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Saving..." : "Save as Draft"}
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleCreateEvent("published")}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Publishing..." : "Publish Event"}
-            </button>
-          </div>
-        </form>
-      </div>
+        <CreateEventActions
+          submitAction={submitAction}
+          title={title}
+          description={description}
+          startAt={startAt}
+          endAt={endAt}
+          memoCount={memoFiles.length}
+          municipalityCount={selectedMunicipalities.length}
+          onCancel={goBackToEvents}
+          onSaveDraft={() =>
+            handleCreateEvent("draft")
+          }
+          onPublish={() =>
+            handleCreateEvent("published")
+          }
+        />
+      </form>
     </div>
   );
 }
