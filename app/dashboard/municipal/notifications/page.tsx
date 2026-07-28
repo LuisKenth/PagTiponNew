@@ -1,12 +1,12 @@
 "use client";
 
-import NotificationFilters from "./components/NotificationFilters";
-import NotificationList from "./components/NotificationList";
-import NotificationStats from "./components/NotificationStats";
-import NotificationsHeader from "./components/NotificationsHeader";
-import { useProvincialNotifications } from "./hooks/useProvincialNotifications";
+import MunicipalNotificationFilters from "./components/MunicipalNotificationFilters";
+import MunicipalNotificationList from "./components/MunicipalNotificationList";
+import MunicipalNotificationStats from "./components/MunicipalNotificationStats";
+import MunicipalNotificationsHeader from "./components/MunicipalNotificationsHeader";
+import { useMunicipalNotifications } from "./hooks/useMunicipalNotifications";
 
-export default function ProvincialNotificationsPage() {
+export default function MunicipalNotificationsPage() {
   const {
     notifications,
     filteredNotifications,
@@ -24,12 +24,12 @@ export default function ProvincialNotificationsPage() {
     markAllAsRead,
     deleteNotification,
     openNotification,
-  } = useProvincialNotifications();
+  } = useMunicipalNotifications();
 
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <NotificationsHeader
+        <MunicipalNotificationsHeader
           unreadCount={unreadCount}
           refreshing={refreshing}
           markingAll={markingAll}
@@ -37,20 +37,20 @@ export default function ProvincialNotificationsPage() {
           onMarkAllAsRead={markAllAsRead}
         />
 
-        <NotificationStats
+        <MunicipalNotificationStats
           totalCount={notifications.length}
           unreadCount={unreadCount}
         />
       </section>
 
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <NotificationFilters
+        <MunicipalNotificationFilters
           activeFilter={activeFilter}
           unreadCount={unreadCount}
           onFilterChange={setActiveFilter}
         />
 
-        <NotificationList
+        <MunicipalNotificationList
           notifications={filteredNotifications}
           loading={loading}
           error={error}

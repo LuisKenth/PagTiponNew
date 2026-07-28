@@ -343,6 +343,7 @@ export default function CreateProvincialEventPage() {
             event_id: eventData.id,
             municipality,
             municipal_status: "pending",
+            preparation_status: "pending",
           }));
 
         const { error: municipalityError } =

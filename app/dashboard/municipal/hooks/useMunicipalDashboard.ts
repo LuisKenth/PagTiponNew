@@ -256,7 +256,7 @@ export default function useMunicipalDashboard() {
     setLocalInstructions(item.local_instructions || "");
     setRegistrationOpen(
       currentStatus === "prepared" &&
-        item.registration_open === true
+      item.registration_open === true
     );
   }, []);
 
@@ -303,10 +303,18 @@ export default function useMunicipalDashboard() {
 
       const savedStatus = preparationStatus;
 
+      const databasePreparationStatus =
+        savedStatus === "preparing"
+          ? "in_progress"
+          : savedStatus === "prepared"
+            ? "ready"
+            : "pending";
+
       const { error } = await supabase
         .from("event_municipalities")
         .update({
           municipal_status: savedStatus,
+          preparation_status: databasePreparationStatus,
           local_instructions: trimmedInstructions || null,
           registration_open:
             savedStatus === "prepared"
@@ -316,6 +324,7 @@ export default function useMunicipalDashboard() {
             savedStatus === "prepared"
               ? user.id
               : null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", selectedEvent.id);
 

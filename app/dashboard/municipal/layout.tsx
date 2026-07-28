@@ -1,11 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { getDashboardPath, type UserRole } from "@/lib/routes";
 
-type VerificationStatus = "pending" | "approved" | "rejected";
+import { supabase } from "@/lib/supabase";
+import {
+  getDashboardPath,
+  type UserRole,
+} from "@/lib/routes";
+
+import MunicipalSidebar from "./components/MunicipalSidebar";
+
+type VerificationStatus =
+  | "pending"
+  | "approved"
+  | "rejected";
 
 type Profile = {
   role: UserRole;
@@ -19,101 +31,150 @@ export default function MunicipalDashboardLayout({
 }) {
   const router = useRouter();
 
-  const [checkingAccess, setCheckingAccess] = useState(true);
-  const [allowed, setAllowed] = useState(false);
+  const [checkingAccess, setCheckingAccess] =
+    useState(true);
+
+  const [allowed, setAllowed] =
+    useState(false);
 
   useEffect(() => {
-    const checkAccess = async () => {
+    let mounted = true;
+
+    async function checkAccess() {
       try {
-        // 1. Check logged-in user
         const {
           data: { user },
           error: userError,
         } = await supabase.auth.getUser();
 
         if (userError || !user) {
-          setAllowed(false);
+          if (mounted) {
+            setAllowed(false);
+          }
+
           router.replace("/login");
           return;
         }
 
-        // 2. Get trusted role/status from profiles
-        const { data: profile, error: profileError } = await supabase
+        const {
+          data: profile,
+          error: profileError,
+        } = await supabase
           .from("profiles")
-          .select("role, verification_status")
+          .select(
+            "role, verification_status",
+          )
           .eq("id", user.id)
           .maybeSingle<Profile>();
 
         if (profileError || !profile) {
           console.error(
             "Municipal access check error:",
-            profileError?.message
+            profileError?.message,
           );
 
           await supabase.auth.signOut();
 
-          setAllowed(false);
+          if (mounted) {
+            setAllowed(false);
+          }
+
           router.replace("/login");
           return;
         }
 
-        // 3. Block users with the wrong role
-        if (profile.role !== "municipal_admin") {
-          setAllowed(false);
+        if (
+          profile.role !== "municipal_admin"
+        ) {
+          if (mounted) {
+            setAllowed(false);
+          }
 
-          router.replace(getDashboardPath(profile.role));
+          router.replace(
+            getDashboardPath(profile.role),
+          );
+
           return;
         }
 
-        // 4. Block pending municipal admins
-        if (profile.verification_status === "pending") {
+        if (
+          profile.verification_status ===
+          "pending"
+        ) {
           await supabase.auth.signOut();
 
           alert(
-            "Your municipal admin account is still pending provincial approval."
+            "Your municipal admin account is still pending provincial approval.",
           );
 
-          setAllowed(false);
+          if (mounted) {
+            setAllowed(false);
+          }
+
           router.replace("/login");
           return;
         }
 
-        // 5. Block rejected municipal admins
-        if (profile.verification_status === "rejected") {
+        if (
+          profile.verification_status ===
+          "rejected"
+        ) {
           await supabase.auth.signOut();
 
           alert(
-            "Your municipal admin application has been rejected."
+            "Your municipal admin application has been rejected.",
           );
 
-          setAllowed(false);
+          if (mounted) {
+            setAllowed(false);
+          }
+
           router.replace("/login");
           return;
         }
 
-        // 6. Only approved Municipal Admin reaches here
-        if (profile.verification_status !== "approved") {
+        if (
+          profile.verification_status !==
+          "approved"
+        ) {
           await supabase.auth.signOut();
 
-          setAllowed(false);
+          if (mounted) {
+            setAllowed(false);
+          }
+
           router.replace("/login");
           return;
         }
 
-        setAllowed(true);
+        if (mounted) {
+          setAllowed(true);
+        }
       } catch (error) {
-        console.error("Municipal route protection error:", error);
+        console.error(
+          "Municipal route protection error:",
+          error,
+        );
 
         await supabase.auth.signOut();
 
-        setAllowed(false);
+        if (mounted) {
+          setAllowed(false);
+        }
+
         router.replace("/login");
       } finally {
-        setCheckingAccess(false);
+        if (mounted) {
+          setCheckingAccess(false);
+        }
       }
-    };
+    }
 
-    checkAccess();
+    void checkAccess();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   if (checkingAccess) {
@@ -132,5 +193,13 @@ export default function MunicipalDashboardLayout({
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-slate-100 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <MunicipalSidebar />
+
+      <main className="min-w-0 p-4 sm:p-6 lg:p-8">
+        {children}
+      </main>
+    </div>
+  );
 }

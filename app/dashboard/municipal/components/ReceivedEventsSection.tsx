@@ -1,3 +1,10 @@
+"use client";
+
+import {
+  useEffect,
+  useRef,
+} from "react";
+
 import type { ReceivedEvent } from "../types/municipalDashboard";
 import MunicipalDashboardLoading from "./MunicipalDashboardLoading";
 import ReceivedEventCard from "./ReceivedEventCard";
@@ -5,16 +12,46 @@ import ReceivedEventCard from "./ReceivedEventCard";
 type ReceivedEventsSectionProps = {
   events: ReceivedEvent[];
   loading: boolean;
+  highlightedEventId?: string | null;
   onPrepare: (item: ReceivedEvent) => void;
 };
 
 export default function ReceivedEventsSection({
   events,
   loading,
+  highlightedEventId = null,
   onPrepare,
 }: ReceivedEventsSectionProps) {
+  const eventCardRefs = useRef<
+    Record<string, HTMLDivElement | null>
+  >({});
+
+  useEffect(() => {
+    if (!highlightedEventId) {
+      return;
+    }
+
+    const highlightedCard =
+      eventCardRefs.current[highlightedEventId];
+
+    if (!highlightedCard) {
+      return;
+    }
+
+    const scrollTimer = window.setTimeout(() => {
+      highlightedCard.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 200);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+    };
+  }, [highlightedEventId]);
+
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm">
+    <section className="rounded-2xl bg-white p-6 shadow-sm">
       <h2 className="text-xl font-semibold text-slate-900">
         Received Provincial Events
       </h2>
@@ -34,15 +71,35 @@ export default function ReceivedEventsSection({
         </div>
       ) : (
         <div className="mt-4 space-y-4">
-          {events.map((item) => (
-            <ReceivedEventCard
-              key={item.id}
-              item={item}
-              onPrepare={onPrepare}
-            />
-          ))}
+          {events.map((item) => {
+            const eventAssignmentId = String(item.id);
+
+            const isHighlighted =
+              highlightedEventId === eventAssignmentId;
+
+            return (
+              <div
+                key={eventAssignmentId}
+                ref={(element) => {
+                  eventCardRefs.current[
+                    eventAssignmentId
+                  ] = element;
+                }}
+                className={`scroll-mt-24 rounded-2xl transition-all duration-500 ${
+                  isHighlighted
+                    ? "scale-[1.01] bg-blue-50 ring-4 ring-blue-400/50"
+                    : ""
+                }`}
+              >
+                <ReceivedEventCard
+                  item={item}
+                  onPrepare={onPrepare}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
