@@ -32,6 +32,33 @@ const municipalitiesList = [
 
 const MEMO_BUCKET = "official-memos";
 
+/*
+ * Converts an existing public Storage URL back
+ * into the path inside the official-memos bucket.
+ *
+ * Used as a fallback for older/legacy memo records.
+ */
+function getStoragePathFromPublicUrl(
+  url: string | null
+) {
+  if (!url) {
+    return null;
+  }
+
+  const marker =
+    `/storage/v1/object/public/${MEMO_BUCKET}/`;
+
+  const markerIndex = url.indexOf(marker);
+
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  return decodeURIComponent(
+    url.slice(markerIndex + marker.length)
+  );
+}
+
 type EventItem = {
   id: string;
   title: string | null;
@@ -60,10 +87,13 @@ function toDatetimeLocal(value: string | null) {
   }
 
   const localDate = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60000
+    date.getTime() -
+      date.getTimezoneOffset() * 60000
   );
 
-  return localDate.toISOString().slice(0, 16);
+  return localDate
+    .toISOString()
+    .slice(0, 16);
 }
 
 export default function EditProvincialEventPage() {
@@ -75,35 +105,56 @@ export default function EditProvincialEventPage() {
   /*
    * EVENT DETAILS
    */
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
+  const [title, setTitle] =
+    useState("");
+
+  const [description, setDescription] =
+    useState("");
+
+  const [startAt, setStartAt] =
+    useState("");
+
+  const [endAt, setEndAt] =
+    useState("");
 
   /*
    * EVENT STATUS
    */
-  const [status, setStatus] = useState("draft");
+  const [status, setStatus] =
+    useState("draft");
 
   /*
    * MEMO
    */
-  const [memoUrl, setMemoUrl] = useState<string | null>(null);
-  const [memoFilename, setMemoFilename] = useState<string | null>(null);
-  const [newMemoFile, setNewMemoFile] = useState<File | null>(null);
+  const [memoUrl, setMemoUrl] =
+    useState<string | null>(null);
+
+  const [
+    memoFilename,
+    setMemoFilename,
+  ] = useState<string | null>(null);
+
+  const [
+    newMemoFile,
+    setNewMemoFile,
+  ] = useState<File | null>(null);
 
   /*
    * MUNICIPALITIES
    */
-  const [selectedMunicipalities, setSelectedMunicipalities] = useState<
-    string[]
-  >([]);
+  const [
+    selectedMunicipalities,
+    setSelectedMunicipalities,
+  ] = useState<string[]>([]);
 
   /*
    * PAGE STATES
    */
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
 
   /*
    * When this has a value, editing is completely blocked.
@@ -112,7 +163,10 @@ export default function EditProvincialEventPage() {
    * completed
    * cancelled
    */
-  const [lockedStatus, setLockedStatus] = useState<string | null>(null);
+  const [
+    lockedStatus,
+    setLockedStatus,
+  ] = useState<string | null>(null);
 
   /*
    * FETCH EVENT
@@ -120,25 +174,34 @@ export default function EditProvincialEventPage() {
   const fetchEvent = async () => {
     setLoading(true);
 
-    const { data: eventData, error: eventError } = await supabase
+    const {
+      data: eventData,
+      error: eventError,
+    } = await supabase
       .from("events")
       .select("*")
       .eq("id", eventId)
       .single();
 
     if (eventError) {
-      console.error("Event fetch error:", eventError.message);
+      console.error(
+        "Event fetch error:",
+        eventError.message
+      );
 
       alert("Failed to load event.");
 
       setLoading(false);
 
-      router.push("/dashboard/provincial/events");
+      router.push(
+        "/dashboard/provincial/events"
+      );
 
       return;
     }
 
-    const event = eventData as EventItem;
+    const event =
+      eventData as EventItem;
 
     /*
      * Calculate the real event status based on:
@@ -147,10 +210,11 @@ export default function EditProvincialEventPage() {
      * start_at
      * end_at
      */
-    const automaticStatus = getAutomaticEventStatus(
-      event,
-      Date.now()
-    );
+    const automaticStatus =
+      getAutomaticEventStatus(
+        event,
+        Date.now()
+      );
 
     /*
      * LOCK RULE
@@ -167,26 +231,44 @@ export default function EditProvincialEventPage() {
       automaticStatus === "completed" ||
       automaticStatus === "cancelled"
     ) {
-      setLockedStatus(automaticStatus);
+      setLockedStatus(
+        automaticStatus
+      );
     } else {
       setLockedStatus(null);
     }
 
-    setTitle(event.title || "");
-    setDescription(event.description || "");
+    setTitle(
+      event.title || ""
+    );
+
+    setDescription(
+      event.description || ""
+    );
 
     setStartAt(
-      toDatetimeLocal(event.start_at)
+      toDatetimeLocal(
+        event.start_at
+      )
     );
 
     setEndAt(
-      toDatetimeLocal(event.end_at)
+      toDatetimeLocal(
+        event.end_at
+      )
     );
 
-    setStatus(automaticStatus);
+    setStatus(
+      automaticStatus
+    );
 
-    setMemoUrl(event.memo_url);
-    setMemoFilename(event.memo_filename);
+    setMemoUrl(
+      event.memo_url
+    );
+
+    setMemoFilename(
+      event.memo_filename
+    );
 
     /*
      * FETCH MUNICIPALITY ASSIGNMENTS
@@ -195,9 +277,14 @@ export default function EditProvincialEventPage() {
       data: municipalityData,
       error: municipalityError,
     } = await supabase
-      .from("event_municipalities")
+      .from(
+        "event_municipalities"
+      )
       .select("*")
-      .eq("event_id", eventId);
+      .eq(
+        "event_id",
+        eventId
+      );
 
     if (municipalityError) {
       console.error(
@@ -205,13 +292,20 @@ export default function EditProvincialEventPage() {
         municipalityError.message
       );
 
-      setSelectedMunicipalities([]);
+      setSelectedMunicipalities(
+        []
+      );
     } else {
       const selected = (
         municipalityData as EventMunicipality[]
-      ).map((item) => item.municipality);
+      ).map(
+        (item) =>
+          item.municipality
+      );
 
-      setSelectedMunicipalities(selected);
+      setSelectedMunicipalities(
+        selected
+      );
     }
 
     setLoading(false);
@@ -226,13 +320,23 @@ export default function EditProvincialEventPage() {
   /*
    * MUNICIPALITY SELECTION
    */
-  const toggleMunicipality = (municipality: string) => {
-    setSelectedMunicipalities((previous) =>
-      previous.includes(municipality)
-        ? previous.filter(
-            (item) => item !== municipality
-          )
-        : [...previous, municipality]
+  const toggleMunicipality = (
+    municipality: string
+  ) => {
+    setSelectedMunicipalities(
+      (previous) =>
+        previous.includes(
+          municipality
+        )
+          ? previous.filter(
+              (item) =>
+                item !==
+                municipality
+            )
+          : [
+              ...previous,
+              municipality,
+            ]
     );
   };
 
@@ -241,7 +345,9 @@ export default function EditProvincialEventPage() {
       selectedMunicipalities.length ===
       municipalitiesList.length
     ) {
-      setSelectedMunicipalities([]);
+      setSelectedMunicipalities(
+        []
+      );
     } else {
       setSelectedMunicipalities(
         municipalitiesList
@@ -252,450 +358,774 @@ export default function EditProvincialEventPage() {
   /*
    * MEMO UPLOAD
    */
-  const uploadMemoIfNeeded = async () => {
-    if (!newMemoFile) {
-      return {
-        url: memoUrl,
-        filename: memoFilename,
-      };
-    }
+  const uploadMemoIfNeeded =
+    async () => {
+      if (!newMemoFile) {
+        return {
+          url: memoUrl,
+          filename:
+            memoFilename,
+          filePath: null,
+          fileSize: null,
+          fileType: null,
+          isNew: false,
+        };
+      }
 
-    const fileExt =
-      newMemoFile.name.split(".").pop();
+      /*
+       * Keep the original filename readable
+       * inside Supabase Storage.
+       */
+      const safeFileName =
+        newMemoFile.name.replace(
+          /[^a-zA-Z0-9._-]/g,
+          "_"
+        );
 
-    const fileName = `${eventId}-${Date.now()}.${fileExt}`;
+      const filePath =
+        `provincial-memos/${eventId}/` +
+        `${Date.now()}-${safeFileName}`;
 
-    const filePath =
-      `provincial-memos/${fileName}`;
-
-    const { error: uploadError } =
-      await supabase.storage
+      const {
+        error: uploadError,
+      } = await supabase.storage
         .from(MEMO_BUCKET)
         .upload(
           filePath,
           newMemoFile,
           {
-            cacheControl: "3600",
-            upsert: true,
+            cacheControl:
+              "3600",
+            upsert: false,
           }
         );
 
-    if (uploadError) {
-      throw uploadError;
-    }
+      if (uploadError) {
+        throw uploadError;
+      }
 
-    const { data } =
-      supabase.storage
-        .from(MEMO_BUCKET)
-        .getPublicUrl(filePath);
+      const { data } =
+        supabase.storage
+          .from(MEMO_BUCKET)
+          .getPublicUrl(
+            filePath
+          );
 
-    return {
-      url: data.publicUrl,
-      filename: newMemoFile.name,
+      return {
+        url:
+          data.publicUrl,
+
+        filename:
+          newMemoFile.name,
+
+        filePath,
+
+        fileSize:
+          newMemoFile.size,
+
+        fileType:
+          newMemoFile.type ||
+          null,
+
+        isNew: true,
+      };
     };
-  };
 
   /*
    * UPDATE EVENT
    */
-  const handleUpdateEvent = async (
-    statusToSave: "draft" | "published"
-  ) => {
-    /*
-     * IMPORTANT:
-     *
-     * Re-read the event before saving.
-     *
-     * Example:
-     * User opened edit page at 7:59 PM
-     * Event starts at 8:00 PM
-     * User clicks Save at 8:01 PM
-     *
-     * The save must be rejected because
-     * the event is already ongoing.
-     */
-    const {
-      data: latestEventData,
-      error: latestEventError,
-    } = await supabase
-      .from("events")
-      .select(
-        "id, status, start_at, end_at"
-      )
-      .eq("id", eventId)
-      .single();
-
-    if (latestEventError) {
-      console.error(
-        "Latest event status error:",
-        latestEventError.message
-      );
-
-      alert(
-        "Unable to verify the current event status."
-      );
-
-      return;
-    }
-
-    const latestStatus =
-      getAutomaticEventStatus(
-        latestEventData,
-        Date.now()
-      );
-
-    /*
-     * HARD EDIT LOCK
-     */
-    if (
-      latestStatus === "ongoing" ||
-      latestStatus === "completed" ||
-      latestStatus === "cancelled"
-    ) {
-      alert(
-        `This event is already ${latestStatus} and can no longer be edited.`
-      );
-
-      router.replace(
-        `/dashboard/provincial/events/${eventId}`
-      );
-
-      return;
-    }
-
-    /*
-     * UPCOMING EVENTS CANNOT RETURN TO DRAFT
-     */
-    if (
-      latestStatus === "upcoming" &&
-      statusToSave === "draft"
-    ) {
-      alert(
-        "An upcoming published event cannot be changed back to draft."
-      );
-
-      return;
-    }
-
-    /*
-     * BASIC VALIDATION
-     */
-    if (!title.trim()) {
-      alert(
-        "Please enter event title."
-      );
-
-      return;
-    }
-
-    /*
-     * PUBLISHED EVENT VALIDATION
-     */
-    if (
-      statusToSave === "published" ||
-      latestStatus === "upcoming"
-    ) {
-      if (!description.trim()) {
-        alert(
-          "Please enter event description before publishing."
-        );
-
-        return;
-      }
-
-      if (!startAt || !endAt) {
-        alert(
-          "Please select start and end date before publishing."
-        );
-
-        return;
-      }
-
-      const startDate =
-        new Date(startAt);
-
-      const endDate =
-        new Date(endAt);
-
-      if (
-        Number.isNaN(
-          startDate.getTime()
-        ) ||
-        Number.isNaN(
-          endDate.getTime()
-        )
-      ) {
-        alert(
-          "Please enter a valid event schedule."
-        );
-
-        return;
-      }
-
-      if (
-        endDate <= startDate
-      ) {
-        alert(
-          "End date and time must be after start date and time."
-        );
-
-        return;
-      }
-
-      if (
-        !memoUrl &&
-        !newMemoFile
-      ) {
-        alert(
-          "Please upload official memo before publishing."
-        );
-
-        return;
-      }
-
-      if (
-        selectedMunicipalities.length ===
-        0
-      ) {
-        alert(
-          "Please select at least one municipality before publishing."
-        );
-
-        return;
-      }
-    }
-
-    setSaving(true);
-
-    try {
+  const handleUpdateEvent =
+    async (
+      statusToSave:
+        | "draft"
+        | "published"
+    ) => {
       /*
-       * UPLOAD NEW MEMO IF NECESSARY
-       */
-      const uploadedMemo =
-        await uploadMemoIfNeeded();
-
-      /*
-       * DETERMINE FINAL STATUS
+       * IMPORTANT:
        *
-       * draft → draft
+       * Re-read the event before saving.
        *
-       * published event:
-       * future schedule → upcoming
-       * current schedule → ongoing
-       * past schedule → completed
-       */
-      const finalStatus =
-        statusToSave === "draft"
-          ? "draft"
-          : getAutomaticEventStatus(
-              {
-                status: "published",
-
-                start_at:
-                  new Date(
-                    startAt
-                  ).toISOString(),
-
-                end_at:
-                  new Date(
-                    endAt
-                  ).toISOString(),
-              },
-              Date.now()
-            );
-
-      /*
-       * UPDATE EVENT
+       * Example:
+       * User opened edit page at 7:59 PM
+       * Event starts at 8:00 PM
+       * User clicks Save at 8:01 PM
+       *
+       * The save must be rejected because
+       * the event is already ongoing.
        */
       const {
-        error: eventError,
+        data: latestEventData,
+        error:
+          latestEventError,
       } = await supabase
         .from("events")
-        .update({
-          title:
-            title.trim(),
-
-          description:
-            description.trim(),
-
-          start_at:
-            startAt
-              ? new Date(
-                  startAt
-                ).toISOString()
-              : null,
-
-          end_at:
-            endAt
-              ? new Date(
-                  endAt
-                ).toISOString()
-              : null,
-
-          status:
-            finalStatus,
-
-          memo_url:
-            uploadedMemo.url,
-
-          memo_filename:
-            uploadedMemo.filename,
-
-          updated_at:
-            new Date().toISOString(),
-        })
+        .select(
+          "id, status, start_at, end_at"
+        )
         .eq(
           "id",
           eventId
-        );
-
-      if (eventError) {
-        throw eventError;
-      }
-
-      /*
-       * GET EXISTING MUNICIPALITIES
-       */
-      const {
-        data: existingRows,
-        error: existingError,
-      } = await supabase
-        .from(
-          "event_municipalities"
         )
-        .select("*")
-        .eq(
-          "event_id",
-          eventId
+        .single();
+
+      if (
+        latestEventError
+      ) {
+        console.error(
+          "Latest event status error:",
+          latestEventError.message
         );
 
-      if (existingError) {
-        throw existingError;
+        alert(
+          "Unable to verify the current event status."
+        );
+
+        return;
       }
 
-      const existingMunicipalities =
-        (
-          existingRows as EventMunicipality[]
-        ).map(
-          (item) =>
-            item.municipality
+      const latestStatus =
+        getAutomaticEventStatus(
+          latestEventData,
+          Date.now()
         );
 
       /*
-       * MUNICIPALITIES TO ADD
-       */
-      const municipalitiesToAdd =
-        selectedMunicipalities.filter(
-          (municipality) =>
-            !existingMunicipalities.includes(
-              municipality
-            )
-        );
-
-      /*
-       * MUNICIPALITIES TO REMOVE
-       */
-      const municipalitiesToRemove =
-        existingMunicipalities.filter(
-          (municipality) =>
-            !selectedMunicipalities.includes(
-              municipality
-            )
-        );
-
-      /*
-       * REMOVE MUNICIPALITIES
+       * HARD EDIT LOCK
        */
       if (
-        municipalitiesToRemove.length >
-        0
+        latestStatus ===
+          "ongoing" ||
+        latestStatus ===
+          "completed" ||
+        latestStatus ===
+          "cancelled"
       ) {
+        alert(
+          `This event is already ${latestStatus} and can no longer be edited.`
+        );
+
+        router.replace(
+          `/dashboard/provincial/events/${eventId}`
+        );
+
+        return;
+      }
+
+      /*
+       * UPCOMING EVENTS CANNOT RETURN TO DRAFT
+       */
+      if (
+        latestStatus ===
+          "upcoming" &&
+        statusToSave ===
+          "draft"
+      ) {
+        alert(
+          "An upcoming published event cannot be changed back to draft."
+        );
+
+        return;
+      }
+
+      /*
+       * BASIC VALIDATION
+       */
+      if (!title.trim()) {
+        alert(
+          "Please enter event title."
+        );
+
+        return;
+      }
+
+      /*
+       * PUBLISHED EVENT VALIDATION
+       */
+      if (
+        statusToSave ===
+          "published" ||
+        latestStatus ===
+          "upcoming"
+      ) {
+        if (
+          !description.trim()
+        ) {
+          alert(
+            "Please enter event description before publishing."
+          );
+
+          return;
+        }
+
+        if (
+          !startAt ||
+          !endAt
+        ) {
+          alert(
+            "Please select start and end date before publishing."
+          );
+
+          return;
+        }
+
+        const startDate =
+          new Date(
+            startAt
+          );
+
+        const endDate =
+          new Date(
+            endAt
+          );
+
+        if (
+          Number.isNaN(
+            startDate.getTime()
+          ) ||
+          Number.isNaN(
+            endDate.getTime()
+          )
+        ) {
+          alert(
+            "Please enter a valid event schedule."
+          );
+
+          return;
+        }
+
+        const currentDate =
+          new Date();
+
+        if (
+          startDate <=
+          currentDate
+        ) {
+          alert(
+            "Event start date and time must be later than the current time."
+          );
+
+          return;
+        }
+
+        if (
+          endDate <=
+          startDate
+        ) {
+          alert(
+            "End date and time must be after start date and time."
+          );
+
+          return;
+        }
+
+        if (
+          !memoUrl &&
+          !newMemoFile
+        ) {
+          alert(
+            "Please upload official memo before publishing."
+          );
+
+          return;
+        }
+
+        if (
+          selectedMunicipalities.length ===
+          0
+        ) {
+          alert(
+            "Please select at least one municipality before publishing."
+          );
+
+          return;
+        }
+      }
+
+      setSaving(true);
+
+      try {
+        /*
+         * GET CURRENT PRIMARY MEMO
+         * BEFORE REPLACEMENT
+         *
+         * This must happen BEFORE the
+         * new memo is uploaded and before
+         * event_memos is updated.
+         */
+        let oldMemoId:
+          | string
+          | null = null;
+
+        let oldMemoFilePath:
+          | string
+          | null = null;
+
+        if (newMemoFile) {
+          const {
+            data:
+              currentMemoRows,
+            error:
+              currentMemoError,
+          } = await supabase
+            .from(
+              "event_memos"
+            )
+            .select(
+              "id, file_path"
+            )
+            .eq(
+              "event_id",
+              eventId
+            )
+            .order(
+              "created_at",
+              {
+                ascending:
+                  true,
+              }
+            )
+            .limit(1);
+
+          if (
+            currentMemoError
+          ) {
+            throw currentMemoError;
+          }
+
+          const currentMemo =
+            currentMemoRows?.[0];
+
+          if (currentMemo) {
+            oldMemoId =
+              currentMemo.id;
+
+            oldMemoFilePath =
+              currentMemo.file_path ||
+              getStoragePathFromPublicUrl(
+                memoUrl
+              );
+          } else {
+            /*
+             * Legacy fallback:
+             * The event might contain
+             * events.memo_url but have
+             * no row yet in event_memos.
+             */
+            oldMemoFilePath =
+              getStoragePathFromPublicUrl(
+                memoUrl
+              );
+          }
+
+          console.log(
+            "OLD MEMO ID:",
+            oldMemoId
+          );
+
+          console.log(
+            "OLD MEMO PATH:",
+            oldMemoFilePath
+          );
+        }
+
+        /*
+         * UPLOAD NEW MEMO IF NECESSARY
+         */
+        const uploadedMemo =
+          await uploadMemoIfNeeded();
+
+        /*
+         * DETERMINE FINAL STATUS
+         *
+         * draft → draft
+         *
+         * published event:
+         * future schedule → upcoming
+         * current schedule → ongoing
+         * past schedule → completed
+         */
+        const finalStatus =
+          statusToSave ===
+          "draft"
+            ? "draft"
+            : getAutomaticEventStatus(
+                {
+                  status:
+                    "published",
+
+                  start_at:
+                    new Date(
+                      startAt
+                    ).toISOString(),
+
+                  end_at:
+                    new Date(
+                      endAt
+                    ).toISOString(),
+                },
+                Date.now()
+              );
+
+        /*
+         * UPDATE EVENT
+         */
         const {
-          error: removeError,
+          error: eventError,
+        } = await supabase
+          .from("events")
+          .update({
+            title:
+              title.trim(),
+
+            description:
+              description.trim(),
+
+            start_at:
+              startAt
+                ? new Date(
+                    startAt
+                  ).toISOString()
+                : null,
+
+            end_at:
+              endAt
+                ? new Date(
+                    endAt
+                  ).toISOString()
+                : null,
+
+            status:
+              finalStatus,
+
+            memo_url:
+              uploadedMemo.url,
+
+            memo_filename:
+              uploadedMemo.filename,
+
+            /*
+             * Change memo timestamp
+             * only when a new memo
+             * has actually been uploaded.
+             */
+            ...(newMemoFile
+              ? {
+                  memo_uploaded_at:
+                    new Date().toISOString(),
+                }
+              : {}),
+
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            "id",
+            eventId
+          );
+
+        if (eventError) {
+          throw eventError;
+        }
+
+        /*
+         * SYNC NEW MEMO WITH event_memos
+         */
+        if (
+          uploadedMemo.isNew &&
+          uploadedMemo.url &&
+          uploadedMemo.filename &&
+          uploadedMemo.filePath
+        ) {
+          /*
+           * Existing memo:
+           * update the SAME primary
+           * event_memos record.
+           */
+          if (oldMemoId) {
+            const {
+              error:
+                memoUpdateError,
+            } = await supabase
+              .from(
+                "event_memos"
+              )
+              .update({
+                file_name:
+                  uploadedMemo.filename,
+
+                file_url:
+                  uploadedMemo.url,
+
+                file_path:
+                  uploadedMemo.filePath,
+
+                file_size:
+                  uploadedMemo.fileSize,
+
+                file_type:
+                  uploadedMemo.fileType,
+              })
+              .eq(
+                "id",
+                oldMemoId
+              );
+
+            if (
+              memoUpdateError
+            ) {
+              throw memoUpdateError;
+            }
+          } else {
+            /*
+             * Legacy event:
+             * no event_memos row exists,
+             * so create one.
+             */
+            const {
+              error:
+                memoInsertError,
+            } = await supabase
+              .from(
+                "event_memos"
+              )
+              .insert({
+                event_id:
+                  eventId,
+
+                file_name:
+                  uploadedMemo.filename,
+
+                file_url:
+                  uploadedMemo.url,
+
+                file_path:
+                  uploadedMemo.filePath,
+
+                file_size:
+                  uploadedMemo.fileSize,
+
+                file_type:
+                  uploadedMemo.fileType,
+              });
+
+            if (
+              memoInsertError
+            ) {
+              throw memoInsertError;
+            }
+          }
+        }
+
+        /*
+         * GET EXISTING MUNICIPALITIES
+         */
+        const {
+          data:
+            existingRows,
+          error:
+            existingError,
         } = await supabase
           .from(
             "event_municipalities"
           )
-          .delete()
+          .select("*")
           .eq(
             "event_id",
             eventId
-          )
-          .in(
-            "municipality",
-            municipalitiesToRemove
           );
 
-        if (removeError) {
-          throw removeError;
+        if (existingError) {
+          throw existingError;
         }
-      }
 
-      /*
-       * ADD MUNICIPALITIES
-       */
-      if (
-        municipalitiesToAdd.length >
-        0
-      ) {
-        const rowsToInsert =
-          municipalitiesToAdd.map(
-            (municipality) => ({
-              event_id:
-                eventId,
-
-              municipality,
-
-              preparation_status:
-                "pending",
-            })
+        const existingMunicipalities =
+          (
+            existingRows as EventMunicipality[]
+          ).map(
+            (item) =>
+              item.municipality
           );
 
-        const {
-          error: insertError,
-        } = await supabase
-          .from(
-            "event_municipalities"
-          )
-          .insert(
-            rowsToInsert
+        /*
+         * MUNICIPALITIES TO ADD
+         */
+        const municipalitiesToAdd =
+          selectedMunicipalities.filter(
+            (municipality) =>
+              !existingMunicipalities.includes(
+                municipality
+              )
           );
 
-        if (insertError) {
-          throw insertError;
+        /*
+         * MUNICIPALITIES TO REMOVE
+         */
+        const municipalitiesToRemove =
+          existingMunicipalities.filter(
+            (municipality) =>
+              !selectedMunicipalities.includes(
+                municipality
+              )
+          );
+
+        /*
+         * REMOVE MUNICIPALITIES
+         */
+        if (
+          municipalitiesToRemove.length >
+          0
+        ) {
+          const {
+            error:
+              removeError,
+          } = await supabase
+            .from(
+              "event_municipalities"
+            )
+            .delete()
+            .eq(
+              "event_id",
+              eventId
+            )
+            .in(
+              "municipality",
+              municipalitiesToRemove
+            );
+
+          if (removeError) {
+            throw removeError;
+          }
         }
+
+        /*
+         * ADD MUNICIPALITIES
+         */
+        if (
+          municipalitiesToAdd.length >
+          0
+        ) {
+          const rowsToInsert =
+            municipalitiesToAdd.map(
+              (
+                municipality
+              ) => ({
+                event_id:
+                  eventId,
+
+                municipality,
+
+                municipal_status:
+                  "pending",
+              })
+            );
+
+          const {
+            error:
+              insertError,
+          } = await supabase
+            .from(
+              "event_municipalities"
+            )
+            .insert(
+              rowsToInsert
+            );
+
+          if (insertError) {
+            throw insertError;
+          }
+        }
+
+        /*
+         * DELETE PREVIOUS MEMO
+         * FROM SUPABASE STORAGE
+         *
+         * Only runs AFTER:
+         *
+         * 1. New file uploaded
+         * 2. events updated
+         * 3. event_memos synchronized
+         * 4. municipality changes completed
+         *
+         * Therefore, the old file is not
+         * removed too early.
+         */
+        if (
+          uploadedMemo.isNew &&
+          oldMemoFilePath &&
+          uploadedMemo.filePath &&
+          oldMemoFilePath !==
+            uploadedMemo.filePath
+        ) {
+          console.log(
+            "DELETING OLD MEMO:",
+            oldMemoFilePath
+          );
+
+          const {
+            data:
+              deletedFiles,
+            error:
+              deleteOldMemoError,
+          } =
+            await supabase.storage
+              .from(
+                MEMO_BUCKET
+              )
+              .remove([
+                oldMemoFilePath,
+              ]);
+
+          if (
+            deleteOldMemoError
+          ) {
+            /*
+             * Do not fail the entire
+             * event update because the
+             * new memo is already saved.
+             */
+            console.error(
+              "OLD MEMO DELETE ERROR:",
+              deleteOldMemoError
+            );
+          } else {
+            console.log(
+              "OLD MEMO DELETED:",
+              deletedFiles
+            );
+          }
+        }
+
+        /*
+         * SUCCESS
+         */
+        alert(
+          statusToSave ===
+            "draft"
+            ? "Draft updated successfully."
+            : "Provincial event updated successfully."
+        );
+
+        router.push(
+          `/dashboard/provincial/events/${eventId}`
+        );
+
+        router.refresh();
+      } catch (error) {
+        console.error(
+          "Update event error:",
+          error
+        );
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to update event.";
+
+        alert(message);
+      } finally {
+        setSaving(false);
       }
-
-      /*
-       * SUCCESS
-       */
-      alert(
-        statusToSave === "draft"
-          ? "Draft updated successfully."
-          : "Provincial event updated successfully."
-      );
-
-      router.push(
-        `/dashboard/provincial/events/${eventId}`
-      );
-
-      router.refresh();
-    } catch (error) {
-      console.error(
-        "Update event error:",
-        error
-      );
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to update event.";
-
-      alert(message);
-    } finally {
-      setSaving(false);
-    }
-  };
+    };
 
   /*
    * LOADING SCREEN
@@ -762,8 +1192,8 @@ export default function EditProvincialEventPage() {
           </h1>
 
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
-            This event can no longer be edited
-            because its current status is{" "}
+            This event can no longer be edited because its
+            current status is{" "}
             <span
               className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${getStatusClass(
                 lockedStatus
@@ -774,30 +1204,27 @@ export default function EditProvincialEventPage() {
             .
           </p>
 
-          {/* ONGOING MESSAGE */}
-          {lockedStatus === "ongoing" && (
+          {lockedStatus ===
+            "ongoing" && (
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
-              Ongoing events are locked to
-              protect attendance and event records
-              while the event is in progress.
+              Ongoing events are locked to protect attendance
+              and event records while the event is in progress.
             </p>
           )}
 
-          {/* COMPLETED MESSAGE */}
-          {lockedStatus === "completed" && (
+          {lockedStatus ===
+            "completed" && (
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
-              Completed events are preserved as
-              historical records and can no
-              longer be modified.
+              Completed events are preserved as historical
+              records and can no longer be modified.
             </p>
           )}
 
-          {/* CANCELLED MESSAGE */}
-          {lockedStatus === "cancelled" && (
+          {lockedStatus ===
+            "cancelled" && (
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-500">
-              Cancelled events are retained for
-              historical records and can no
-              longer be modified.
+              Cancelled events are retained for historical
+              records and can no longer be modified.
             </p>
           )}
 
@@ -845,8 +1272,8 @@ export default function EditProvincialEventPage() {
         </h1>
 
         <p className="mt-1 text-sm text-slate-500">
-          Update event details, official memo,
-          schedule, and target municipalities.
+          Update event details, official memo, schedule, and
+          target municipalities.
         </p>
       </div>
 
@@ -898,7 +1325,6 @@ export default function EditProvincialEventPage() {
 
           {/* SCHEDULE */}
           <div className="grid gap-5 md:grid-cols-2">
-            {/* START */}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
                 Start Date and Time
@@ -916,7 +1342,6 @@ export default function EditProvincialEventPage() {
               />
             </div>
 
-            {/* END */}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
                 End Date and Time
@@ -951,9 +1376,8 @@ export default function EditProvincialEventPage() {
               </span>
 
               <p className="mt-2 text-xs leading-5 text-slate-500">
-                Event status is automatically
-                managed based on its publishing
-                state and schedule.
+                Event status is automatically managed based on
+                its publishing state and schedule.
               </p>
             </div>
           </div>
@@ -964,7 +1388,8 @@ export default function EditProvincialEventPage() {
               Official Memo
             </label>
 
-            {memoFilename || memoUrl ? (
+            {memoFilename ||
+            memoUrl ? (
               <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-medium text-slate-900">
                   Current Memo:{" "}
@@ -974,7 +1399,9 @@ export default function EditProvincialEventPage() {
 
                 {memoUrl && (
                   <a
-                    href={memoUrl}
+                    href={
+                      memoUrl
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline"
@@ -994,7 +1421,8 @@ export default function EditProvincialEventPage() {
               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
               onChange={(event) =>
                 setNewMemoFile(
-                  event.target.files?.[0] ||
+                  event.target
+                    .files?.[0] ||
                     null
                 )
               }
@@ -1002,15 +1430,17 @@ export default function EditProvincialEventPage() {
             />
 
             <p className="mt-1 text-xs text-slate-500">
-              Uploading a new memo will replace
-              the current memo link.
+              Uploading a new memo will replace the current memo
+              link.
             </p>
 
             {newMemoFile && (
               <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2">
                 <p className="text-xs font-medium text-blue-700">
                   New memo selected:{" "}
-                  {newMemoFile.name}
+                  {
+                    newMemoFile.name
+                  }
                 </p>
               </div>
             )}
@@ -1025,15 +1455,16 @@ export default function EditProvincialEventPage() {
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Select the municipalities
-                  assigned to this provincial
-                  event.
+                  Select the municipalities assigned to this
+                  provincial event.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={handleSelectAll}
+                onClick={
+                  handleSelectAll
+                }
                 className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 {selectedMunicipalities.length ===
@@ -1043,7 +1474,6 @@ export default function EditProvincialEventPage() {
               </button>
             </div>
 
-            {/* SELECTED COUNT */}
             <div className="mb-3">
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                 {
@@ -1055,7 +1485,9 @@ export default function EditProvincialEventPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {municipalitiesList.map(
-                (municipality) => {
+                (
+                  municipality
+                ) => {
                   const selected =
                     selectedMunicipalities.includes(
                       municipality
@@ -1063,7 +1495,9 @@ export default function EditProvincialEventPage() {
 
                   return (
                     <label
-                      key={municipality}
+                      key={
+                        municipality
+                      }
                       className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition ${
                         selected
                           ? "border-slate-400 bg-slate-50"
@@ -1072,7 +1506,9 @@ export default function EditProvincialEventPage() {
                     >
                       <input
                         type="checkbox"
-                        checked={selected}
+                        checked={
+                          selected
+                        }
                         onChange={() =>
                           toggleMunicipality(
                             municipality
@@ -1082,7 +1518,9 @@ export default function EditProvincialEventPage() {
                       />
 
                       <span className="font-medium text-slate-700">
-                        {municipality}
+                        {
+                          municipality
+                        }
                       </span>
                     </label>
                   );
@@ -1093,10 +1531,11 @@ export default function EditProvincialEventPage() {
 
           {/* ACTIONS */}
           <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5">
-            {/* CANCEL EDITING */}
             <button
               type="button"
-              disabled={saving}
+              disabled={
+                saving
+              }
               onClick={() =>
                 router.push(
                   `/dashboard/provincial/events/${eventId}`
@@ -1107,12 +1546,14 @@ export default function EditProvincialEventPage() {
               Cancel
             </button>
 
-            {/* DRAFT ACTIONS */}
-            {status === "draft" && (
+            {status ===
+              "draft" && (
               <>
                 <button
                   type="button"
-                  disabled={saving}
+                  disabled={
+                    saving
+                  }
                   onClick={() =>
                     handleUpdateEvent(
                       "draft"
@@ -1127,7 +1568,9 @@ export default function EditProvincialEventPage() {
 
                 <button
                   type="button"
-                  disabled={saving}
+                  disabled={
+                    saving
+                  }
                   onClick={() =>
                     handleUpdateEvent(
                       "published"
@@ -1142,11 +1585,13 @@ export default function EditProvincialEventPage() {
               </>
             )}
 
-            {/* UPCOMING EVENT */}
-            {status === "upcoming" && (
+            {status ===
+              "upcoming" && (
               <button
                 type="button"
-                disabled={saving}
+                disabled={
+                  saving
+                }
                 onClick={() =>
                   handleUpdateEvent(
                     "published"

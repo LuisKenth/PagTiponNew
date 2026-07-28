@@ -75,7 +75,7 @@ export default function CreateProvincialEventPage() {
       );
 
       const filePath =
-        `${userId}/${eventId}/` +
+        `provincial-memos/${userId}/${eventId}/` +
         `${Date.now()}-${index}-${safeFileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -181,21 +181,6 @@ export default function CreateProvincialEventPage() {
         return;
       }
 
-      if (
-        Number.isNaN(startDate.getTime()) ||
-        Number.isNaN(endDate.getTime())
-      ) {
-        alert("Please select valid start and end date/time.");
-        return;
-      }
-
-      if (endDate <= startDate) {
-        alert(
-          "End date and time must be after start date and time."
-        );
-        return;
-      }
-
       if (memoFiles.length === 0) {
         alert(
           "Please upload at least one official memo before publishing."
@@ -279,6 +264,7 @@ export default function CreateProvincialEventPage() {
 
             memo_url: null,
             memo_filename: null,
+            memo_uploaded_at: null,
 
             created_by: user.id,
             status: statusToSave,
@@ -335,6 +321,7 @@ export default function CreateProvincialEventPage() {
           .update({
             memo_url: firstMemo.file_url,
             memo_filename: firstMemo.file_name,
+            memo_uploaded_at: new Date().toISOString(),
           })
           .eq("id", eventData.id);
 

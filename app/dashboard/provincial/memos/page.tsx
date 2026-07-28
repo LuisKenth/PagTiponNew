@@ -1,151 +1,366 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { supabase } from "@/lib/supabase";
 
-type EventRow = {
-  id: string;
-  title: string | null;
-  memo_url: string | null;
-  memo_filename: string | null;
-  status: string | null;
-  created_at: string | null;
-};
+import MemoSummaryCards from "./components/MemoSummaryCards";
+import MemoSearch from "./components/MemoSearch";
+import MemoSort, {
+  type MemoSortValue,
+} from "./components/MemoSort";
+import MemoTable from "./components/MemoTable";
+import EventsWithoutMemo from "./components/EventsWithoutMemo";
 
-type MunicipalityRow = {
-  id: string;
-  event_id: string;
-  municipality: string;
-};
+import type {
+  EventRow,
+  MemoEvent,
+  MunicipalityRow,
+} from "./types";
 
-type MemoEvent = EventRow & {
-  municipalities: MunicipalityRow[];
-};
 
-function formatDate(value: string | null) {
-  if (!value) return "Unknown date";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown date";
-  }
-
-  return date.toLocaleString("en-PH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function getStatusClass(status: string | null) {
-  if (status === "published") {
-    return "bg-blue-50 text-blue-700";
-  }
-
-  if (status === "draft") {
-    return "bg-slate-100 text-slate-700";
-  }
-
-  if (status === "upcoming") {
-    return "bg-indigo-50 text-indigo-700";
-  }
-
-  if (status === "ongoing") {
-    return "bg-green-50 text-green-700";
-  }
-
-  if (status === "completed") {
-    return "bg-slate-100 text-slate-700";
-  }
-
-  if (status === "cancelled") {
-    return "bg-red-50 text-red-700";
-  }
-
-  return "bg-slate-100 text-slate-700";
-}
 
 export default function OfficialMemosPage() {
   const [events, setEvents] = useState<MemoEvent[]>([]);
-  const [loading, setLoading] = useState(true);
 
+  const [loading, setLoading] =
+    useState(true);
+
+  /*
+   * SEARCH
+   */
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
+
+  /*
+   * PAGINATION
+   */
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
+
+  const [
+    pageSize,
+    setPageSize,
+  ] = useState(5);
+
+  /*
+   * FETCH MEMOS
+   */
   const fetchMemos = async () => {
     setLoading(true);
 
-    const { data: eventData, error: eventError } = await supabase
-      .from("events")
-      .select(
+    try {
+      const {
+        data: eventData,
+        error: eventError,
+      } = await supabase
+        .from("events")
+        .select(
+          `
+          id,
+          title,
+          memo_url,
+          memo_filename,
+          memo_uploaded_at,
+          status,
+          created_at
         `
-        id,
-        title,
-        memo_url,
-        memo_filename,
-        status,
-        created_at
-      `
-      )
-      .order("created_at", { ascending: false });
+        )
+        .order("created_at", {
+          ascending: false,
+        });
 
-    if (eventError) {
-      console.error("Official memos error:", eventError.message);
-      setEvents([]);
-      setLoading(false);
-      return;
-    }
+      if (eventError) {
+        throw eventError;
+      }
 
-    if (!eventData || eventData.length === 0) {
-      setEvents([]);
-      setLoading(false);
-      return;
-    }
+      const normalizedEvents =
+        (eventData || []) as EventRow[];
 
-    const eventIds = eventData.map((event) => event.id);
+      if (
+        normalizedEvents.length === 0
+      ) {
+        setEvents([]);
+        return;
+      }
 
-    const { data: municipalityData, error: municipalityError } =
-      await supabase
-        .from("event_municipalities")
-        .select("id, event_id, municipality")
-        .in("event_id", eventIds);
+      const eventIds =
+        normalizedEvents.map(
+          (event) => event.id
+        );
 
-    if (municipalityError) {
+      const {
+        data: municipalityData,
+        error: municipalityError,
+      } = await supabase
+        .from(
+          "event_municipalities"
+        )
+        .select(
+          "id, event_id, municipality"
+        )
+        .in(
+          "event_id",
+          eventIds
+        );
+
+      if (municipalityError) {
+        throw municipalityError;
+      }
+
+      const municipalities =
+        (municipalityData ||
+          []) as MunicipalityRow[];
+
+      const mappedEvents: MemoEvent[] =
+        normalizedEvents.map(
+          (event) => ({
+            ...event,
+
+            municipalities:
+              municipalities.filter(
+                (item) =>
+                  item.event_id ===
+                  event.id
+              ),
+          })
+        );
+
+      setEvents(mappedEvents);
+    } catch (error) {
       console.error(
-        "Municipality fetch error:",
-        municipalityError.message
+        "Official memos error:",
+        error
       );
 
       setEvents([]);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const mappedEvents: MemoEvent[] = eventData.map((event) => ({
-      ...event,
-      municipalities:
-        municipalityData?.filter(
-          (item) => item.event_id === event.id
-        ) || [],
-    }));
-
-    setEvents(mappedEvents);
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchMemos();
   }, []);
 
-  const eventsWithMemo = events.filter(
-    (event) => event.memo_url || event.memo_filename
+  /*
+   * EVENTS WITH MEMO
+   */
+  const eventsWithMemo =
+    useMemo(() => {
+      return events.filter(
+        (event) =>
+          event.memo_url ||
+          event.memo_filename
+      );
+    }, [events]);
+
+  /*
+   * EVENTS WITHOUT MEMO
+   */
+  const eventsWithoutMemo =
+    useMemo(() => {
+      return events.filter(
+        (event) =>
+          !event.memo_url &&
+          !event.memo_filename
+      );
+    }, [events]);
+
+  /*
+   * SEARCHED MEMOS
+   */
+  const filteredMemos =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
+
+      if (!query) {
+        return eventsWithMemo;
+      }
+
+      return eventsWithMemo.filter(
+        (event) => {
+          const title =
+            event.title?.toLowerCase() ||
+            "";
+
+          const filename =
+            event.memo_filename?.toLowerCase() ||
+            "";
+
+          const status =
+            event.status?.toLowerCase() ||
+            "";
+
+          const municipalities =
+            event.municipalities
+              .map((item) =>
+                item.municipality.toLowerCase()
+              )
+              .join(" ");
+
+          return (
+            title.includes(query) ||
+            filename.includes(query) ||
+            status.includes(query) ||
+            municipalities.includes(query)
+          );
+        }
+      );
+    }, [
+      eventsWithMemo,
+      searchQuery,
+    ]);
+
+
+  /*
+* SORTING
+*/
+  const [sortBy, setSortBy] =
+    useState<MemoSortValue>("newest");
+
+  /*
+   * SORTED MEMOS
+   */
+  const sortedMemos = useMemo(() => {
+    const memos = [...filteredMemos];
+
+    switch (sortBy) {
+      case "oldest":
+        return memos.sort((a, b) => {
+          const dateA = a.created_at
+            ? new Date(a.created_at).getTime()
+            : 0;
+
+          const dateB = b.created_at
+            ? new Date(b.created_at).getTime()
+            : 0;
+
+          return dateA - dateB;
+        });
+
+      case "title-asc":
+        return memos.sort((a, b) =>
+          (a.title || "Untitled Event").localeCompare(
+            b.title || "Untitled Event",
+            "en",
+            {
+              sensitivity: "base",
+            }
+          )
+        );
+
+      case "title-desc":
+        return memos.sort((a, b) =>
+          (b.title || "Untitled Event").localeCompare(
+            a.title || "Untitled Event",
+            "en",
+            {
+              sensitivity: "base",
+            }
+          )
+        );
+
+      case "newest":
+      default:
+        return memos.sort((a, b) => {
+          const dateA = a.created_at
+            ? new Date(a.created_at).getTime()
+            : 0;
+
+          const dateB = b.created_at
+            ? new Date(b.created_at).getTime()
+            : 0;
+
+          return dateB - dateA;
+        });
+    }
+  }, [filteredMemos, sortBy]);
+
+  /*
+   * PAGINATION
+   */
+  const totalItems =
+    sortedMemos.length;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      totalItems /
+      pageSize
+    )
   );
 
-  const eventsWithoutMemo = events.filter(
-    (event) => !event.memo_url && !event.memo_filename
-  );
+  const paginatedMemos =
+    useMemo(() => {
+      const startIndex =
+        (currentPage - 1) * pageSize;
+
+      const endIndex =
+        startIndex + pageSize;
+
+      return sortedMemos.slice(
+        startIndex,
+        endIndex
+      );
+    }, [
+      sortedMemos,
+      currentPage,
+      pageSize,
+    ]);
+
+  /*
+   * RESET TO PAGE 1
+   * WHEN SEARCH CHANGES
+   */
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy]);
+
+  /*
+   * KEEP CURRENT PAGE VALID
+   */
+  useEffect(() => {
+    if (
+      currentPage >
+      totalPages
+    ) {
+      setCurrentPage(
+        totalPages
+      );
+    }
+  }, [
+    currentPage,
+    totalPages,
+  ]);
+
+  /*
+   * PAGE SIZE
+   */
+  const handlePageSizeChange = (
+    size: number
+  ) => {
+    setPageSize(size);
+
+    setCurrentPage(1);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* HEADER */}
       <div>
         <p className="text-sm font-medium text-slate-500">
           Provincial Admin
@@ -156,43 +371,20 @@ export default function OfficialMemosPage() {
         </h1>
 
         <p className="mt-1 text-sm text-slate-500">
-          View official memos uploaded and distributed with provincial events.
+          View official memos uploaded and distributed
+          with provincial events.
         </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Total Official Memos
-          </p>
+      {/* SUMMARY */}
+      <MemoSummaryCards
+        totalMemos={eventsWithMemo.length}
+        totalWithoutMemo={eventsWithoutMemo.length}
+        loading={loading}
+      />
 
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {eventsWithMemo.length}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-500">
-            Provincial events with uploaded official memos
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Events Without Memo
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {eventsWithoutMemo.length}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-500">
-            Events that currently have no attached memo
-          </p>
-        </div>
-      </div>
-
-      {/* Memo List */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
+      {/* OFFICIAL MEMO LIST */}
+      <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
@@ -206,169 +398,70 @@ export default function OfficialMemosPage() {
 
           <Link
             href="/dashboard/provincial/events/create"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-slate-800"
+            className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
           >
             Create Event
           </Link>
         </div>
 
-        {loading ? (
-          <div className="py-10 text-center">
-            <p className="text-sm text-slate-500">
-              Loading official memos...
-            </p>
-          </div>
-        ) : eventsWithMemo.length === 0 ? (
-          <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center">
-            <p className="font-semibold text-slate-900">
-              No official memos uploaded yet
-            </p>
+        {/* SEARCH AND SORT */}
+        {!loading &&
+          eventsWithMemo.length > 0 && (
+            <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="w-full md:max-w-md">
+                <MemoSearch
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                />
+              </div>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Official memos attached to provincial events will appear here.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase text-slate-500">
-                  <th className="py-3 pr-4">Event</th>
-                  <th className="py-3 pr-4">Memo</th>
-                  <th className="py-3 pr-4">Target Municipalities</th>
-                  <th className="py-3 pr-4">Status</th>
-                  <th className="py-3 pr-4">Uploaded</th>
-                  <th className="py-3 text-right">Actions</th>
-                </tr>
-              </thead>
+              <MemoSort
+                value={sortBy}
+                onChange={setSortBy}
+              />
+            </div>
+          )}
 
-              <tbody>
-                {eventsWithMemo.map((event) => (
-                  <tr
-                    key={event.id}
-                    className="border-b last:border-b-0 hover:bg-slate-50"
-                  >
-                    <td className="max-w-[240px] py-4 pr-4 align-top">
-                      <p className="break-words font-semibold text-slate-900">
-                        {event.title || "Untitled Event"}
-                      </p>
-                    </td>
-
-                    <td className="max-w-[240px] py-4 pr-4 align-top">
-                      <p className="break-all text-slate-700">
-                        {event.memo_filename || "Official Memo"}
-                      </p>
-                    </td>
-
-                    <td className="max-w-[300px] py-4 pr-4 align-top">
-                      {event.municipalities.length === 0 ? (
-                        <span className="text-xs text-slate-400">
-                          No municipality assigned
-                        </span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {event.municipalities.map((item) => (
-                            <span
-                              key={item.id}
-                              className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700"
-                            >
-                              {item.municipality}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="py-4 pr-4 align-top">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getStatusClass(
-                          event.status
-                        )}`}
-                      >
-                        {event.status || "No status"}
-                      </span>
-                    </td>
-
-                    <td className="min-w-[165px] py-4 pr-4 align-top text-slate-500">
-                      {formatDate(event.created_at)}
-                    </td>
-
-                    <td className="py-4 align-top">
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          href={`/dashboard/provincial/events/${event.id}`}
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                          View Event
-                        </Link>
-
-                        {event.memo_url && (
-                          <Link
-                            href={`/dashboard/provincial/memos/${event.id}`}
-                            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800"
-                          >
-                            View Memo
-                          </Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* TABLE */}
+        <MemoTable
+          memos={
+            paginatedMemos
+          }
+          loading={loading}
+          totalItems={
+            totalItems
+          }
+          totalMemos={
+            eventsWithMemo.length
+          }
+          currentPage={
+            currentPage
+          }
+          totalPages={
+            totalPages
+          }
+          pageSize={
+            pageSize
+          }
+          searchQuery={
+            searchQuery
+          }
+          onPageChange={
+            setCurrentPage
+          }
+          onPageSizeChange={
+            handlePageSizeChange
+          }
+        />
       </div>
 
-      {/* Events Without Memo */}
-      {!loading && eventsWithoutMemo.length > 0 && (
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              Events Without Official Memo
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              These provincial events currently have no uploaded memo.
-            </p>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {eventsWithoutMemo.map((event) => (
-              <div
-                key={event.id}
-                className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-slate-900">
-                      {event.title || "Untitled Event"}
-                    </p>
-
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${getStatusClass(
-                        event.status
-                      )}`}
-                    >
-                      {event.status || "No status"}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Created {formatDate(event.created_at)}
-                  </p>
-                </div>
-
-                <Link
-                  href={`/dashboard/provincial/events/${event.id}/edit`}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  Add Memo
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* EVENTS WITHOUT MEMO */}
+      {!loading && (
+        <EventsWithoutMemo
+          events={
+            eventsWithoutMemo
+          }
+        />
       )}
     </div>
   );
