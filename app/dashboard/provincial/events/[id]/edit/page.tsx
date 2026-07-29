@@ -97,10 +97,10 @@ function toDatetimeLocal(value: string | null) {
 }
 
 export default function EditProvincialEventPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params = useParams<{ id: string }>();
+const router = useRouter();
 
-  const eventId = params.id as string;
+const eventId = params.id;
 
   /*
    * EVENT DETAILS

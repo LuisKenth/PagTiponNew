@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
@@ -179,10 +176,16 @@ export default function MunicipalDashboardLayout({
 
   if (checkingAccess) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
-        <div className="rounded-xl bg-white px-6 py-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-600">
-            Checking account access...
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950" />
+
+          <h1 className="mt-5 text-base font-bold text-slate-900">
+            PagTipon Municipal Portal
+          </h1>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Checking your account access...
           </p>
         </div>
       </div>
@@ -194,12 +197,14 @@ export default function MunicipalDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
       <MunicipalSidebar />
 
-      <main className="min-w-0 p-4 sm:p-6 lg:p-8">
-        {children}
-      </main>
+      <div className="min-w-0">
+        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 xl:p-10">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
