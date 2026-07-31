@@ -23,6 +23,9 @@ export type ReceivedEvent = {
   registration_open: boolean | null;
   local_instructions: string | null;
   created_at: string | null;
+
+  registered_participants: number;
+
   event: EventRow | null;
 };
 

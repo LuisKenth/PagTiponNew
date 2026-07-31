@@ -43,6 +43,10 @@ type LatestEventStatusRow = {
   status: string | null;
 };
 
+type RegisteredRsvpRow = {
+  event_municipality_id: string | null;
+};
+
 /*
  * Convert any database status into a consistent
  * lowercase string.
@@ -218,6 +222,68 @@ export default function useMunicipalDashboard() {
         if (targetRows.length === 0) {
           setReceivedEvents([]);
           return;
+        }
+
+        /*
+         * LOAD REGISTERED PARTICIPANT COUNTS
+         *
+         * Load all registered RSVP rows for the
+         * municipality's event assignments in one
+         * request, then group them by assignment ID.
+         */
+        const assignmentIds = Array.from(
+          new Set(
+            targetRows.map((row) =>
+              String(row.id),
+            ),
+          ),
+        );
+
+        const {
+          data: registeredRsvpRowsData,
+          error: registeredRsvpRowsError,
+        } = await supabase
+          .from("rsvps")
+          .select("event_municipality_id")
+          .in(
+            "event_municipality_id",
+            assignmentIds,
+          )
+          .eq("status", "registered");
+
+        if (registeredRsvpRowsError) {
+          console.error(
+            "Unable to load registered participant counts:",
+            registeredRsvpRowsError.message,
+          );
+        }
+
+        const registeredRsvpRows =
+          (registeredRsvpRowsData ??
+            []) as RegisteredRsvpRow[];
+
+        const registeredCountByAssignment =
+          new Map<string, number>();
+
+        for (const rsvpRow of registeredRsvpRows) {
+          const assignmentId = String(
+            rsvpRow.event_municipality_id ??
+              "",
+          ).trim();
+
+          if (!assignmentId) {
+            continue;
+          }
+
+          const currentCount =
+            registeredCountByAssignment.get(
+              assignmentId,
+            ) ?? 0;
+
+          registeredCountByAssignment.set(
+            assignmentId,
+            currentCount + 1,
+          );
         }
 
         const eventIds = Array.from(
@@ -401,6 +467,11 @@ export default function useMunicipalDashboard() {
                     created_at:
                       row.created_at ??
                       null,
+
+                    registered_participants:
+                      registeredCountByAssignment.get(
+                        String(row.id),
+                      ) ?? 0,
 
                     event:
                       matchedEvent,

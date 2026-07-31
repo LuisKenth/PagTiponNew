@@ -152,13 +152,13 @@ export default function MunicipalDashboardPage() {
      */
     let targetEvent = assignmentId
       ? receivedEvents.find((receivedEvent) => {
-          const candidate =
-            receivedEvent as unknown as NotificationTargetEvent;
+        const candidate =
+          receivedEvent as unknown as NotificationTargetEvent;
 
-          return getAssignmentIds(candidate).includes(
-            assignmentId,
-          );
-        })
+        return getAssignmentIds(candidate).includes(
+          assignmentId,
+        );
+      })
       : undefined;
 
     /*
@@ -295,32 +295,39 @@ export default function MunicipalDashboardPage() {
     notificationType === "event_updated";
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <>
+      <div className="space-y-5 sm:space-y-6">
         <MunicipalDashboardHeader
           municipality={municipality}
         />
 
-        {/* NOTIFICATION-LINKED EVENT MESSAGE */}
+        {/* Notification-linked event message */}
         {notificationMessage && (
           <section
-            className={`relative overflow-hidden rounded-2xl border p-4 shadow-sm sm:p-5 ${
-              isCancellationNotice
+            className={`relative overflow-hidden rounded-2xl border shadow-sm ${isCancellationNotice
                 ? "border-red-200 bg-red-50"
                 : isUpdateNotice
                   ? "border-violet-200 bg-violet-50"
                   : "border-amber-200 bg-amber-50"
-            }`}
+              }`}
           >
-            <div className="flex items-start gap-3 pr-10">
+            <div
+              className={`h-1 w-full ${isCancellationNotice
+                  ? "bg-red-500"
+                  : isUpdateNotice
+                    ? "bg-violet-500"
+                    : "bg-amber-500"
+                }`}
+            />
+
+            <div className="flex items-start gap-3 p-4 pr-12 sm:p-5 sm:pr-14">
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                  isCancellationNotice
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isCancellationNotice
                     ? "bg-red-100 text-red-700"
                     : isUpdateNotice
                       ? "bg-violet-100 text-violet-700"
                       : "bg-amber-100 text-amber-700"
-                }`}
+                  }`}
               >
                 {isUpdateNotice ? (
                   <PencilLine className="h-5 w-5" />
@@ -329,31 +336,29 @@ export default function MunicipalDashboardPage() {
                 )}
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <h2
-                  className={`text-sm font-bold ${
-                    isCancellationNotice
+                  className={`text-sm font-bold ${isCancellationNotice
                       ? "text-red-900"
                       : isUpdateNotice
                         ? "text-violet-900"
                         : "text-amber-900"
-                  }`}
+                    }`}
                 >
                   {isCancellationNotice
                     ? "Event Cancelled"
                     : isUpdateNotice
                       ? "Event Updated"
-                      : "Notification Event"}
+                      : "Event Notification"}
                 </h2>
 
                 <p
-                  className={`mt-1 text-sm leading-6 ${
-                    isCancellationNotice
+                  className={`mt-1 text-sm leading-6 ${isCancellationNotice
                       ? "text-red-700"
                       : isUpdateNotice
                         ? "text-violet-700"
                         : "text-amber-700"
-                  }`}
+                    }`}
                 >
                   {notificationMessage}
                 </p>
@@ -362,17 +367,14 @@ export default function MunicipalDashboardPage() {
 
             <button
               type="button"
-              onClick={
-                closeNotificationMessage
-              }
+              onClick={closeNotificationMessage}
               aria-label="Close notification message"
-              className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg transition ${
-                isCancellationNotice
+              className={`absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg transition sm:right-4 sm:top-5 ${isCancellationNotice
                   ? "text-red-500 hover:bg-red-100 hover:text-red-700"
                   : isUpdateNotice
                     ? "text-violet-500 hover:bg-violet-100 hover:text-violet-700"
                     : "text-amber-500 hover:bg-amber-100 hover:text-amber-700"
-              }`}
+                }`}
             >
               <X className="h-4 w-4" />
             </button>
@@ -386,24 +388,16 @@ export default function MunicipalDashboardPage() {
         <ReceivedEventsSection
           events={receivedEvents}
           loading={loading}
-          highlightedEventId={
-            highlightedEventId
-          }
+          highlightedEventId={highlightedEventId}
           onPrepare={openPrepareModal}
         />
       </div>
 
       <PrepareEventModal
         selectedEvent={selectedEvent}
-        preparationStatus={
-          preparationStatus
-        }
-        localInstructions={
-          localInstructions
-        }
-        registrationOpen={
-          registrationOpen
-        }
+        preparationStatus={preparationStatus}
+        localInstructions={localInstructions}
+        registrationOpen={registrationOpen}
         saving={savingPreparation}
         onStatusChange={
           handlePreparationStatusChange
@@ -417,6 +411,6 @@ export default function MunicipalDashboardPage() {
         onClose={closePrepareModal}
         onSave={savePreparation}
       />
-    </main>
+    </>
   );
 }
