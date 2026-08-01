@@ -47,7 +47,7 @@ export type MunicipalAttendanceRecord = {
 
 export type AttendanceEventOption = {
   event_municipality_id: string;
-  event_id: number;
+  event_id: string;
   event_title: string;
   event_status: string;
   event_start_date: string | null;

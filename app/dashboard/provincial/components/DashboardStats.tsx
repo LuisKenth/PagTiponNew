@@ -1,4 +1,4 @@
-import type { ProvincialDashboardStats } from "../../../types";
+import type { ProvincialDashboardStats } from "../types";
 
 type DashboardStatsProps = {
   loading: boolean;
