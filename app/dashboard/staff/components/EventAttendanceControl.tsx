@@ -1,3 +1,14 @@
+import {
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  LockKeyhole,
+  Play,
+  RefreshCw,
+  Square,
+  XCircle,
+} from "lucide-react";
+
 import type { EventAssignment } from "../types";
 import { formatDateTime } from "../utils";
 
@@ -39,194 +50,300 @@ export default function EventAttendanceControl({
   onRefresh,
 }: EventAttendanceControlProps) {
   const checkInStatusLabel = isCheckInOpen
-    ? "Open"
+    ? "Check-in Open"
     : wasCheckInClosed
-      ? "Closed"
-      : "Not Open";
+      ? "Check-in Closed"
+      : "Not Yet Open";
 
   const checkInStatusClass = isCheckInOpen
-    ? "bg-green-100 text-green-700"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
     : wasCheckInClosed
-      ? "bg-red-100 text-red-700"
-      : "bg-amber-100 text-amber-700";
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : "border-amber-200 bg-amber-50 text-amber-700";
+
+  const CheckInStatusIcon = isCheckInOpen
+    ? CheckCircle2
+    : wasCheckInClosed
+      ? XCircle
+      : Clock3;
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">
-            Event Attendance Control
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Select an event before opening, closing, or processing attendance.
-          </p>
-        </div>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Event selector */}
+      <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-5 sm:px-6">
+        {loading ? (
+          <div className="flex min-h-14 items-center gap-3 text-sm text-slate-500">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            Loading assigned events...
+          </div>
+        ) : assignments.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
+            <CalendarClock className="mx-auto h-8 w-8 text-slate-400" />
 
-        {selectedAssignment && (
-          <span
-            className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${checkInStatusClass}`}
-          >
-            Check-in: {checkInStatusLabel}
-          </span>
+            <p className="mt-3 text-sm font-semibold text-slate-700">
+              No assigned events
+            </p>
+
+            <p className="mt-1 text-sm text-slate-500">
+              No provincial event is currently assigned to your municipality.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <label
+                htmlFor="event-assignment"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                Assigned Event
+              </label>
+
+              <select
+                id="event-assignment"
+                value={selectedId}
+                onChange={(event) => void onSelect(event.target.value)}
+                disabled={Boolean(controlLoading)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+              >
+                {assignments.map((assignment) => (
+                  <option
+                    key={String(assignment.id)}
+                    value={String(assignment.id)}
+                  >
+                    {assignment.event.title} — {assignment.event.status}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedAssignment && (
+              <div
+                className={`flex w-fit shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold ${checkInStatusClass}`}
+              >
+                <CheckInStatusIcon className="h-4 w-4" />
+                {checkInStatusLabel}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {loading ? (
-        <p className="mt-5 text-sm text-slate-500">
-          Loading assigned events...
-        </p>
-      ) : assignments.length === 0 ? (
-        <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-          No provincial event is currently assigned to your municipality.
-        </div>
-      ) : (
-        <>
-          <div className="mt-5">
-            <label
-              htmlFor="event-assignment"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Assigned Event
-            </label>
+      {!loading && assignments.length > 0 && selectedAssignment && (
+        <div className="px-5 py-5 sm:px-6 sm:py-6">
+          {/* Event schedule and status */}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InfoCard
+              icon={CheckCircle2}
+              label="Event Status"
+              value={selectedAssignment.event.status || "Unknown"}
+              capitalize
+            />
 
-            <select
-              id="event-assignment"
-              value={selectedId}
-              onChange={(event) => void onSelect(event.target.value)}
-              disabled={Boolean(controlLoading)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"
-            >
-              {assignments.map((assignment) => (
-                <option
-                  key={String(assignment.id)}
-                  value={String(assignment.id)}
-                >
-                  {assignment.event.title} — {assignment.event.status}
-                </option>
-              ))}
-            </select>
+            <InfoCard
+              icon={CalendarClock}
+              label="Event Starts"
+              value={formatDateTime(selectedAssignment.event.start_at)}
+            />
+
+            <InfoCard
+              icon={Clock3}
+              label="Check-in Available From"
+              value={
+                earliestOpeningTime !== null
+                  ? formatDateTime(
+                      new Date(earliestOpeningTime).toISOString()
+                    )
+                  : "Not set"
+              }
+            />
+
+            <InfoCard
+              icon={Clock3}
+              label="Event Ends"
+              value={formatDateTime(selectedAssignment.event.end_at)}
+            />
           </div>
 
-          {selectedAssignment && (
-            <>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <InfoCard
-                  label="Event status"
-                  value={selectedAssignment.event.status || "Unknown"}
-                  capitalize
-                />
-                <InfoCard
-                  label="Event starts"
-                  value={formatDateTime(selectedAssignment.event.start_at)}
-                />
-                <InfoCard
-                  label="Earliest opening"
-                  value={
-                    earliestOpeningTime
-                      ? formatDateTime(
-                          new Date(earliestOpeningTime).toISOString()
-                        )
-                      : "Not set"
-                  }
-                />
-                <InfoCard
-                  label="Event ends"
-                  value={formatDateTime(selectedAssignment.event.end_at)}
-                />
-              </div>
+          {/* Attendance state messages */}
+          <div className="mt-5 space-y-3">
+            {!canUseAttendanceTools && (
+              <StatusMessage
+                icon={LockKeyhole}
+                className="border-amber-200 bg-amber-50 text-amber-900"
+                iconClassName="text-amber-600"
+                title="Attendance tools unavailable"
+              >
+                {blockedMessage}
+              </StatusMessage>
+            )}
 
-              <div className="mt-5 flex flex-wrap gap-3">
-                {!isCheckInOpen && (
-                  <button
-                    type="button"
-                    onClick={() => void onOpen()}
-                    disabled={!canOpenCheckIn || Boolean(controlLoading)}
-                    className="rounded-lg bg-green-600 px-5 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {controlLoading === "open"
-                      ? "Opening..."
-                      : wasCheckInOpened
-                        ? "Reopen Check-in"
-                        : "Open Check-in"}
-                  </button>
-                )}
+            {isCheckInOpen && (
+              <StatusMessage
+                icon={CheckCircle2}
+                className="border-emerald-200 bg-emerald-50 text-emerald-900"
+                iconClassName="text-emerald-600"
+                title="Attendance check-in is active"
+              >
+                Attendance was opened at{" "}
+                <span className="font-semibold">
+                  {formatDateTime(selectedAssignment.check_in_opened_at)}
+                </span>
+                . QR scanning and manual token entry are currently enabled.
+                Check-in will remain available until staff closes it or the
+                event reaches its end time.
+              </StatusMessage>
+            )}
 
-                {isCheckInOpen && (
-                  <button
-                    type="button"
-                    onClick={() => void onClose()}
-                    disabled={Boolean(controlLoading)}
-                    className="rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {controlLoading === "close"
-                      ? "Closing..."
-                      : "Close Check-in"}
-                  </button>
-                )}
+            {!isCheckInOpen && wasCheckInClosed && (
+              <StatusMessage
+                icon={XCircle}
+                className="border-rose-200 bg-rose-50 text-rose-900"
+                iconClassName="text-rose-600"
+                title="Attendance check-in has ended"
+              >
+                Attendance was closed at{" "}
+                <span className="font-semibold">
+                  {formatDateTime(selectedAssignment.check_in_closed_at)}
+                </span>
+                . QR scanning and manual token entry are currently disabled.
+              </StatusMessage>
+            )}
+          </div>
 
+          {/* Attendance actions */}
+          <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                Check-in Controls
+              </p>
+
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Open check-in to enable QR scanning and manual token entry for
+                this event.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {!isCheckInOpen && (
                 <button
                   type="button"
-                  onClick={() => void onRefresh()}
-                  disabled={Boolean(controlLoading)}
-                  className="rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void onOpen()}
+                  disabled={!canOpenCheckIn || Boolean(controlLoading)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Refresh
-                </button>
-              </div>
+                  {controlLoading === "open" ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
 
-              {!canUseAttendanceTools && (
-                <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm font-medium text-amber-800">
-                  {blockedMessage}
-                </div>
+                  {controlLoading === "open"
+                    ? "Opening..."
+                    : wasCheckInOpened
+                      ? "Reopen Check-in"
+                      : "Open Check-in"}
+                </button>
               )}
 
               {isCheckInOpen && (
-                <div className="mt-4 rounded-xl bg-green-50 p-4 text-sm text-green-800">
-                  Attendance was opened at{" "}
-                  <span className="font-semibold">
-                    {formatDateTime(selectedAssignment.check_in_opened_at)}
-                  </span>
-                  . QR scanning and manual token entry are enabled until staff
-                  closes check-in or the event reaches its end time.
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void onClose()}
+                  disabled={Boolean(controlLoading)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {controlLoading === "close" ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
+
+                  {controlLoading === "close"
+                    ? "Closing..."
+                    : "Close Check-in"}
+                </button>
               )}
 
-              {!isCheckInOpen && wasCheckInClosed && (
-                <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-800">
-                  Attendance was closed at{" "}
-                  <span className="font-semibold">
-                    {formatDateTime(selectedAssignment.check_in_closed_at)}
-                  </span>
-                  .
-                </div>
-              )}
-            </>
-          )}
-        </>
+              <button
+                type="button"
+                onClick={() => void onRefresh()}
+                disabled={Boolean(controlLoading)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    controlLoading ? "animate-spin" : ""
+                  }`}
+                />
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
 }
 
 type InfoCardProps = {
+  icon: typeof Clock3;
   label: string;
   value: string;
   capitalize?: boolean;
 };
 
-function InfoCard({ label, value, capitalize = false }: InfoCardProps) {
+function InfoCard({
+  icon: Icon,
+  label,
+  value,
+  capitalize = false,
+}: InfoCardProps) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+      <div className="flex items-center gap-2 text-slate-500">
+        <Icon className="h-4 w-4 shrink-0" />
+
+        <p className="text-xs font-semibold uppercase tracking-wide">
+          {label}
+        </p>
+      </div>
+
       <p
-        className={`mt-2 text-sm font-semibold text-slate-900 ${
+        className={`mt-3 break-words text-sm font-semibold leading-5 text-slate-900 ${
           capitalize ? "capitalize" : ""
         }`}
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+type StatusMessageProps = {
+  icon: typeof Clock3;
+  title: string;
+  className: string;
+  iconClassName: string;
+  children: React.ReactNode;
+};
+
+function StatusMessage({
+  icon: Icon,
+  title,
+  className,
+  iconClassName,
+  children,
+}: StatusMessageProps) {
+  return (
+    <div className={`rounded-xl border p-4 ${className}`}>
+      <div className="flex items-start gap-3">
+        <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconClassName}`} />
+
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-sm leading-6">{children}</p>
+        </div>
+      </div>
     </div>
   );
 }
