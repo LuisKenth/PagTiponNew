@@ -76,12 +76,22 @@ export default function QrAttendanceScanner({
 
   useEffect(() => {
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .catch(() => { })
-          .finally(() => scannerRef.current?.clear().catch(() => { }));
-      }
+      const scanner = scannerRef.current;
+
+      scannerRef.current = null;
+      scanningLockRef.current = false;
+
+      if (!scanner) return;
+
+      void (async () => {
+        try {
+          await scanner.stop();
+        } catch { }
+
+        try {
+          await scanner.clear();
+        } catch { }
+      })();
     };
   }, []);
 
