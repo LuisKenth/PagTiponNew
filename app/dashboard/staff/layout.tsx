@@ -10,6 +10,7 @@ import {
 } from "@/lib/routes";
 
 import StaffSidebar from "./components/StaffSidebar";
+import { StaffAttendanceProvider } from "./context/StaffAttendanceContext";
 
 type VerificationStatus =
   | "pending"
@@ -59,7 +60,7 @@ export default function StaffDashboardLayout({
         } = await supabase
           .from("profiles")
           .select(
-            "role, verification_status",
+            "role, verification_status"
           )
           .eq("id", user.id)
           .maybeSingle<Profile>();
@@ -67,7 +68,7 @@ export default function StaffDashboardLayout({
         if (profileError || !profile) {
           console.error(
             "Staff access check error:",
-            profileError?.message,
+            profileError?.message
           );
 
           await supabase.auth.signOut();
@@ -90,7 +91,7 @@ export default function StaffDashboardLayout({
           }
 
           router.replace(
-            getDashboardPath(profile.role),
+            getDashboardPath(profile.role)
           );
 
           return;
@@ -107,7 +108,7 @@ export default function StaffDashboardLayout({
           await supabase.auth.signOut();
 
           alert(
-            "Your event staff account is still pending approval.",
+            "Your event staff account is still pending approval."
           );
 
           if (mounted) {
@@ -125,7 +126,7 @@ export default function StaffDashboardLayout({
           await supabase.auth.signOut();
 
           alert(
-            "Your event staff application has been rejected.",
+            "Your event staff application has been rejected."
           );
 
           if (mounted) {
@@ -156,7 +157,7 @@ export default function StaffDashboardLayout({
       } catch (error) {
         console.error(
           "Staff route protection error:",
-          error,
+          error
         );
 
         await supabase.auth.signOut();
@@ -203,14 +204,16 @@ export default function StaffDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <StaffSidebar />
+    <StaffAttendanceProvider>
+      <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <StaffSidebar />
 
-      <div className="min-w-0">
-        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 xl:p-10">
-          {children}
-        </main>
+        <div className="min-w-0">
+          <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 xl:p-10">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </StaffAttendanceProvider>
   );
 }

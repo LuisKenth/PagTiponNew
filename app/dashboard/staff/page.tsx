@@ -1,178 +1,183 @@
 "use client";
 
-import AttendanceRecordsTable from "./components/AttendanceRecordsTable";
+import Link from "next/link";
+import {
+  BarChart3,
+  ChevronRight,
+  ClipboardCheck,
+  QrCode,
+  ScanLine,
+} from "lucide-react";
+
 import AttendanceSummaryCards from "./components/AttendanceSummaryCards";
-import EventAttendanceControl from "./components/EventAttendanceControl";
-import ManualQrTokenEntry from "./components/ManualQrTokenEntry";
-import QrAttendanceScanner from "./components/QrAttendanceScanner";
 import StaffDashboardHeader from "./components/StaffDashboardHeader";
-import { useStaffAttendanceDashboard } from "./hooks/useStaffAttendanceDashboard";
+import { useStaffAttendanceContext } from "./context/StaffAttendanceContext";
+
+const quickActions = [
+  {
+    title: "Event Control",
+    description:
+      "Select an assigned event and manage its attendance check-in session.",
+    href: "/dashboard/staff/event-control",
+    icon: ClipboardCheck,
+    iconClassName: "bg-emerald-100 text-emerald-700",
+  },
+  {
+    title: "Attendance Overview",
+    description:
+      "View current attendance totals for the selected event.",
+    href: "/dashboard/staff/attendance-overview",
+    icon: BarChart3,
+    iconClassName: "bg-blue-100 text-blue-700",
+  },
+  {
+    title: "Participant Check-In",
+    description:
+      "Scan participant QR codes or process manual attendance codes.",
+    href: "/dashboard/staff/participant-check-in",
+    icon: QrCode,
+    iconClassName: "bg-violet-100 text-violet-700",
+  },
+  {
+    title: "Attendance Records",
+    description:
+      "Review participant names, statuses, methods, and check-in times.",
+    href: "/dashboard/staff/attendance-records",
+    icon: ScanLine,
+    iconClassName: "bg-amber-100 text-amber-700",
+  },
+];
 
 export default function StaffDashboardPage() {
-  const dashboard = useStaffAttendanceDashboard();
-  const blockedMessage =
-    dashboard.getAttendanceBlockedMessage();
+  const dashboard = useStaffAttendanceContext();
+  const totalRecords =
+    dashboard.attendanceRecords.length;
 
+  const totalPresent =
+    dashboard.attendanceRecords.filter(
+      (record) =>
+        String(record.status).toLowerCase() ===
+        "present"
+    ).length;
+
+  const totalPending =
+    dashboard.attendanceRecords.filter(
+      (record) =>
+        String(record.status).toLowerCase() ===
+        "pending"
+    ).length;
+
+  const totalAbsent =
+    dashboard.attendanceRecords.filter(
+      (record) =>
+        String(record.status).toLowerCase() ===
+        "absent"
+    ).length;
+
+  const attendanceRate =
+    totalRecords > 0
+      ? Math.round(
+        (totalPresent / totalRecords) * 100
+      )
+      : 0;
   return (
-    <div className="space-y-7">
-      {/* Dashboard heading */}
+    <div className="space-y-8">
       <StaffDashboardHeader
         municipality={dashboard.municipality}
       />
 
-      {/* Event selection and attendance controls */}
       <section
-        id="event-control"
-        aria-labelledby="event-control-heading"
-        className="scroll-mt-24 space-y-4 lg:scroll-mt-6"
+        aria-labelledby="dashboard-summary-heading"
+        className="space-y-4"
       >
         <div>
           <h2
-            id="event-control-heading"
+            id="dashboard-summary-heading"
             className="text-lg font-semibold text-slate-900"
           >
-            Event Attendance Control
+            Current Attendance Summary
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Select an assigned event and manage its attendance
-            check-in session.
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Overview of the currently selected event and its attendance
+            records.
           </p>
         </div>
 
-        <EventAttendanceControl
-          assignments={dashboard.eventAssignments}
-          selectedId={
-            dashboard.selectedEventMunicipalityId
-          }
-          selectedAssignment={
-            dashboard.selectedAssignment
-          }
-          loading={dashboard.loading}
-          controlLoading={dashboard.controlLoading}
-          earliestOpeningTime={
-            dashboard.earliestOpeningTime
-          }
-          isCheckInOpen={dashboard.isCheckInOpen}
-          wasCheckInOpened={
-            dashboard.wasCheckInOpened
-          }
-          wasCheckInClosed={
-            dashboard.wasCheckInClosed
-          }
-          canOpenCheckIn={dashboard.canOpenCheckIn}
-          canUseAttendanceTools={
-            dashboard.canUseAttendanceTools
-          }
-          blockedMessage={blockedMessage}
-          onSelect={dashboard.selectEvent}
-          onOpen={dashboard.openCheckIn}
-          onClose={dashboard.closeCheckIn}
-          onRefresh={dashboard.refreshSelectedEvent}
-        />
-      </section>
-
-      {/* Attendance summary */}
-      <section
-        id="attendance-overview"
-        aria-labelledby="attendance-overview-heading"
-        className="scroll-mt-24 space-y-4 lg:scroll-mt-6"
-      >
-        <div>
-          <h2
-            id="attendance-overview-heading"
-            className="text-lg font-semibold text-slate-900"
-          >
-            Attendance Overview
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            View the current attendance totals for the selected
-            event.
-          </p>
-        </div>
-
-        <AttendanceSummaryCards
-          totalRecords={
-            dashboard.attendanceRecords.length
-          }
-          totalPresent={dashboard.totalPresent}
-          selectedEventTitle={
-            dashboard.selectedAssignment?.event.title ??
-            null
-          }
-        />
-      </section>
-
-      {/* Attendance tools */}
-      <section
-        id="participant-check-in"
-        aria-labelledby="attendance-tools-heading"
-        className="scroll-mt-24 space-y-4 lg:scroll-mt-6"
-      >
-        <div>
-          <h2
-            id="attendance-tools-heading"
-            className="text-lg font-semibold text-slate-900"
-          >
-            Participant Check-In
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Scan a participant QR code or enter the QR token
-            manually.
-          </p>
-        </div>
-
-        <div className="grid items-start gap-6 xl:grid-cols-2">
-          <QrAttendanceScanner
-            eventKey={
-              dashboard.selectedEventMunicipalityId
+        {dashboard.loading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+            Loading staff attendance information...
+          </div>
+        ) : (
+          <AttendanceSummaryCards
+            totalRecords={totalRecords}
+            totalPresent={totalPresent}
+            totalPending={totalPending}
+            totalAbsent={totalAbsent}
+            attendanceRate={attendanceRate}
+            selectedEventTitle={
+              dashboard.selectedAssignment?.event.title ??
+              null
             }
-            canUseAttendanceTools={
-              dashboard.canUseAttendanceTools
-            }
-            blockedMessage={blockedMessage}
-            message={dashboard.message}
-            onProcessToken={dashboard.processQrToken}
-            onShowMessage={dashboard.showMessage}
           />
-
-          <ManualQrTokenEntry
-            canUseAttendanceTools={
-              dashboard.canUseAttendanceTools
-            }
-            blockedMessage={blockedMessage}
-            onProcessToken={dashboard.processQrToken}
-            onShowMessage={dashboard.showMessage}
-          />
-        </div>
+        )}
       </section>
 
-      {/* Attendance roster */}
       <section
-        id="attendance-records"
-        aria-labelledby="attendance-records-heading"
-        className="scroll-mt-24 space-y-4 pb-4 lg:scroll-mt-6"
+        aria-labelledby="quick-actions-heading"
+        className="space-y-4"
       >
         <div>
           <h2
-            id="attendance-records-heading"
+            id="quick-actions-heading"
             className="text-lg font-semibold text-slate-900"
           >
-            Attendance Records
+            Attendance Operations
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Review the participants and their latest attendance
-            status.
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Select the attendance operation you need to perform.
           </p>
         </div>
 
-        <AttendanceRecordsTable
-          records={dashboard.attendanceRecords}
-          loading={dashboard.attendanceLoading}
-        />
+        <div className="grid gap-4 md:grid-cols-2">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+
+            return (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md sm:p-6"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-4">
+                    <div
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${action.iconClassName}`}
+                    >
+                      <Icon
+                        className="h-6 w-6"
+                        aria-hidden="true"
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-slate-900">
+                        {action.title}
+                      </h3>
+
+                      <p className="mt-1 text-sm leading-6 text-slate-500">
+                        {action.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-300 transition group-hover:translate-x-1 group-hover:text-slate-600" />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </section>
     </div>
   );

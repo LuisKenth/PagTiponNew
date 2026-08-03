@@ -28,7 +28,7 @@ type NavigationLink = {
   name: string;
   href: string;
   icon: typeof LayoutDashboard;
-  section?: string;
+  exact?: boolean;
 };
 
 type NavigationGroup = {
@@ -44,6 +44,7 @@ const navigationGroups: NavigationGroup[] = [
         name: "Dashboard",
         href: "/dashboard/staff",
         icon: LayoutDashboard,
+        exact: true,
       },
     ],
   },
@@ -52,31 +53,35 @@ const navigationGroups: NavigationGroup[] = [
     links: [
       {
         name: "Event Control",
-        href: "/dashboard/staff#event-control",
+        href: "/dashboard/staff/event-control",
         icon: ClipboardCheck,
-        section: "event-control",
       },
       {
         name: "Attendance Overview",
-        href: "/dashboard/staff#attendance-overview",
+        href: "/dashboard/staff/attendance-overview",
         icon: BarChart3,
-        section: "attendance-overview",
       },
       {
         name: "Participant Check-In",
-        href: "/dashboard/staff#participant-check-in",
+        href: "/dashboard/staff/participant-check-in",
         icon: QrCode,
-        section: "participant-check-in",
       },
       {
         name: "Attendance Records",
-        href: "/dashboard/staff#attendance-records",
+        href: "/dashboard/staff/attendance-records",
         icon: ScanLine,
-        section: "attendance-records",
       },
     ],
   },
 ];
+
+function normalizePath(path: string) {
+  if (path === "/") {
+    return path;
+  }
+
+  return path.replace(/\/+$/, "");
+}
 
 export default function StaffSidebar() {
   const pathname = usePathname();
@@ -88,30 +93,9 @@ export default function StaffSidebar() {
   const [loggingOut, setLoggingOut] =
     useState(false);
 
-  const [activeSection, setActiveSection] =
-    useState("");
-
   useEffect(() => {
-    function updateActiveSection() {
-      setActiveSection(
-        window.location.hash.replace("#", ""),
-      );
-    }
-
-    updateActiveSection();
-
-    window.addEventListener(
-      "hashchange",
-      updateActiveSection,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "hashchange",
-        updateActiveSection,
-      );
-    };
-  }, []);
+    setMobileOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -124,7 +108,7 @@ export default function StaffSidebar() {
     document.body.style.overflow = "hidden";
 
     function handleEscape(
-      event: KeyboardEvent,
+      event: KeyboardEvent
     ) {
       if (event.key === "Escape") {
         setMobileOpen(false);
@@ -133,7 +117,7 @@ export default function StaffSidebar() {
 
     window.addEventListener(
       "keydown",
-      handleEscape,
+      handleEscape
     );
 
     return () => {
@@ -142,27 +126,13 @@ export default function StaffSidebar() {
 
       window.removeEventListener(
         "keydown",
-        handleEscape,
+        handleEscape
       );
     };
   }, [mobileOpen]);
 
-  function normalizePath(path: string) {
-    const pathWithoutHash =
-      path.split("#")[0];
-
-    if (pathWithoutHash === "/") {
-      return pathWithoutHash;
-    }
-
-    return pathWithoutHash.replace(
-      /\/+$/,
-      "",
-    );
-  }
-
   function isActiveLink(
-    link: NavigationLink,
+    link: NavigationLink
   ) {
     const currentPath =
       normalizePath(pathname);
@@ -170,22 +140,16 @@ export default function StaffSidebar() {
     const targetPath =
       normalizePath(link.href);
 
-    if (currentPath !== targetPath) {
-      return false;
+    if (link.exact) {
+      return currentPath === targetPath;
     }
 
-    if (link.section) {
-      return activeSection === link.section;
-    }
-
-    return activeSection === "";
-  }
-
-  function handleNavigation(
-    section?: string,
-  ) {
-    setActiveSection(section ?? "");
-    setMobileOpen(false);
+    return (
+      currentPath === targetPath ||
+      currentPath.startsWith(
+        `${targetPath}/`
+      )
+    );
   }
 
   async function handleLogout() {
@@ -204,11 +168,11 @@ export default function StaffSidebar() {
     } catch (error) {
       console.error(
         "Staff logout error:",
-        error,
+        error
       );
 
       alert(
-        "Unable to log out. Please try again.",
+        "Unable to log out. Please try again."
       );
 
       setLoggingOut(false);
@@ -242,7 +206,7 @@ export default function StaffSidebar() {
           type="button"
           onClick={() =>
             setMobileOpen(
-              (previous) => !previous,
+              (previous) => !previous
             )
           }
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
@@ -341,9 +305,7 @@ export default function StaffSidebar() {
                               key={link.href}
                               href={link.href}
                               onClick={() =>
-                                handleNavigation(
-                                  link.section,
-                                )
+                                setMobileOpen(false)
                               }
                               aria-current={
                                 active
@@ -381,11 +343,11 @@ export default function StaffSidebar() {
                               />
                             </Link>
                           );
-                        },
+                        }
                       )}
                     </div>
                   </div>
-                ),
+                )
               )}
             </div>
           </nav>
@@ -402,7 +364,8 @@ export default function StaffSidebar() {
               </p>
 
               <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                QR check-in and participant monitoring
+                QR check-in and participant
+                monitoring
               </p>
             </div>
 

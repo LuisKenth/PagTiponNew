@@ -39,6 +39,7 @@ type RSVP = {
     user_id: string;
     municipality: string;
     qr_token: string | null;
+    attendance_code: string | null;
     status: string | null;
     registered_at: string | null;
 };
@@ -253,14 +254,15 @@ export default function ParticipantDashboardPage() {
                     .from("rsvps")
                     .select(
                         `
-              id,
-              event_municipality_id,
-              user_id,
-              municipality,
-              qr_token,
-              status,
-              registered_at
-            `,
+                    id,
+                    event_municipality_id,
+                    user_id,
+                    municipality,
+                    qr_token,
+                    attendance_code,
+                    status,
+                    registered_at
+                    `,
                     )
                     .eq("user_id", user.id);
 
@@ -382,6 +384,24 @@ export default function ParticipantDashboardPage() {
                 normalizeStatus(rsvp.status) ===
                 "registered",
         );
+    };
+
+    const handleCopyAttendanceCode = async (
+        attendanceCode: string,
+    ) => {
+        try {
+            await navigator.clipboard.writeText(
+                attendanceCode,
+            );
+
+            alert(
+                "Manual attendance code copied.",
+            );
+        } catch {
+            alert(
+                "Unable to copy the code. Please copy it manually.",
+            );
+        }
     };
 
     const handleRegister = async (
@@ -916,12 +936,61 @@ export default function ParticipantDashboardPage() {
                                             </p>
                                         )}
 
-                                        {registeredRsvp?.qr_token && (
-                                            <QRCodeBox
-                                                qrToken={
-                                                    registeredRsvp.qr_token
-                                                }
-                                            />
+                                        {registeredRsvp && (
+                                            <div className="mt-5 space-y-4">
+                                                {registeredRsvp.qr_token && (
+                                                    <QRCodeBox
+                                                        qrToken={
+                                                            registeredRsvp.qr_token
+                                                        }
+                                                    />
+                                                )}
+
+                                                {registeredRsvp.attendance_code && (
+                                                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                                                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                                            <div>
+                                                                <p className="text-sm font-semibold text-blue-900">
+                                                                    Manual Attendance Code
+                                                                </p>
+
+                                                                <p className="mt-1 text-xs leading-5 text-blue-700">
+                                                                    Show this code to event
+                                                                    staff when your QR code
+                                                                    cannot be opened or
+                                                                    scanned.
+                                                                </p>
+                                                            </div>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    void handleCopyAttendanceCode(
+                                                                        registeredRsvp.attendance_code!,
+                                                                    )
+                                                                }
+                                                                className="shrink-0 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                                                            >
+                                                                Copy Code
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="mt-4 rounded-lg border border-blue-200 bg-white px-4 py-4 text-center">
+                                                            <p className="break-all font-mono text-xl font-bold tracking-wider text-slate-900 sm:text-2xl">
+                                                                {
+                                                                    registeredRsvp.attendance_code
+                                                                }
+                                                            </p>
+                                                        </div>
+
+                                                        <p className="mt-3 text-xs leading-5 text-blue-700">
+                                                            Keep this code private. Event
+                                                            staff may use it only for your
+                                                            attendance at this event.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
 
                                         <button

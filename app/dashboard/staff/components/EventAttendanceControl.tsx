@@ -8,6 +8,7 @@ import {
   Square,
   XCircle,
 } from "lucide-react";
+import EventAssignmentPicker from "./EventAssignmentPicker";
 
 import type { EventAssignment } from "../types";
 import { formatDateTime } from "../utils";
@@ -49,24 +50,7 @@ export default function EventAttendanceControl({
   onClose,
   onRefresh,
 }: EventAttendanceControlProps) {
-  const checkInStatusLabel = isCheckInOpen
-    ? "Check-in Open"
-    : wasCheckInClosed
-      ? "Check-in Closed"
-      : "Not Yet Open";
-
-  const checkInStatusClass = isCheckInOpen
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : wasCheckInClosed
-      ? "border-rose-200 bg-rose-50 text-rose-700"
-      : "border-amber-200 bg-amber-50 text-amber-700";
-
-  const CheckInStatusIcon = isCheckInOpen
-    ? CheckCircle2
-    : wasCheckInClosed
-      ? XCircle
-      : Clock3;
-
+  
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Event selector */}
@@ -89,42 +73,13 @@ export default function EventAttendanceControl({
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <label
-                htmlFor="event-assignment"
-                className="mb-2 block text-sm font-semibold text-slate-700"
-              >
-                Assigned Event
-              </label>
-
-              <select
-                id="event-assignment"
-                value={selectedId}
-                onChange={(event) => void onSelect(event.target.value)}
-                disabled={Boolean(controlLoading)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-              >
-                {assignments.map((assignment) => (
-                  <option
-                    key={String(assignment.id)}
-                    value={String(assignment.id)}
-                  >
-                    {assignment.event.title} — {assignment.event.status}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedAssignment && (
-              <div
-                className={`flex w-fit shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold ${checkInStatusClass}`}
-              >
-                <CheckInStatusIcon className="h-4 w-4" />
-                {checkInStatusLabel}
-              </div>
-            )}
-          </div>
+          <EventAssignmentPicker
+            assignments={assignments}
+            selectedId={selectedId}
+            selectedAssignment={selectedAssignment}
+            disabled={Boolean(controlLoading)}
+            onSelect={onSelect}
+          />
         )}
       </div>
 
@@ -151,8 +106,8 @@ export default function EventAttendanceControl({
               value={
                 earliestOpeningTime !== null
                   ? formatDateTime(
-                      new Date(earliestOpeningTime).toISOString()
-                    )
+                    new Date(earliestOpeningTime).toISOString()
+                  )
                   : "Not set"
               }
             />
@@ -271,9 +226,8 @@ export default function EventAttendanceControl({
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
-                  className={`h-4 w-4 ${
-                    controlLoading ? "animate-spin" : ""
-                  }`}
+                  className={`h-4 w-4 ${controlLoading ? "animate-spin" : ""
+                    }`}
                 />
                 Refresh
               </button>
@@ -309,9 +263,8 @@ function InfoCard({
       </div>
 
       <p
-        className={`mt-3 break-words text-sm font-semibold leading-5 text-slate-900 ${
-          capitalize ? "capitalize" : ""
-        }`}
+        className={`mt-3 break-words text-sm font-semibold leading-5 text-slate-900 ${capitalize ? "capitalize" : ""
+          }`}
       >
         {value}
       </p>

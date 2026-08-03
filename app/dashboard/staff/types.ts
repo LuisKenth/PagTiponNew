@@ -51,6 +51,9 @@ export type AttendanceRecord = {
   method: string | null;
   checked_in_at: string | null;
   checked_in_by: string | null;
+
+  participant_name?: string | null;
+  participant_email?: string | null;
 };
 
 export type MessageTone = "info" | "success" | "error";

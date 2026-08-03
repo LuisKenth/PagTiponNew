@@ -10,13 +10,31 @@ import type {
   DatabaseId,
   EventAssignment,
   RawEventAssignment,
-  RSVP,
   SupabaseErrorLike,
 } from "../types";
 import { formatDatabaseError, formatDateTime } from "../utils";
 
+type ParticipantProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
+type ProcessAttendanceRpcResult = {
+  success: boolean;
+  result_code: string;
+  result_message: string;
+  attendance_id: string | null;
+  participant_id: string | null;
+  participant_name: string | null;
+  participant_email: string | null;
+  event_title: string | null;
+  attendance_status: string | null;
+  attendance_checked_in_at: string | null;
+  already_checked_in: boolean;
+};
+
 export function useStaffAttendanceDashboard() {
-  const [staffId, setStaffId] = useState("");
   const [municipality, setMunicipality] = useState("");
 
   const [eventAssignments, setEventAssignments] = useState<EventAssignment[]>(
@@ -235,24 +253,145 @@ export function useStaffAttendanceDashboard() {
 
       setAttendanceLoading(true);
 
-      const { data, error } = await supabase
-        .from("attendance")
-        .select(
-          "id, rsvp_id, event_municipality_id, user_id, status, method, checked_in_at, checked_in_by"
-        )
-        .eq("event_municipality_id", eventMunicipalityId)
-        .order("checked_in_at", { ascending: false });
+      try {
+        const { data: attendanceData, error: attendanceError } =
+          await supabase
+            .from("attendance")
+            .select(
+              `
+              id,
+              rsvp_id,
+              event_municipality_id,
+              user_id,
+              status,
+              method,
+              checked_in_at,
+              checked_in_by
+            `
+            )
+            .eq(
+              "event_municipality_id",
+              eventMunicipalityId
+            )
+            .order("checked_in_at", {
+              ascending: false,
+              nullsFirst: false,
+            });
 
-      if (error) {
-        console.error(error.message);
+        if (attendanceError) {
+          throw attendanceError;
+        }
+
+        const attendanceRows =
+          (attendanceData ?? []) as AttendanceRecord[];
+
+        if (attendanceRows.length === 0) {
+          setAttendanceRecords([]);
+          return;
+        }
+
+        const participantIds = Array.from(
+          new Set(
+            attendanceRows
+              .map((record) =>
+                String(record.user_id ?? "").trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
+        if (participantIds.length === 0) {
+          setAttendanceRecords(
+            attendanceRows.map((record) => ({
+              ...record,
+              participant_name: null,
+              participant_email: null,
+            }))
+          );
+
+          return;
+        }
+
+        const {
+          data: participantProfiles,
+          error: participantProfilesError,
+        } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", participantIds);
+
+        /*
+         * Attendance records should still be displayed
+         * even when participant profile details cannot
+         * be loaded.
+         */
+        if (participantProfilesError) {
+          console.error(
+            "Unable to load participant profiles:",
+            participantProfilesError.message
+          );
+
+          setAttendanceRecords(
+            attendanceRows.map((record) => ({
+              ...record,
+              participant_name: null,
+              participant_email: null,
+            }))
+          );
+
+          return;
+        }
+
+        const profileByUserId = new Map<
+          string,
+          ParticipantProfileRow
+        >();
+
+        for (const profile of
+          (participantProfiles ?? []) as ParticipantProfileRow[]) {
+          profileByUserId.set(
+            String(profile.id),
+            profile
+          );
+        }
+
+        const enrichedAttendanceRecords =
+          attendanceRows.map((record) => {
+            const participantProfile =
+              profileByUserId.get(
+                String(record.user_id)
+              );
+
+            return {
+              ...record,
+              participant_name:
+                participantProfile?.full_name ?? null,
+              participant_email:
+                participantProfile?.email ?? null,
+            };
+          });
+
+        setAttendanceRecords(
+          enrichedAttendanceRecords
+        );
+      } catch (error) {
+        const errorValue =
+          error as SupabaseErrorLike;
+
+        console.error(
+          errorValue.message ??
+          "Unable to load attendance records."
+        );
+
         setAttendanceRecords([]);
-        showMessage(formatDatabaseError(error), "error");
-        setAttendanceLoading(false);
-        return;
-      }
 
-      setAttendanceRecords(data || []);
-      setAttendanceLoading(false);
+        showMessage(
+          formatDatabaseError(errorValue),
+          "error"
+        );
+      } finally {
+        setAttendanceLoading(false);
+      }
     },
     [showMessage]
   );
@@ -315,7 +454,6 @@ export function useStaffAttendanceDashboard() {
         throw userError ?? new Error("Authenticated user not found.");
       }
 
-      setStaffId(user.id);
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
@@ -466,7 +604,7 @@ export function useStaffAttendanceDashboard() {
 
   const processQrToken = useCallback(
     async (
-      qrToken: string,
+      submittedToken: string,
       attendanceMethod: AttendanceMethod = "qr"
     ) => {
       if (!selectedAssignment) {
@@ -479,109 +617,103 @@ export function useStaffAttendanceDashboard() {
         return false;
       }
 
-      showMessage("Checking participant QR code...", "info");
+      const cleanedToken = submittedToken.trim();
 
-      const { data: rsvp, error: rsvpError } = await supabase
-        .from("rsvps")
-        .select(
-          "id, event_municipality_id, user_id, municipality, qr_token, status, registered_at"
-        )
-        .eq("qr_token", qrToken)
-        .eq("status", "registered")
-        .single();
-
-      if (rsvpError || !rsvp) {
+      if (!cleanedToken) {
         showMessage(
-          "Invalid QR code or the participant is not registered.",
+          attendanceMethod === "qr"
+            ? "The scanned QR code did not contain a valid token."
+            : "Enter the participant QR token or attendance code.",
           "error"
         );
-        return false;
-      }
 
-      const typedRsvp = rsvp as RSVP;
-
-      if (
-        String(typedRsvp.event_municipality_id) !==
-        String(selectedAssignment.id)
-      ) {
-        showMessage("This QR code belongs to a different event.", "error");
-        return false;
-      }
-
-      if (typedRsvp.municipality !== municipality) {
-        showMessage(
-          "This QR code is not assigned to your municipality.",
-          "error"
-        );
-        return false;
-      }
-
-      const { data: existingAttendance, error: existingError } =
-        await supabase
-          .from("attendance")
-          .select(
-            "id, rsvp_id, event_municipality_id, user_id, status, method, checked_in_at, checked_in_by"
-          )
-          .eq("rsvp_id", typedRsvp.id)
-          .maybeSingle();
-
-      if (existingError) {
-        showMessage(formatDatabaseError(existingError), "error");
-        return false;
-      }
-
-      if (existingAttendance) {
-        if (existingAttendance.status === "present") {
-          showMessage("Participant is already marked as present.", "info");
-          return false;
-        }
-
-        // checked_in_at is omitted intentionally. The database trigger
-        // writes the trusted database time.
-        const { error: updateError } = await supabase
-          .from("attendance")
-          .update({
-            status: "present",
-            method: attendanceMethod,
-            checked_in_by: staffId,
-          })
-          .eq("id", existingAttendance.id);
-
-        if (updateError) {
-          showMessage(formatDatabaseError(updateError), "error");
-          return false;
-        }
-
-        showMessage(
-          "Attendance updated. Participant is now present.",
-          "success"
-        );
-        await fetchAttendanceRecords(selectedAssignment.id);
-        return true;
-      }
-
-      // checked_in_at is omitted intentionally. The database trigger
-      // writes the trusted database time.
-      const { error: insertError } = await supabase
-        .from("attendance")
-        .insert({
-          rsvp_id: typedRsvp.id,
-          event_municipality_id: typedRsvp.event_municipality_id,
-          user_id: typedRsvp.user_id,
-          status: "present",
-          method: attendanceMethod,
-          checked_in_by: staffId,
-        });
-
-      if (insertError) {
-        showMessage(formatDatabaseError(insertError), "error");
         return false;
       }
 
       showMessage(
-        "Attendance recorded successfully. Participant is present.",
+        attendanceMethod === "qr"
+          ? "Checking participant QR code..."
+          : "Checking participant attendance code...",
+        "info"
+      );
+
+      const { data, error } = await supabase.rpc(
+        "process_attendance_token",
+        {
+          p_event_municipality_id: selectedAssignment.id,
+          p_token: cleanedToken,
+          p_method: attendanceMethod,
+        }
+      );
+
+      if (error) {
+        console.error("Attendance RPC error:", error);
+        showMessage(formatDatabaseError(error), "error");
+        return false;
+      }
+
+      const result = (
+        Array.isArray(data)
+          ? data[0]
+          : data
+      ) as ProcessAttendanceRpcResult | null | undefined;
+
+      if (!result) {
+        showMessage(
+          "The attendance request returned no result. Please try again.",
+          "error"
+        );
+        return false;
+      }
+
+      const participantName =
+        result.participant_name?.trim() || "Participant";
+
+      if (!result.success) {
+        showMessage(
+          result.result_message ||
+          "Unable to process the participant attendance.",
+          "error"
+        );
+
+        return false;
+      }
+
+      if (
+        result.already_checked_in ||
+        result.result_code === "already_checked_in"
+      ) {
+        const checkedInTime = result.attendance_checked_in_at
+          ? formatDateTime(result.attendance_checked_in_at)
+          : null;
+
+        showMessage(
+          checkedInTime
+            ? `${participantName} was already checked in at ${checkedInTime}.`
+            : `${participantName} is already marked as present.`,
+          "info"
+        );
+
+        await fetchAttendanceRecords(selectedAssignment.id);
+        return false;
+      }
+
+      if (result.result_code === "attendance_recorded") {
+        showMessage(
+          `${participantName} was checked in successfully.`,
+          "success"
+        );
+
+        await fetchAttendanceRecords(selectedAssignment.id);
+        return true;
+      }
+
+      showMessage(
+        result.result_message ||
+        `${participantName}'s attendance was processed successfully.`,
         "success"
       );
+
       await fetchAttendanceRecords(selectedAssignment.id);
       return true;
     },
@@ -589,10 +721,8 @@ export function useStaffAttendanceDashboard() {
       canUseAttendanceTools,
       fetchAttendanceRecords,
       getAttendanceBlockedMessage,
-      municipality,
       selectedAssignment,
       showMessage,
-      staffId,
     ]
   );
 

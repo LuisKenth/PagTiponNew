@@ -6,12 +6,14 @@ export default function ProvincialDashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-slate-100 lg:flex">
+    <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
       <ProvincialSidebar />
 
-      <main className="min-h-screen flex-1 p-4 lg:p-6">
-        {children}
-      </main>
+      <div className="min-w-0">
+        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 xl:p-10">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
