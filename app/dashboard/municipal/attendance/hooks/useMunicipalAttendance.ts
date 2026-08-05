@@ -23,6 +23,22 @@ import {
 
 const DEFAULT_PAGE_SIZE = 10;
 
+export type AttendanceEventGroup = {
+  eventMunicipalityId: string;
+  eventTitle: string;
+  eventStatus: string;
+  records: MunicipalAttendanceRecord[];
+
+  registeredCount: number;
+  presentCount: number;
+  lateCount: number;
+  absentCount: number;
+  pendingCount: number;
+
+  qrCheckInCount: number;
+  manualCheckInCount: number;
+};
+
 export default function useMunicipalAttendance() {
   const [
     attendanceRecords,
@@ -67,6 +83,10 @@ export default function useMunicipalAttendance() {
   const [currentPage, setCurrentPage] =
     useState(1);
 
+  /*
+   * Page size now represents the number
+   * of event groups displayed per page.
+   */
   const [pageSize, setPageSize] =
     useState(DEFAULT_PAGE_SIZE);
 
@@ -128,6 +148,12 @@ export default function useMunicipalAttendance() {
     void fetchAttendance();
   }, [fetchAttendance]);
 
+  /*
+   * Supports:
+   *
+   * /dashboard/municipal/attendance
+   * ?eventMunicipalityId=...
+   */
   useEffect(() => {
     const searchParameters =
       new URLSearchParams(
@@ -136,9 +162,7 @@ export default function useMunicipalAttendance() {
 
     const targetEventId =
       searchParameters
-        .get(
-          "eventMunicipalityId",
-        )
+        .get("eventMunicipalityId")
         ?.trim();
 
     if (targetEventId) {
@@ -176,6 +200,10 @@ export default function useMunicipalAttendance() {
       ],
     );
 
+  /*
+   * Overall cards remain based on all
+   * currently filtered participant records.
+   */
   const attendanceSummary = useMemo(
     () =>
       calculateAttendanceSummary(
@@ -184,32 +212,162 @@ export default function useMunicipalAttendance() {
     [filteredAttendanceRecords],
   );
 
+  /*
+   * Group the filtered records according
+   * to event_municipalities assignment.
+   */
+  const groupedAttendanceRecords =
+    useMemo<AttendanceEventGroup[]>(
+      () => {
+        const groupMap = new Map<
+          string,
+          MunicipalAttendanceRecord[]
+        >();
+
+        filteredAttendanceRecords.forEach(
+          (record) => {
+            const eventMunicipalityId =
+              String(
+                record.event_municipality_id ??
+                  "",
+              ).trim();
+
+            /*
+             * The event assignment ID should
+             * normally exist. Event title is
+             * retained as a defensive fallback.
+             */
+            const groupKey =
+              eventMunicipalityId ||
+              `event-title:${record.event_title}`;
+
+            const currentRecords =
+              groupMap.get(groupKey) ??
+              [];
+
+            currentRecords.push(record);
+
+            groupMap.set(
+              groupKey,
+              currentRecords,
+            );
+          },
+        );
+
+        return Array.from(
+          groupMap.entries(),
+        ).map(
+          ([
+            groupKey,
+            eventRecords,
+          ]) => {
+            const firstRecord =
+              eventRecords[0];
+
+            const presentCount =
+              eventRecords.filter(
+                (record) =>
+                  record.attendance_status ===
+                  "present",
+              ).length;
+
+            const lateCount =
+              eventRecords.filter(
+                (record) =>
+                  record.attendance_status ===
+                  "late",
+              ).length;
+
+            const absentCount =
+              eventRecords.filter(
+                (record) =>
+                  record.attendance_status ===
+                  "absent",
+              ).length;
+
+            const pendingCount =
+              eventRecords.filter(
+                (record) =>
+                  record.attendance_status ===
+                  "pending",
+              ).length;
+
+            const qrCheckInCount =
+              eventRecords.filter(
+                (record) =>
+                  record.attendance_method ===
+                  "qr",
+              ).length;
+
+            const manualCheckInCount =
+              eventRecords.filter(
+                (record) =>
+                  record.attendance_method ===
+                  "manual",
+              ).length;
+
+            return {
+              eventMunicipalityId:
+                groupKey,
+
+              eventTitle:
+                firstRecord
+                  ?.event_title ||
+                "Untitled Event",
+
+              eventStatus:
+                firstRecord
+                  ?.event_status ||
+                "unknown",
+
+              records: eventRecords,
+
+              registeredCount:
+                eventRecords.length,
+
+              presentCount,
+              lateCount,
+              absentCount,
+              pendingCount,
+
+              qrCheckInCount,
+              manualCheckInCount,
+            };
+          },
+        );
+      },
+      [filteredAttendanceRecords],
+    );
+
+  /*
+   * Pagination now uses event groups.
+   */
   const totalPages = Math.max(
     1,
     Math.ceil(
-      filteredAttendanceRecords.length /
+      groupedAttendanceRecords.length /
         pageSize,
     ),
   );
 
-  const paginatedAttendanceRecords =
+  const paginatedEventGroups =
     useMemo(() => {
       const startIndex =
         (currentPage - 1) *
         pageSize;
 
-      return filteredAttendanceRecords.slice(
+      return groupedAttendanceRecords.slice(
         startIndex,
         startIndex + pageSize,
       );
     }, [
       currentPage,
-      filteredAttendanceRecords,
+      groupedAttendanceRecords,
       pageSize,
     ]);
 
   const firstVisibleItem =
-    filteredAttendanceRecords.length ===
+    groupedAttendanceRecords.length ===
     0
       ? 0
       : (currentPage - 1) *
@@ -218,7 +376,7 @@ export default function useMunicipalAttendance() {
 
   const lastVisibleItem = Math.min(
     currentPage * pageSize,
-    filteredAttendanceRecords.length,
+    groupedAttendanceRecords.length,
   );
 
   const selectedEvent =
@@ -274,6 +432,7 @@ export default function useMunicipalAttendance() {
     value: string,
   ) {
     setSelectedEventId(value);
+    setCurrentPage(1);
 
     const nextUrl =
       value === "all"
@@ -319,31 +478,41 @@ export default function useMunicipalAttendance() {
   return {
     attendanceRecords,
     filteredAttendanceRecords,
-    paginatedAttendanceRecords,
+
+    groupedAttendanceRecords,
+    paginatedEventGroups,
+
     eventOptions,
     selectedEvent,
     attendanceSummary,
+
     loading,
     refreshing,
     errorMessage,
+
     searchTerm,
     selectedEventId,
     statusFilter,
     methodFilter,
+
     currentPage,
     pageSize,
     totalPages,
     firstVisibleItem,
     lastVisibleItem,
+
     hasActiveFilters,
+
     setSearchTerm,
     changeSelectedEvent,
     setStatusFilter,
     setMethodFilter,
     clearFilters,
+
     changePageSize,
     goToPreviousPage,
     goToNextPage,
+
     refreshAttendance: () =>
       fetchAttendance(true),
   };

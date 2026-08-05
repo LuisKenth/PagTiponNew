@@ -16,7 +16,8 @@ export default function MunicipalRegistrationsPage() {
   const {
     registrations,
     filteredRegistrations,
-    paginatedRegistrations,
+    groupedRegistrations,
+    paginatedEventGroups,
     eventOptions,
     selectedEvent,
     loading,
@@ -45,16 +46,13 @@ export default function MunicipalRegistrationsPage() {
   function handleExport() {
     exportRegistrationsCsv({
       /*
-       * Export all currently filtered records,
-       * not only the visible pagination page.
+       * Export all filtered participant
+       * registrations, not only the event
+       * groups visible on the current page.
        */
       registrations:
         filteredRegistrations,
 
-      /*
-       * When a specific event is selected,
-       * its title is included in the filename.
-       */
       eventTitle:
         selectedEvent?.event_title ??
         null,
@@ -117,32 +115,37 @@ export default function MunicipalRegistrationsPage() {
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
           <h2 className="text-lg font-bold text-slate-900">
-            Registration Records
+            Registration Records by Event
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Participant names and contact
-            details are visible only to the
-            authorized municipal administrator.
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Participant registrations are
+            grouped according to their assigned
+            provincial event. Select an event to
+            view its participant records.
           </p>
         </div>
 
         <RegistrationsTable
-          registrations={
-            paginatedRegistrations
+          eventGroups={
+            paginatedEventGroups
           }
           loading={loading}
           errorMessage={errorMessage}
         />
 
         {!loading &&
-          !errorMessage && (
+          !errorMessage &&
+          groupedRegistrations.length >
+            0 && (
             <RegistrationsPagination
-              currentPage={currentPage}
+              currentPage={
+                currentPage
+              }
               totalPages={totalPages}
               pageSize={pageSize}
               totalItems={
-                filteredRegistrations.length
+                groupedRegistrations.length
               }
               firstVisibleItem={
                 firstVisibleItem

@@ -17,38 +17,54 @@ export default function MunicipalAttendancePage() {
   const {
     attendanceRecords,
     filteredAttendanceRecords,
-    paginatedAttendanceRecords,
+
+    groupedAttendanceRecords,
+    paginatedEventGroups,
+
     eventOptions,
     selectedEvent,
     attendanceSummary,
+
     loading,
     refreshing,
     errorMessage,
+
     searchTerm,
     selectedEventId,
     statusFilter,
     methodFilter,
+
     currentPage,
     pageSize,
     totalPages,
     firstVisibleItem,
     lastVisibleItem,
+
     hasActiveFilters,
+
     setSearchTerm,
     changeSelectedEvent,
     setStatusFilter,
     setMethodFilter,
     clearFilters,
+
     changePageSize,
     goToPreviousPage,
     goToNextPage,
+
     refreshAttendance,
   } = useMunicipalAttendance();
 
   function handleExport() {
     exportAttendanceCsv({
+      /*
+       * Export all filtered participant
+       * records, not only the event groups
+       * displayed on the current page.
+       */
       records:
         filteredAttendanceRecords,
+
       eventTitle:
         selectedEvent?.event_title ??
         null,
@@ -117,33 +133,39 @@ export default function MunicipalAttendancePage() {
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
           <h2 className="text-lg font-bold text-slate-900">
-            Attendance Records
+            Attendance Records by Event
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
-            This page is for municipal
-            monitoring. QR scanning and manual
-            check-in remain under the authorized
-            Event Staff workflow.
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Attendance records are grouped
+            according to their provincial event.
+            This page is for municipal monitoring;
+            QR scanning and manual check-in remain
+            under the authorized Event Staff
+            workflow.
           </p>
         </div>
 
         <AttendanceTable
-          records={
-            paginatedAttendanceRecords
+          eventGroups={
+            paginatedEventGroups
           }
           loading={loading}
           errorMessage={errorMessage}
         />
 
         {!loading &&
-          !errorMessage && (
+          !errorMessage &&
+          groupedAttendanceRecords.length >
+            0 && (
             <AttendancePagination
-              currentPage={currentPage}
+              currentPage={
+                currentPage
+              }
               totalPages={totalPages}
               pageSize={pageSize}
               totalItems={
-                filteredAttendanceRecords.length
+                groupedAttendanceRecords.length
               }
               firstVisibleItem={
                 firstVisibleItem

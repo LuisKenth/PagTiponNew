@@ -22,13 +22,20 @@ import {
 
 const DEFAULT_PAGE_SIZE = 10;
 
+export type RegistrationEventGroup = {
+  eventMunicipalityId: string;
+  eventTitle: string;
+  registrations: MunicipalRegistration[];
+  registrationCount: number;
+  qrReadyCount: number;
+  isCancelled: boolean;
+};
+
 export default function useMunicipalRegistrations() {
   const [
     registrations,
     setRegistrations,
-  ] = useState<
-    MunicipalRegistration[]
-  >([]);
+  ] = useState<MunicipalRegistration[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -58,6 +65,10 @@ export default function useMunicipalRegistrations() {
   const [currentPage, setCurrentPage] =
     useState(1);
 
+  /*
+   * Page size now means the number of event
+   * groups shown per page.
+   */
   const [pageSize, setPageSize] =
     useState(DEFAULT_PAGE_SIZE);
 
@@ -120,7 +131,8 @@ export default function useMunicipalRegistrations() {
   }, [fetchRegistrations]);
 
   /*
-   * Support:
+   * Supports:
+   *
    * /dashboard/municipal/registrations
    * ?eventMunicipalityId=...
    */
@@ -132,9 +144,7 @@ export default function useMunicipalRegistrations() {
 
     const targetEventId =
       searchParameters
-        .get(
-          "eventMunicipalityId",
-        )
+        .get("eventMunicipalityId")
         ?.trim();
 
     if (targetEventId) {
@@ -169,42 +179,140 @@ export default function useMunicipalRegistrations() {
       ],
     );
 
+  /*
+   * Group all filtered participant records
+   * according to their event assignment.
+   */
+  const groupedRegistrations =
+    useMemo<RegistrationEventGroup[]>(
+      () => {
+        const groupMap = new Map<
+          string,
+          MunicipalRegistration[]
+        >();
+
+        filteredRegistrations.forEach(
+          (registration) => {
+            const eventMunicipalityId =
+              String(
+                registration.event_municipality_id ??
+                  "",
+              ).trim();
+
+            /*
+             * The event_municipality_id should
+             * normally exist. Event title is used
+             * only as a safe fallback.
+             */
+            const groupKey =
+              eventMunicipalityId ||
+              `event-title:${registration.event_title}`;
+
+            const currentGroup =
+              groupMap.get(groupKey) ?? [];
+
+            currentGroup.push(
+              registration,
+            );
+
+            groupMap.set(
+              groupKey,
+              currentGroup,
+            );
+          },
+        );
+
+        return Array.from(
+          groupMap.entries(),
+        ).map(
+          ([
+            groupKey,
+            eventRegistrations,
+          ]) => {
+            const firstRegistration =
+              eventRegistrations[0];
+
+            const cancelled =
+              eventRegistrations.some(
+                (registration) =>
+                  isCancelledRegistration(
+                    registration,
+                  ),
+              );
+
+            const eventQrReadyCount =
+              eventRegistrations.filter(
+                (registration) =>
+                  registration.qr_available &&
+                  !isCancelledRegistration(
+                    registration,
+                  ),
+              ).length;
+
+            return {
+              eventMunicipalityId:
+                groupKey,
+              eventTitle:
+                firstRegistration
+                  ?.event_title ||
+                "Untitled Event",
+              registrations:
+                eventRegistrations,
+              registrationCount:
+                eventRegistrations.length,
+              qrReadyCount:
+                eventQrReadyCount,
+              isCancelled: cancelled,
+            };
+          },
+        );
+      },
+      [filteredRegistrations],
+    );
+
+  /*
+   * Pagination is now based on event groups.
+   */
   const totalPages = Math.max(
     1,
     Math.ceil(
-      filteredRegistrations.length /
-      pageSize,
+      groupedRegistrations.length /
+        pageSize,
     ),
   );
 
-  const paginatedRegistrations =
+  const paginatedEventGroups =
     useMemo(() => {
       const startIndex =
         (currentPage - 1) *
         pageSize;
 
-      return filteredRegistrations.slice(
+      return groupedRegistrations.slice(
         startIndex,
         startIndex + pageSize,
       );
     }, [
       currentPage,
-      filteredRegistrations,
+      groupedRegistrations,
       pageSize,
     ]);
 
   const firstVisibleItem =
-    filteredRegistrations.length === 0
+    groupedRegistrations.length === 0
       ? 0
       : (currentPage - 1) *
-      pageSize +
-      1;
+          pageSize +
+        1;
 
   const lastVisibleItem = Math.min(
     currentPage * pageSize,
-    filteredRegistrations.length,
+    groupedRegistrations.length,
   );
 
+  /*
+   * This remains based on participant records
+   * because it is displayed in the main summary.
+   */
   const qrReadyCount =
     filteredRegistrations.filter(
       (registration) =>
@@ -218,10 +326,10 @@ export default function useMunicipalRegistrations() {
     selectedEventId === "all"
       ? null
       : eventOptions.find(
-        (eventOption) =>
-          eventOption.event_municipality_id ===
-          selectedEventId,
-      ) ?? null;
+          (eventOption) =>
+            eventOption.event_municipality_id ===
+            selectedEventId,
+        ) ?? null;
 
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
@@ -264,13 +372,14 @@ export default function useMunicipalRegistrations() {
     value: string,
   ) {
     setSelectedEventId(value);
+    setCurrentPage(1);
 
     const nextUrl =
       value === "all"
         ? "/dashboard/municipal/registrations"
         : `/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
-          value,
-        )}`;
+            value,
+          )}`;
 
     window.history.replaceState(
       {},
@@ -309,7 +418,8 @@ export default function useMunicipalRegistrations() {
   return {
     registrations,
     filteredRegistrations,
-    paginatedRegistrations,
+    groupedRegistrations,
+    paginatedEventGroups,
     eventOptions,
     selectedEvent,
     loading,
