@@ -17,6 +17,7 @@ import type {
 import {
   buildEventOptions,
   filterRegistrations,
+  isCancelledRegistration,
 } from "../utils/municipalRegistrationsUtils";
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -172,7 +173,7 @@ export default function useMunicipalRegistrations() {
     1,
     Math.ceil(
       filteredRegistrations.length /
-        pageSize,
+      pageSize,
     ),
   );
 
@@ -196,8 +197,8 @@ export default function useMunicipalRegistrations() {
     filteredRegistrations.length === 0
       ? 0
       : (currentPage - 1) *
-          pageSize +
-        1;
+      pageSize +
+      1;
 
   const lastVisibleItem = Math.min(
     currentPage * pageSize,
@@ -207,17 +208,20 @@ export default function useMunicipalRegistrations() {
   const qrReadyCount =
     filteredRegistrations.filter(
       (registration) =>
-        registration.qr_available,
+        registration.qr_available &&
+        !isCancelledRegistration(
+          registration,
+        ),
     ).length;
 
   const selectedEvent =
     selectedEventId === "all"
       ? null
       : eventOptions.find(
-          (eventOption) =>
-            eventOption.event_municipality_id ===
-            selectedEventId,
-        ) ?? null;
+        (eventOption) =>
+          eventOption.event_municipality_id ===
+          selectedEventId,
+      ) ?? null;
 
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
@@ -265,8 +269,8 @@ export default function useMunicipalRegistrations() {
       value === "all"
         ? "/dashboard/municipal/registrations"
         : `/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
-            value,
-          )}`;
+          value,
+        )}`;
 
     window.history.replaceState(
       {},

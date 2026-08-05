@@ -94,6 +94,43 @@ function isActiveEventStatus(
     ].includes(normalizedStatus);
 }
 
+function isCancelledRegistration(
+    item: RegistrationItem,
+) {
+    return (
+        normalizeStatus(
+            item.rsvp.status,
+        ) === "cancelled" ||
+        normalizeStatus(
+            item.event.status,
+        ) === "cancelled"
+    );
+}
+
+function isActiveRegistration(
+    item: RegistrationItem,
+) {
+    return (
+        normalizeStatus(
+            item.rsvp.status,
+        ) === "registered" &&
+        isActiveEventStatus(
+            item.event.status,
+        )
+    );
+}
+
+function isCompletedRegistration(
+    item: RegistrationItem,
+) {
+    return (
+        !isCancelledRegistration(item) &&
+        normalizeStatus(
+            item.event.status,
+        ) === "completed"
+    );
+}
+
 function getEventStatusLabel(
     status: string | null,
 ) {
@@ -193,7 +230,7 @@ export default function ParticipantRegistrationsPage() {
                 if (userError || !user) {
                     throw new Error(
                         userError?.message ||
-                            "Participant user not found.",
+                        "Participant user not found.",
                     );
                 }
 
@@ -213,7 +250,10 @@ export default function ParticipantRegistrationsPage() {
                         `,
                     )
                     .eq("user_id", user.id)
-                    .eq("status", "registered")
+                    .in("status", [
+                        "registered",
+                        "cancelled",
+                    ])
                     .order("registered_at", {
                         ascending: false,
                     });
@@ -385,16 +425,16 @@ export default function ParticipantRegistrationsPage() {
                                     first.event
                                         .start_at
                                         ? new Date(
-                                              first.event.start_at,
-                                          ).getTime()
+                                            first.event.start_at,
+                                        ).getTime()
                                         : 0;
 
                                 const secondDate =
                                     second.event
                                         .start_at
                                         ? new Date(
-                                              second.event.start_at,
-                                          ).getTime()
+                                            second.event.start_at,
+                                        ).getTime()
                                         : 0;
 
                                 if (
@@ -443,36 +483,21 @@ export default function ParticipantRegistrationsPage() {
     const registrationCounts =
         useMemo(() => {
             return {
-                total:
-                    registrations.length,
+                total: registrations.length,
 
                 active:
                     registrations.filter(
-                        (item) =>
-                            isActiveEventStatus(
-                                item.event
-                                    .status,
-                            ),
+                        isActiveRegistration,
                     ).length,
 
                 completed:
                     registrations.filter(
-                        (item) =>
-                            normalizeStatus(
-                                item.event
-                                    .status,
-                            ) ===
-                            "completed",
+                        isCompletedRegistration,
                     ).length,
 
                 cancelled:
                     registrations.filter(
-                        (item) =>
-                            normalizeStatus(
-                                item.event
-                                    .status,
-                            ) ===
-                            "cancelled",
+                        isCancelledRegistration,
                     ).length,
             };
         }, [registrations]);
@@ -483,10 +508,7 @@ export default function ParticipantRegistrationsPage() {
                 activeFilter === "active"
             ) {
                 return registrations.filter(
-                    (item) =>
-                        isActiveEventStatus(
-                            item.event.status,
-                        ),
+                    isActiveRegistration,
                 );
             }
 
@@ -495,10 +517,7 @@ export default function ParticipantRegistrationsPage() {
                 "completed"
             ) {
                 return registrations.filter(
-                    (item) =>
-                        normalizeStatus(
-                            item.event.status,
-                        ) === "completed",
+                    isCompletedRegistration,
                 );
             }
 
@@ -507,10 +526,7 @@ export default function ParticipantRegistrationsPage() {
                 "cancelled"
             ) {
                 return registrations.filter(
-                    (item) =>
-                        normalizeStatus(
-                            item.event.status,
-                        ) === "cancelled",
+                    isCancelledRegistration,
                 );
             }
 
@@ -525,31 +541,31 @@ export default function ParticipantRegistrationsPage() {
         label: string;
         count: number;
     }[] = [
-        {
-            value: "all",
-            label: "All",
-            count:
-                registrationCounts.total,
-        },
-        {
-            value: "active",
-            label: "Active",
-            count:
-                registrationCounts.active,
-        },
-        {
-            value: "completed",
-            label: "Completed",
-            count:
-                registrationCounts.completed,
-        },
-        {
-            value: "cancelled",
-            label: "Cancelled",
-            count:
-                registrationCounts.cancelled,
-        },
-    ];
+            {
+                value: "all",
+                label: "All",
+                count:
+                    registrationCounts.total,
+            },
+            {
+                value: "active",
+                label: "Active",
+                count:
+                    registrationCounts.active,
+            },
+            {
+                value: "completed",
+                label: "Completed",
+                count:
+                    registrationCounts.completed,
+            },
+            {
+                value: "cancelled",
+                label: "Cancelled",
+                count:
+                    registrationCounts.cancelled,
+            },
+        ];
 
     return (
         <main className="p-4 sm:p-6 lg:p-8">
@@ -584,11 +600,10 @@ export default function ParticipantRegistrationsPage() {
                             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <RefreshCw
-                                className={`size-4 ${
-                                    refreshing
-                                        ? "animate-spin"
-                                        : ""
-                                }`}
+                                className={`size-4 ${refreshing
+                                    ? "animate-spin"
+                                    : ""
+                                    }`}
                                 aria-hidden="true"
                             />
 
@@ -726,11 +741,10 @@ export default function ParticipantRegistrationsPage() {
                                                     filter.value,
                                                 )
                                             }
-                                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                                                selected
-                                                    ? "bg-slate-950 text-white"
-                                                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                                            }`}
+                                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selected
+                                                ? "bg-slate-950 text-white"
+                                                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                                                }`}
                                         >
                                             {
                                                 filter.label
@@ -790,7 +804,7 @@ export default function ParticipantRegistrationsPage() {
                             </button>
                         </div>
                     ) : registrations.length ===
-                      0 ? (
+                        0 ? (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
                             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
                                 <CalendarCheck2
@@ -818,7 +832,7 @@ export default function ParticipantRegistrationsPage() {
                             </Link>
                         </div>
                     ) : filteredRegistrations.length ===
-                      0 ? (
+                        0 ? (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                             <p className="font-semibold text-slate-800">
                                 No matching
@@ -842,18 +856,18 @@ export default function ParticipantRegistrationsPage() {
                                         );
 
                                     const active =
-                                        isActiveEventStatus(
-                                            item.event
-                                                .status,
-                                        );
-
-                                    const completed =
-                                        eventStatus ===
-                                        "completed";
+                                        isActiveRegistration(item);
 
                                     const cancelled =
-                                        eventStatus ===
-                                        "cancelled";
+                                        isCancelledRegistration(item);
+
+                                    const completed =
+                                        isCompletedRegistration(item);
+
+                                    const rsvpCancelled =
+                                        normalizeStatus(
+                                            item.rsvp.status,
+                                        ) === "cancelled";
 
                                     return (
                                         <article
@@ -884,8 +898,15 @@ export default function ParticipantRegistrationsPage() {
                                                 </div>
 
                                                 <div className="flex flex-wrap gap-2">
-                                                    <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">
-                                                        Registered
+                                                    <span
+                                                        className={`rounded-full px-3 py-1 text-xs font-semibold ${rsvpCancelled
+                                                                ? "bg-red-100 text-red-700"
+                                                                : "bg-violet-100 text-violet-700"
+                                                            }`}
+                                                    >
+                                                        {rsvpCancelled
+                                                            ? "Registration Cancelled"
+                                                            : "Registered"}
                                                     </span>
 
                                                     <span
@@ -944,21 +965,21 @@ export default function ParticipantRegistrationsPage() {
                                             {item
                                                 .assignment
                                                 .local_instructions && (
-                                                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                        Local
-                                                        Instructions
-                                                    </p>
+                                                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                                                            Local
+                                                            Instructions
+                                                        </p>
 
-                                                    <p className="mt-1 text-sm leading-6 text-amber-900">
-                                                        {
-                                                            item
-                                                                .assignment
-                                                                .local_instructions
-                                                        }
-                                                    </p>
-                                                </div>
-                                            )}
+                                                        <p className="mt-1 text-sm leading-6 text-amber-900">
+                                                            {
+                                                                item
+                                                                    .assignment
+                                                                    .local_instructions
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
 
                                             <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
                                                 <Clock3

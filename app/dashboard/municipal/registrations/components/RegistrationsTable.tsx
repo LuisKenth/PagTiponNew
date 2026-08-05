@@ -3,6 +3,7 @@ import {
   QrCode,
   Search,
   UserRound,
+  XCircle,
 } from "lucide-react";
 
 import type {
@@ -17,7 +18,7 @@ import {
 
 type RegistrationsTableProps = {
   registrations:
-    MunicipalRegistration[];
+  MunicipalRegistration[];
   loading: boolean;
   errorMessage: string | null;
 };
@@ -152,11 +153,10 @@ export default function RegistrationsTable({
 
                   <td className="px-5 py-4 align-top">
                     <p
-                      className={`font-semibold ${
-                        cancelled
-                          ? "text-red-900"
-                          : "text-slate-800"
-                      }`}
+                      className={`font-semibold ${cancelled
+                        ? "text-red-900"
+                        : "text-slate-800"
+                        }`}
                     >
                       {
                         registration.event_title
@@ -172,15 +172,18 @@ export default function RegistrationsTable({
 
                   <td className="px-5 py-4 align-top">
                     <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        registered
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${cancelled
+                        ? "bg-red-100 text-red-700"
+                        : registered
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-amber-100 text-amber-700"
-                      }`}
+                        }`}
                     >
-                      {registered
-                        ? "Registered"
-                        : "Pending"}
+                      {cancelled
+                        ? "Cancelled"
+                        : registered
+                          ? "Registered"
+                          : "Pending"}
                     </span>
                   </td>
 
@@ -191,23 +194,36 @@ export default function RegistrationsTable({
                   </td>
 
                   <td className="px-5 py-4 align-top">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        registration.qr_available
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
-                      {registration.qr_available ? (
-                        <QrCode className="h-3.5 w-3.5" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
+                    {(() => {
+                      const qrActive =
+                        registration.qr_available &&
+                        !cancelled;
 
-                      {registration.qr_available
-                        ? "Generated"
-                        : "Missing"}
-                    </span>
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cancelled
+                              ? "bg-red-100 text-red-700"
+                              : qrActive
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                        >
+                          {cancelled ? (
+                            <XCircle className="h-3.5 w-3.5" />
+                          ) : qrActive ? (
+                            <QrCode className="h-3.5 w-3.5" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          )}
+
+                          {cancelled
+                            ? "Inactive"
+                            : qrActive
+                              ? "Generated"
+                              : "Missing"}
+                        </span>
+                      );
+                    })()}
                   </td>
                 </tr>
               );
