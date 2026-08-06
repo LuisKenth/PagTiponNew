@@ -147,7 +147,9 @@ export default function MunicipalSidebar() {
     };
   }, [mobileOpen]);
 
-  function normalizePath(path: string) {
+  function normalizePath(
+    path: string,
+  ) {
     if (path === "/") {
       return path;
     }
@@ -155,7 +157,9 @@ export default function MunicipalSidebar() {
     return path.replace(/\/+$/, "");
   }
 
-  function isActiveLink(href: string) {
+  function isActiveLink(
+    href: string,
+  ) {
     const currentPath =
       normalizePath(pathname);
 
@@ -242,7 +246,8 @@ export default function MunicipalSidebar() {
             type="button"
             onClick={() =>
               setMobileOpen(
-                (previous) => !previous,
+                (previous) =>
+                  !previous,
               )
             }
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100"
@@ -276,15 +281,14 @@ export default function MunicipalSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-72 transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${
-          mobileOpen
+        className={`fixed left-0 top-0 z-50 h-screen w-72 transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${mobileOpen
             ? "translate-x-0"
             : "-translate-x-full"
-        }`}
+          }`}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-h-0 flex-col">
           {/* Brand */}
-          <div className="border-b border-slate-200 px-5 py-5">
+          <div className="shrink-0 border-b border-slate-200 px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm">
@@ -316,16 +320,16 @@ export default function MunicipalSidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-4 py-5">
-            <div className="space-y-6">
+          <nav className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            <div className="space-y-4">
               {navigationGroups.map(
                 (group) => (
                   <div key={group.label}>
-                    <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                    <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
                       {group.label}
                     </p>
 
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       {group.links.map(
                         (link) => {
                           const active =
@@ -358,19 +362,17 @@ export default function MunicipalSidebar() {
                                   ? "page"
                                   : undefined
                               }
-                              className={`group flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                                active
+                              className={`group flex min-h-10 items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${active
                                   ? "bg-slate-950 text-white shadow-sm"
                                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                              }`}
+                                }`}
                             >
                               <span className="flex min-w-0 items-center gap-3">
                                 <Icon
-                                  className={`h-5 w-5 shrink-0 ${
-                                    active
+                                  className={`h-[18px] w-[18px] shrink-0 ${active
                                       ? "text-white"
                                       : "text-slate-400 transition group-hover:text-slate-700"
-                                  }`}
+                                    }`}
                                 />
 
                                 <span className="truncate">
@@ -393,11 +395,10 @@ export default function MunicipalSidebar() {
                                 )}
 
                                 <ChevronRight
-                                  className={`h-4 w-4 ${
-                                    active
+                                  className={`h-4 w-4 ${active
                                       ? "text-slate-300"
                                       : "text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500"
-                                  }`}
+                                    }`}
                                 />
                               </span>
                             </Link>
@@ -412,9 +413,9 @@ export default function MunicipalSidebar() {
           </nav>
 
           {/* Bottom section */}
-          <div className="border-t border-slate-200 p-4">
-            <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+          <div className="shrink-0 border-t border-slate-200 p-3">
+            <div className="mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 Current Workspace
               </p>
 
@@ -422,7 +423,7 @@ export default function MunicipalSidebar() {
                 Municipal Administration
               </p>
 
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-[11px] text-slate-500">
                 Event coordination portal
               </p>
             </div>
@@ -431,7 +432,7 @@ export default function MunicipalSidebar() {
               type="button"
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <LogOut className="h-4 w-4" />
 
