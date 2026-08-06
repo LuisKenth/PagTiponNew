@@ -13,7 +13,16 @@ export type MunicipalVenueProfile = {
   municipality: string | null;
 };
 
-export type VenueFeedback = {
-  type: "success" | "error";
-  message: string;
-};
+export type VenueFeedback =
+  | {
+      type: "success";
+      action:
+        | "added"
+        | "updated"
+        | "deleted";
+      message: string;
+    }
+  | {
+      type: "error";
+      message: string;
+    };

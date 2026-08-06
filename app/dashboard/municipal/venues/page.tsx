@@ -14,6 +14,12 @@ import VenuesPagination from "./components/VenuesPagination";
 
 import useMunicipalVenues from "./hooks/useMunicipalVenues";
 
+const successFeedbackTitles = {
+  added: "Venue Added",
+  updated: "Venue Updated",
+  deleted: "Venue Deleted",
+} as const;
+
 export default function MunicipalVenuesPage() {
   const {
     venues,
@@ -78,21 +84,19 @@ export default function MunicipalVenuesPage() {
 
       {feedback && (
         <section
-          className={`relative flex items-start gap-3 rounded-2xl border p-4 pr-12 shadow-sm ${
-            feedback.type === "success"
+          className={`relative flex items-start gap-3 rounded-2xl border p-4 pr-12 shadow-sm ${feedback.type === "success"
               ? "border-emerald-200 bg-emerald-50"
               : "border-red-200 bg-red-50"
-          }`}
+            }`}
         >
           <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-              feedback.type === "success"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${feedback.type === "success"
                 ? "bg-emerald-100 text-emerald-700"
                 : "bg-red-100 text-red-700"
-            }`}
+              }`}
           >
             {feedback.type ===
-            "success" ? (
+              "success" ? (
               <CheckCircle2 className="h-5 w-5" />
             ) : (
               <CircleAlert className="h-5 w-5" />
@@ -101,23 +105,23 @@ export default function MunicipalVenuesPage() {
 
           <div>
             <p
-              className={`text-sm font-bold ${
-                feedback.type === "success"
+              className={`text-sm font-bold ${feedback.type === "success"
                   ? "text-emerald-900"
                   : "text-red-900"
-              }`}
+                }`}
             >
               {feedback.type === "success"
-                ? "Venue Saved"
+                ? successFeedbackTitles[
+                feedback.action
+                ]
                 : "Venue Action Failed"}
             </p>
 
             <p
-              className={`mt-1 text-sm leading-6 ${
-                feedback.type === "success"
+              className={`mt-1 text-sm leading-6 ${feedback.type === "success"
                   ? "text-emerald-700"
                   : "text-red-700"
-              }`}
+                }`}
             >
               {feedback.message}
             </p>

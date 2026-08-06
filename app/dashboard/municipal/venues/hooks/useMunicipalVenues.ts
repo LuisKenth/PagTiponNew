@@ -23,7 +23,65 @@ function normalizeValue(
 ) {
   return String(value ?? "")
     .trim()
+    .replace(/\s+/g, " ")
     .toLowerCase();
+}
+
+function cleanVenueNameValue(
+  value: string,
+) {
+  return value
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function getDatabaseErrorCode(
+  error: unknown,
+) {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    !("code" in error)
+  ) {
+    return null;
+  }
+
+  const code = (
+    error as {
+      code?: unknown;
+    }
+  ).code;
+
+  return typeof code === "string"
+    ? code
+    : null;
+}
+
+function getErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error
+  ) {
+    const message = (
+      error as {
+        message?: unknown;
+      }
+    ).message;
+
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  return fallbackMessage;
 }
 
 export default function useMunicipalVenues() {
@@ -119,7 +177,7 @@ export default function useMunicipalVenues() {
         if (profileError || !profile) {
           throw new Error(
             profileError?.message ||
-              "Profile not found.",
+            "Profile not found.",
           );
         }
 
@@ -230,7 +288,7 @@ export default function useMunicipalVenues() {
     1,
     Math.ceil(
       filteredVenues.length /
-        pageSize,
+      pageSize,
     ),
   );
 
@@ -254,8 +312,8 @@ export default function useMunicipalVenues() {
     filteredVenues.length === 0
       ? 0
       : (currentPage - 1) *
-          pageSize +
-        1;
+      pageSize +
+      1;
 
   const lastVisibleItem = Math.min(
     currentPage * pageSize,
@@ -325,7 +383,7 @@ export default function useMunicipalVenues() {
     setFeedback(null);
 
     const cleanVenueName =
-      venueName.trim();
+      cleanVenueNameValue(venueName);
 
     const capacityNumber =
       Number(capacity);
@@ -367,6 +425,35 @@ export default function useMunicipalVenues() {
       return;
     }
 
+    const normalizedVenueName =
+      normalizeValue(cleanVenueName);
+
+    const duplicateVenue =
+      venues.find((venue) => {
+        const isCurrentEditingVenue =
+          editingVenue?.id ===
+          venue.id;
+
+        if (isCurrentEditingVenue) {
+          return false;
+        }
+
+        return (
+          normalizeValue(
+            venue.venue_name,
+          ) === normalizedVenueName
+        );
+      });
+
+    if (duplicateVenue) {
+      setFeedback({
+        type: "error",
+        message: `A venue with this name already exists in ${municipality}.`,
+      });
+
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -401,6 +488,7 @@ export default function useMunicipalVenues() {
 
         setFeedback({
           type: "success",
+          action: "updated",
           message:
             "Venue updated successfully.",
         });
@@ -427,6 +515,7 @@ export default function useMunicipalVenues() {
 
         setFeedback({
           type: "success",
+          action: "added",
           message:
             "Venue added successfully.",
         });
@@ -437,12 +526,18 @@ export default function useMunicipalVenues() {
         error,
       );
 
+      const isDuplicateError =
+        getDatabaseErrorCode(error) ===
+        "23505";
+
       setFeedback({
         type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to save the venue.",
+        message: isDuplicateError
+          ? `A venue with this name already exists in ${municipality}.`
+          : getErrorMessage(
+            error,
+            "Unable to save the venue.",
+          ),
       });
     } finally {
       setSaving(false);
@@ -509,6 +604,7 @@ export default function useMunicipalVenues() {
 
       setFeedback({
         type: "success",
+        action: "deleted",
         message:
           "Venue deleted successfully.",
       });
