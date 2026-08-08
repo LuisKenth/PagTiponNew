@@ -7,10 +7,6 @@ as $$
 declare
   actor_role text;
 begin
-  /*
-   * Allow trusted server operations where there is
-   * no authenticated end-user JWT.
-   */
   if auth.uid() is null then
     return new;
   end if;
@@ -20,11 +16,8 @@ begin
   from public.profiles p
   where p.id = auth.uid();
 
-  /*
-   * Only provincial administrators may change
-   * authorization-related profile fields.
-   */
   if actor_role is distinct from 'provincial_admin' then
+
     if new.id is distinct from old.id then
       raise exception
         'You are not allowed to change the profile ID.';
@@ -46,6 +39,7 @@ begin
       raise exception
         'You are not allowed to change your verification status.';
     end if;
+
   end if;
 
   return new;
@@ -56,7 +50,8 @@ drop trigger if exists
   protect_profile_authorization_fields_trigger
 on public.profiles;
 
-create trigger protect_profile_authorization_fields_trigger
+create trigger
+  protect_profile_authorization_fields_trigger
 before update on public.profiles
 for each row
 execute function

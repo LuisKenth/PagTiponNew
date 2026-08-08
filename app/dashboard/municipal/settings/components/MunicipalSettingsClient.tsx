@@ -70,7 +70,7 @@ export default function MunicipalSettingsClient() {
       if (profileError || !data) {
         throw new Error(
           profileError?.message ??
-            "Unable to load your profile.",
+          "Unable to load your profile.",
         );
       }
 
@@ -148,7 +148,7 @@ export default function MunicipalSettingsClient() {
     <div className="space-y-6">
       <SettingsHeader />
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(430px,0.8fr)]">
         <ProfileSettingsCard
           profile={profile}
           onProfileUpdated={setProfile}
@@ -174,7 +174,7 @@ function SettingsLoadingState() {
         </div>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(430px,0.8fr)]">
         <LoadingCard rows={5} />
         <LoadingCard rows={4} />
       </div>
