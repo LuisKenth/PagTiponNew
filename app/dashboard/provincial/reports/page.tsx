@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 
 import AttendanceBreakdown from "./components/AttendanceBreakdown";
@@ -9,6 +10,7 @@ import EventStatusSummary from "./components/EventStatusSummary";
 import ExportCSVButton from "./components/ExportCSVButton";
 import MunicipalityParticipationTable from "./components/MunicipalityParticipationTable";
 import NeedsAttention from "./components/NeedsAttention";
+import ParticipantCategoryBreakdown from "./components/ParticipantCategoryBreakdown";
 import PreparedPendingSummary from "./components/PreparedPendingSummary";
 import PrintReportButton from "./components/PrintReportButton";
 import ReportFilters from "./components/ReportFilters";
@@ -19,7 +21,9 @@ import useProvincialReports from "./hooks/useProvincialReports";
 
 export default function ProvincialReportsPage() {
   const reports = useProvincialReports();
-  const [generatedAt, setGeneratedAt] = useState("");
+
+  const [generatedAt, setGeneratedAt] =
+    useState("");
 
   useEffect(() => {
     setGeneratedAt(
@@ -29,7 +33,9 @@ export default function ProvincialReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Normal Screen Header - Hidden when printing */}
+      {/* =========================================
+          NORMAL SCREEN HEADER
+          ========================================= */}
       <div className="print:hidden">
         <ReportsHeader
           loading={reports.loading}
@@ -37,7 +43,9 @@ export default function ProvincialReportsPage() {
         />
       </div>
 
-      {/* Error Message - Hidden when printing */}
+      {/* =========================================
+          ERROR MESSAGE
+          ========================================= */}
       {reports.errorMessage && (
         <div className="print:hidden">
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -52,12 +60,17 @@ export default function ProvincialReportsPage() {
         </div>
       )}
 
-      {/* Filters - Hidden when printing */}
+      {/* =========================================
+          FILTERS
+          ========================================= */}
       <div className="print:hidden">
         <ReportFilters
           events={reports.events}
           municipalityOptions={
             reports.municipalityOptions
+          }
+          participantCategoryOptions={
+            reports.participantCategoryOptions
           }
           selectedEventId={
             reports.selectedEventId
@@ -70,6 +83,12 @@ export default function ProvincialReportsPage() {
           }
           onMunicipalityChange={
             reports.setSelectedMunicipality
+          }
+          selectedParticipantCategory={
+            reports.selectedParticipantCategory
+          }
+          onParticipantCategoryChange={
+            reports.setSelectedParticipantCategory
           }
           dateFrom={reports.dateFrom}
           onDateFromChange={
@@ -86,7 +105,9 @@ export default function ProvincialReportsPage() {
         />
       </div>
 
-      {/* Report Actions - Hidden when printing */}
+      {/* =========================================
+          REPORT ACTIONS
+          ========================================= */}
       <div className="flex flex-wrap justify-end gap-3 print:hidden">
         <PrintReportButton />
 
@@ -96,6 +117,9 @@ export default function ProvincialReportsPage() {
           }
           municipalityReports={
             reports.filteredMunicipalityReports
+          }
+          participantCategoryBreakdown={
+            reports.participantCategoryBreakdown
           }
         />
       </div>
@@ -107,26 +131,31 @@ export default function ProvincialReportsPage() {
         id="printable-report"
         className="space-y-6"
       >
-        {/* Print-only Header */}
+        {/* =======================================
+            PRINT-ONLY HEADER
+            ======================================= */}
         <div className="hidden print:block">
-          <div className="border-b border-slate-300 pb-4">
-            <h1 className="text-2xl font-bold text-slate-900">
+          <div className="border-b border-slate-300 pb-3">
+            <h1 className="text-2xl font-bold text-slate-900 print:text-lg">
               PagTipon Provincial Report
             </h1>
 
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-slate-600 print:text-[10px]">
               Event Participation, Preparation, and
               Attendance Report
             </p>
 
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-500 print:mt-1 print:text-[9px]">
               Generated:{" "}
-              {generatedAt || "Preparing report..."}
+              {generatedAt ||
+                "Preparing report..."}
             </p>
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* =======================================
+            SUMMARY CARDS
+            ======================================= */}
         <ReportSummaryCards
           eventCount={
             reports.filteredEvents.length
@@ -151,22 +180,30 @@ export default function ProvincialReportsPage() {
           }
         />
 
-        {/* Step 3 */}
+        {/* =======================================
+            EVENT STATUS
+            ======================================= */}
         <EventStatusSummary
-          summary={reports.eventStatusSummary}
+          summary={
+            reports.eventStatusSummary
+          }
           totalEvents={
             reports.filteredEvents.length
           }
         />
 
-        {/* Step 4 */}
+        {/* =======================================
+            PREPARED VS PENDING
+            ======================================= */}
         <PreparedPendingSummary
           summary={
             reports.preparedVsPendingSummary
           }
         />
 
-        {/* Step 5 */}
+        {/* =======================================
+            TOP MUNICIPALITIES
+            ======================================= */}
         <TopParticipatingMunicipalities
           reports={
             reports.filteredMunicipalityReports
@@ -174,7 +211,9 @@ export default function ProvincialReportsPage() {
           loading={reports.loading}
         />
 
-        {/* Step 6 */}
+        {/* =======================================
+            NEEDS ATTENTION
+            ======================================= */}
         <NeedsAttention
           reports={
             reports.filteredMunicipalityReports
@@ -182,7 +221,9 @@ export default function ProvincialReportsPage() {
           loading={reports.loading}
         />
 
-        {/* Step 7 */}
+        {/* =======================================
+            EVENT PERFORMANCE
+            ======================================= */}
         <EventPerformance
           reports={
             reports.filteredEventReports
@@ -190,7 +231,9 @@ export default function ProvincialReportsPage() {
           loading={reports.loading}
         />
 
-        {/* Step 8 */}
+        {/* =======================================
+            ATTENDANCE TREND
+            ======================================= */}
         <AttendanceTrend
           reports={
             reports.filteredEventReports
@@ -198,7 +241,9 @@ export default function ProvincialReportsPage() {
           loading={reports.loading}
         />
 
-        {/* Event Attendance */}
+        {/* =======================================
+            EVENT ATTENDANCE SUMMARY
+            ======================================= */}
         <EventAttendanceTable
           reports={
             reports.filteredEventReports
@@ -206,7 +251,9 @@ export default function ProvincialReportsPage() {
           loading={reports.loading}
         />
 
-        {/* Municipality Participation */}
+        {/* =======================================
+            MUNICIPALITY PARTICIPATION
+            ======================================= */}
         <MunicipalityParticipationTable
           reports={
             reports.filteredMunicipalityReports
@@ -214,7 +261,19 @@ export default function ProvincialReportsPage() {
           loading={reports.loading}
         />
 
-        {/* Attendance Breakdown */}
+        {/* =======================================
+            PARTICIPANT CATEGORY BREAKDOWN
+            ======================================= */}
+        <ParticipantCategoryBreakdown
+          items={
+            reports.participantCategoryBreakdown
+          }
+          loading={reports.loading}
+        />
+
+        {/* =======================================
+            ATTENDANCE BREAKDOWN
+            ======================================= */}
         {!reports.loading && (
           <AttendanceBreakdown
             totalRegistrations={
@@ -229,19 +288,125 @@ export default function ProvincialReportsPage() {
           />
         )}
 
-        {/* Print-only Footer */}
-        <div className="hidden border-t border-slate-300 pt-4 print:block">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <p>
-              PagTipon — Provincial Event Report
-            </p>
+        {/* =======================================
+            PRINT-ONLY FOOTER
+            ======================================= */}
+        <div className="hidden print:block">
+          <div className="border-t border-slate-300 pt-3">
+            <div className="flex items-center justify-between text-[9px] text-slate-500">
+              <p>
+                PagTipon — Provincial Event
+                Report
+              </p>
 
-            <p>
-              Province of Antique
-            </p>
+              <p>
+                Province of Antique
+              </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* =========================================
+          GLOBAL PRINT STYLES
+          ========================================= */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm;
+          }
+
+          html,
+          body {
+            background: #ffffff !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          /*
+           * PRINTABLE REPORT WIDTH
+           */
+          #printable-report {
+            width: 100% !important;
+            max-width: none !important;
+          }
+
+          /*
+           * Replace normal space-y-6 spacing
+           * with smaller print spacing.
+           */
+          #printable-report > * {
+            margin-top: 0 !important;
+          }
+
+          #printable-report > * + * {
+            margin-top: 10px !important;
+          }
+
+          /*
+           * Remove unnecessary shadows.
+           */
+          #printable-report section {
+            box-shadow: none !important;
+          }
+
+          /*
+           * Prevent headings from being left
+           * alone at the bottom of a page.
+           */
+          #printable-report h1,
+          #printable-report h2,
+          #printable-report h3 {
+            break-after: avoid-page;
+            page-break-after: avoid;
+          }
+
+          /*
+           * Tables
+           */
+          #printable-report table {
+            width: 100% !important;
+            font-size: 9px !important;
+          }
+
+          #printable-report thead {
+            display: table-header-group;
+          }
+
+          #printable-report tfoot {
+            display: table-footer-group;
+          }
+
+          /*
+           * Do not split a single table row
+           * between two pages.
+           */
+          #printable-report tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /*
+           * Avoid splitting common small items.
+           */
+          #printable-report li {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /*
+           * Keep progress bars/colors visible.
+           */
+          #printable-report * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -61,6 +61,11 @@ const participantNavigation: ParticipantNavigationItem[] =
             icon: History,
         },
         {
+            label: "My Profile",
+            href: "/dashboard/participant/profile",
+            icon: UserRound,
+        },
+        {
             label: "Notifications",
             href: "/dashboard/participant/notifications",
             icon: Bell,
@@ -227,7 +232,7 @@ export default function ParticipantSidebar() {
 
                             const showBadge =
                                 item.showUnreadBadge ===
-                                    true &&
+                                true &&
                                 unreadCount > 0;
 
                             return (
@@ -239,18 +244,16 @@ export default function ParticipantSidebar() {
                                             ? "page"
                                             : undefined
                                     }
-                                    className={`group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                                        active
+                                    className={`group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ${active
                                             ? "bg-slate-950 text-white shadow-sm"
                                             : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                                    }`}
+                                        }`}
                                 >
                                     <Icon
-                                        className={`size-5 shrink-0 ${
-                                            active
+                                        className={`size-5 shrink-0 ${active
                                                 ? "text-white"
                                                 : "text-slate-400 transition group-hover:text-slate-700"
-                                        }`}
+                                            }`}
                                         aria-hidden="true"
                                     />
 
@@ -262,11 +265,10 @@ export default function ParticipantSidebar() {
                                         {showBadge && (
                                             <span
                                                 aria-label={`${unreadCount} unread notifications`}
-                                                className={`inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-                                                    active
+                                                className={`inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${active
                                                         ? "bg-white text-slate-950"
                                                         : "bg-red-500 text-white"
-                                                }`}
+                                                    }`}
                                             >
                                                 {formatUnreadCount(
                                                     unreadCount,
@@ -393,11 +395,10 @@ export default function ParticipantSidebar() {
             {/* Mobile sidebar */}
             <aside
                 aria-label="Participant sidebar"
-                className={`fixed inset-y-0 left-0 z-50 w-[86%] max-w-72 border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 lg:hidden ${
-                    mobileSidebarOpen
+                className={`fixed inset-y-0 left-0 z-50 w-[86%] max-w-72 border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 lg:hidden ${mobileSidebarOpen
                         ? "translate-x-0"
                         : "-translate-x-full"
-                }`}
+                    }`}
             >
                 <button
                     type="button"
