@@ -11,10 +11,15 @@ export type MunicipalRegistration = {
   event_status: string | null;
   municipal_status: string | null;
   registration_open: boolean;
+
   participant_id: string;
   participant_name: string;
   participant_email: string;
   participant_municipality: string | null;
+
+  participant_category: string | null;
+  participant_category_other: string | null;
+
   rsvp_status: string | null;
   registered_at: string | null;
   qr_available: boolean;

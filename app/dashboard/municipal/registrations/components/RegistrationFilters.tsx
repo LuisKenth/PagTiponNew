@@ -8,22 +8,43 @@ import type {
   RegistrationStatusFilter,
 } from "../types/municipalRegistrations";
 
+type ParticipantCategoryOption = {
+  value: string;
+  label: string;
+  count: number;
+};
+
 type RegistrationFiltersProps = {
   searchTerm: string;
   selectedEventId: string;
   statusFilter: RegistrationStatusFilter;
+
+  participantCategoryFilter: string;
+
   eventOptions: RegistrationEventOption[];
+
+  participantCategoryOptions:
+    ParticipantCategoryOption[];
+
   resultCount: number;
   hasActiveFilters: boolean;
+
   onSearchChange: (
     value: string,
   ) => void;
+
   onEventChange: (
     value: string,
   ) => void;
+
   onStatusChange: (
     value: RegistrationStatusFilter,
   ) => void;
+
+  onParticipantCategoryChange: (
+    value: string,
+  ) => void;
+
   onClearFilters: () => void;
 };
 
@@ -31,17 +52,21 @@ export default function RegistrationFilters({
   searchTerm,
   selectedEventId,
   statusFilter,
+  participantCategoryFilter,
   eventOptions,
+  participantCategoryOptions,
   resultCount,
   hasActiveFilters,
   onSearchChange,
   onEventChange,
   onStatusChange,
+  onParticipantCategoryChange,
   onClearFilters,
 }: RegistrationFiltersProps) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(15rem,1fr)_minmax(12rem,0.65fr)]">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* Search */}
         <label>
           <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
             Search Participants
@@ -58,12 +83,13 @@ export default function RegistrationFilters({
                   event.target.value,
                 )
               }
-              placeholder="Search participant name or email..."
+              placeholder="Search name, email, or category..."
               className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             />
           </div>
         </label>
 
+        {/* Event */}
         <label>
           <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
             Event
@@ -106,6 +132,52 @@ export default function RegistrationFilters({
           </select>
         </label>
 
+        {/* Participant Category */}
+        <label>
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            Participant Category
+          </span>
+
+          <select
+            value={
+              participantCategoryFilter
+            }
+            onChange={(event) =>
+              onParticipantCategoryChange(
+                event.target.value,
+              )
+            }
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+          >
+            <option value="all">
+              All Categories
+            </option>
+
+            {participantCategoryOptions.map(
+              (categoryOption) => (
+                <option
+                  key={
+                    categoryOption.value
+                  }
+                  value={
+                    categoryOption.value
+                  }
+                >
+                  {
+                    categoryOption.label
+                  }{" "}
+                  (
+                  {
+                    categoryOption.count
+                  }
+                  )
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+
+        {/* Registration Status */}
         <label>
           <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
             Registration Status
@@ -152,7 +224,9 @@ export default function RegistrationFilters({
 
           <button
             type="button"
-            onClick={onClearFilters}
+            onClick={
+              onClearFilters
+            }
             className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
           >
             <FilterX className="h-4 w-4" />

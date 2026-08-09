@@ -3,18 +3,26 @@ import type {
 } from "../types/municipalRegistrations";
 
 import {
+  formatParticipantCategory,
   formatRegistrationDate,
 } from "./municipalRegistrationsUtils";
 
 function escapeCsvValue(
-  value: string | number | boolean | null | undefined,
+  value:
+    | string
+    | number
+    | boolean
+    | null
+    | undefined,
 ) {
   const text = String(value ?? "");
 
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function sanitizeFilename(value: string) {
+function sanitizeFilename(
+  value: string,
+) {
   return value
     .trim()
     .toLowerCase()
@@ -43,6 +51,8 @@ export function exportRegistrationsCsv({
     "Participant Name",
     "Email",
     "Municipality",
+    "Participant Category",
+    "Participant Category Other",
     "Event",
     "Registration Status",
     "Registered At",
@@ -56,30 +66,48 @@ export function exportRegistrationsCsv({
       registration.participant_email,
       registration.participant_municipality ??
         "",
+
+      formatParticipantCategory(
+        registration.participant_category,
+      ),
+
+      registration.participant_category_other ??
+        "",
+
       registration.event_title,
+
       registration.rsvp_status ??
         "Unknown",
+
       formatRegistrationDate(
         registration.registered_at,
       ),
+
       registration.qr_available
         ? "Generated"
         : "Missing",
+
       registration.event_status ??
         "Unknown",
     ],
   );
 
   const csvContent = [
-    headers.map(escapeCsvValue).join(","),
+    headers
+      .map(escapeCsvValue)
+      .join(","),
+
     ...rows.map((row) =>
-      row.map(escapeCsvValue).join(","),
+      row
+        .map(escapeCsvValue)
+        .join(","),
     ),
   ].join("\r\n");
 
   /*
-   * UTF-8 BOM helps Microsoft Excel display
-   * names and special characters correctly.
+   * UTF-8 BOM helps Microsoft Excel
+   * display names and special characters
+   * correctly.
    */
   const csvBlob = new Blob(
     ["\uFEFF", csvContent],
@@ -103,6 +131,7 @@ export function exportRegistrationsCsv({
     document.createElement("a");
 
   link.href = downloadUrl;
+
   link.download =
     `municipal-registrations-${eventName}-${dateStamp}.csv`;
 
@@ -110,5 +139,7 @@ export function exportRegistrationsCsv({
   link.click();
   link.remove();
 
-  URL.revokeObjectURL(downloadUrl);
+  URL.revokeObjectURL(
+    downloadUrl,
+  );
 }

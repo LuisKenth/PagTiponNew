@@ -18,28 +18,40 @@ export default function MunicipalRegistrationsPage() {
     filteredRegistrations,
     groupedRegistrations,
     paginatedEventGroups,
+
     eventOptions,
+    participantCategoryOptions,
+
     selectedEvent,
+
     loading,
     refreshing,
     errorMessage,
+
     searchTerm,
     selectedEventId,
     statusFilter,
+    participantCategoryFilter,
+
     currentPage,
     pageSize,
     totalPages,
     firstVisibleItem,
     lastVisibleItem,
+
     qrReadyCount,
     hasActiveFilters,
+
     setSearchTerm,
     changeSelectedEvent,
     setStatusFilter,
+    setParticipantCategoryFilter,
+
     clearFilters,
     changePageSize,
     goToPreviousPage,
     goToNextPage,
+
     refreshRegistrations,
   } = useMunicipalRegistrations();
 
@@ -68,8 +80,12 @@ export default function MunicipalRegistrationsPage() {
         filteredRegistrations={
           filteredRegistrations.length
         }
-        qrReadyCount={qrReadyCount}
-        eventCount={eventOptions.length}
+        qrReadyCount={
+          qrReadyCount
+        }
+        eventCount={
+          eventOptions.length
+        }
         loading={loading}
         refreshing={refreshing}
         exportDisabled={
@@ -88,8 +104,18 @@ export default function MunicipalRegistrationsPage() {
         selectedEventId={
           selectedEventId
         }
-        statusFilter={statusFilter}
-        eventOptions={eventOptions}
+        statusFilter={
+          statusFilter
+        }
+        participantCategoryFilter={
+          participantCategoryFilter
+        }
+        eventOptions={
+          eventOptions
+        }
+        participantCategoryOptions={
+          participantCategoryOptions
+        }
         resultCount={
           filteredRegistrations.length
         }
@@ -105,11 +131,18 @@ export default function MunicipalRegistrationsPage() {
         onStatusChange={
           setStatusFilter
         }
-        onClearFilters={clearFilters}
+        onParticipantCategoryChange={
+          setParticipantCategoryFilter
+        }
+        onClearFilters={
+          clearFilters
+        }
       />
 
       <EventRegistrationSummary
-        selectedEvent={selectedEvent}
+        selectedEvent={
+          selectedEvent
+        }
       />
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -131,7 +164,9 @@ export default function MunicipalRegistrationsPage() {
             paginatedEventGroups
           }
           loading={loading}
-          errorMessage={errorMessage}
+          errorMessage={
+            errorMessage
+          }
         />
 
         {!loading &&
@@ -142,8 +177,12 @@ export default function MunicipalRegistrationsPage() {
               currentPage={
                 currentPage
               }
-              totalPages={totalPages}
-              pageSize={pageSize}
+              totalPages={
+                totalPages
+              }
+              pageSize={
+                pageSize
+              }
               totalItems={
                 groupedRegistrations.length
               }

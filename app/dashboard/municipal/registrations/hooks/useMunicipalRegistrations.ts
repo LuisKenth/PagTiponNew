@@ -16,6 +16,7 @@ import type {
 
 import {
   buildEventOptions,
+  buildParticipantCategoryOptions,
   filterRegistrations,
   isCancelledRegistration,
 } from "../utils/municipalRegistrationsUtils";
@@ -43,11 +44,15 @@ export default function useMunicipalRegistrations() {
   const [refreshing, setRefreshing] =
     useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState<string | null>(null);
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] =
-    useState("");
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] = useState("");
 
   const [
     selectedEventId,
@@ -62,12 +67,22 @@ export default function useMunicipalRegistrations() {
       "all",
     );
 
-  const [currentPage, setCurrentPage] =
-    useState(1);
+  /*
+   * Participant category filter.
+   */
+  const [
+    participantCategoryFilter,
+    setParticipantCategoryFilter,
+  ] = useState("all");
+
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
 
   /*
-   * Page size now means the number of event
-   * groups shown per page.
+   * Page size means the number of
+   * event groups shown per page.
    */
   const [pageSize, setPageSize] =
     useState(DEFAULT_PAGE_SIZE);
@@ -144,7 +159,9 @@ export default function useMunicipalRegistrations() {
 
     const targetEventId =
       searchParameters
-        .get("eventMunicipalityId")
+        .get(
+          "eventMunicipalityId",
+        )
         ?.trim();
 
     if (targetEventId) {
@@ -162,6 +179,19 @@ export default function useMunicipalRegistrations() {
     [registrations],
   );
 
+  /*
+   * Build available participant
+   * categories from registration records.
+   */
+  const participantCategoryOptions =
+    useMemo(
+      () =>
+        buildParticipantCategoryOptions(
+          registrations,
+        ),
+      [registrations],
+    );
+
   const filteredRegistrations =
     useMemo(
       () =>
@@ -170,108 +200,115 @@ export default function useMunicipalRegistrations() {
           searchTerm,
           selectedEventId,
           statusFilter,
+          participantCategoryFilter,
         }),
       [
         registrations,
         searchTerm,
         selectedEventId,
         statusFilter,
+        participantCategoryFilter,
       ],
     );
 
   /*
-   * Group all filtered participant records
-   * according to their event assignment.
+   * Group all filtered participant
+   * records according to their
+   * event assignment.
    */
   const groupedRegistrations =
-    useMemo<RegistrationEventGroup[]>(
-      () => {
-        const groupMap = new Map<
-          string,
-          MunicipalRegistration[]
-        >();
+    useMemo<
+      RegistrationEventGroup[]
+    >(() => {
+      const groupMap = new Map<
+        string,
+        MunicipalRegistration[]
+      >();
 
-        filteredRegistrations.forEach(
-          (registration) => {
-            const eventMunicipalityId =
-              String(
-                registration.event_municipality_id ??
-                  "",
-              ).trim();
+      filteredRegistrations.forEach(
+        (registration) => {
+          const eventMunicipalityId =
+            String(
+              registration.event_municipality_id ??
+                "",
+            ).trim();
 
-            /*
-             * The event_municipality_id should
-             * normally exist. Event title is used
-             * only as a safe fallback.
-             */
-            const groupKey =
-              eventMunicipalityId ||
-              `event-title:${registration.event_title}`;
+          /*
+           * The event_municipality_id
+           * should normally exist.
+           * Event title is used only
+           * as a safe fallback.
+           */
+          const groupKey =
+            eventMunicipalityId ||
+            `event-title:${registration.event_title}`;
 
-            const currentGroup =
-              groupMap.get(groupKey) ?? [];
-
-            currentGroup.push(
-              registration,
-            );
-
-            groupMap.set(
+          const currentGroup =
+            groupMap.get(
               groupKey,
-              currentGroup,
-            );
-          },
-        );
+            ) ?? [];
 
-        return Array.from(
-          groupMap.entries(),
-        ).map(
-          ([
+          currentGroup.push(
+            registration,
+          );
+
+          groupMap.set(
             groupKey,
-            eventRegistrations,
-          ]) => {
-            const firstRegistration =
-              eventRegistrations[0];
+            currentGroup,
+          );
+        },
+      );
 
-            const cancelled =
-              eventRegistrations.some(
-                (registration) =>
-                  isCancelledRegistration(
-                    registration,
-                  ),
-              );
+      return Array.from(
+        groupMap.entries(),
+      ).map(
+        ([
+          groupKey,
+          eventRegistrations,
+        ]) => {
+          const firstRegistration =
+            eventRegistrations[0];
 
-            const eventQrReadyCount =
-              eventRegistrations.filter(
-                (registration) =>
-                  registration.qr_available &&
-                  !isCancelledRegistration(
-                    registration,
-                  ),
-              ).length;
+          const cancelled =
+            eventRegistrations.some(
+              (registration) =>
+                isCancelledRegistration(
+                  registration,
+                ),
+            );
 
-            return {
-              eventMunicipalityId:
-                groupKey,
-              eventTitle:
-                firstRegistration
-                  ?.event_title ||
-                "Untitled Event",
-              registrations:
-                eventRegistrations,
-              registrationCount:
-                eventRegistrations.length,
-              qrReadyCount:
-                eventQrReadyCount,
-              isCancelled: cancelled,
-            };
-          },
-        );
-      },
-      [filteredRegistrations],
-    );
+          const eventQrReadyCount =
+            eventRegistrations.filter(
+              (registration) =>
+                registration.qr_available &&
+                !isCancelledRegistration(
+                  registration,
+                ),
+            ).length;
+
+          return {
+            eventMunicipalityId:
+              groupKey,
+            eventTitle:
+              firstRegistration
+                ?.event_title ||
+              "Untitled Event",
+            registrations:
+              eventRegistrations,
+            registrationCount:
+              eventRegistrations.length,
+            qrReadyCount:
+              eventQrReadyCount,
+            isCancelled:
+              cancelled,
+          };
+        },
+      );
+    }, [filteredRegistrations]);
 
   /*
-   * Pagination is now based on event groups.
+   * Pagination is based on
+   * event groups.
    */
   const totalPages = Math.max(
     1,
@@ -304,14 +341,16 @@ export default function useMunicipalRegistrations() {
           pageSize +
         1;
 
-  const lastVisibleItem = Math.min(
-    currentPage * pageSize,
-    groupedRegistrations.length,
-  );
+  const lastVisibleItem =
+    Math.min(
+      currentPage * pageSize,
+      groupedRegistrations.length,
+    );
 
   /*
-   * This remains based on participant records
-   * because it is displayed in the main summary.
+   * Remains based on participant
+   * records because it is displayed
+   * in the main summary.
    */
   const qrReadyCount =
     filteredRegistrations.filter(
@@ -334,14 +373,21 @@ export default function useMunicipalRegistrations() {
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
     selectedEventId !== "all" ||
-    statusFilter !== "all";
+    statusFilter !== "all" ||
+    participantCategoryFilter !==
+      "all";
 
+  /*
+   * Return to page 1 whenever
+   * any filter changes.
+   */
   useEffect(() => {
     setCurrentPage(1);
   }, [
     searchTerm,
     selectedEventId,
     statusFilter,
+    participantCategoryFilter,
     pageSize,
   ]);
 
@@ -359,6 +405,11 @@ export default function useMunicipalRegistrations() {
     setSearchTerm("");
     setSelectedEventId("all");
     setStatusFilter("all");
+
+    setParticipantCategoryFilter(
+      "all",
+    );
+
     setCurrentPage(1);
 
     window.history.replaceState(
@@ -420,28 +471,40 @@ export default function useMunicipalRegistrations() {
     filteredRegistrations,
     groupedRegistrations,
     paginatedEventGroups,
+
     eventOptions,
+    participantCategoryOptions,
+
     selectedEvent,
+
     loading,
     refreshing,
     errorMessage,
+
     searchTerm,
     selectedEventId,
     statusFilter,
+    participantCategoryFilter,
+
     currentPage,
     pageSize,
     totalPages,
     firstVisibleItem,
     lastVisibleItem,
+
     qrReadyCount,
     hasActiveFilters,
+
     setSearchTerm,
     changeSelectedEvent,
     setStatusFilter,
+    setParticipantCategoryFilter,
+
     clearFilters,
     changePageSize,
     goToPreviousPage,
     goToNextPage,
+
     refreshRegistrations: () =>
       fetchRegistrations(true),
   };

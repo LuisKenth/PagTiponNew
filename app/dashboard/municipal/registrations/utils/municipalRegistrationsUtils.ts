@@ -38,6 +38,23 @@ export function formatRegistrationDate(
   );
 }
 
+export function formatParticipantCategory(
+  value: string | null | undefined,
+) {
+  const normalized =
+    normalizeValue(value);
+
+  if (!normalized) {
+    return "Not specified";
+  }
+
+  return normalized
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase(),
+    );
+}
+
 export function isCancelledRegistration(
   registration: MunicipalRegistration,
 ) {
@@ -95,15 +112,62 @@ export function buildEventOptions(
 
   return Array.from(
     optionMap.values(),
-  ).sort((firstOption, secondOption) =>
-    firstOption.event_title.localeCompare(
-      secondOption.event_title,
-      undefined,
-      {
-        sensitivity: "base",
-      },
-    ),
+  ).sort(
+    (
+      firstOption,
+      secondOption,
+    ) =>
+      firstOption.event_title.localeCompare(
+        secondOption.event_title,
+        undefined,
+        {
+          sensitivity: "base",
+        },
+      ),
   );
+}
+
+export function buildParticipantCategoryOptions(
+  registrations: MunicipalRegistration[],
+) {
+  const categoryMap =
+    new Map<string, number>();
+
+  for (const registration of registrations) {
+    const category =
+      normalizeValue(
+        registration.participant_category,
+      );
+
+    if (!category) {
+      continue;
+    }
+
+    categoryMap.set(
+      category,
+      (categoryMap.get(category) ?? 0) +
+        1,
+    );
+  }
+
+  return Array.from(
+    categoryMap.entries(),
+  )
+    .map(([value, count]) => ({
+      value,
+      label:
+        formatParticipantCategory(value),
+      count,
+    }))
+    .sort((firstOption, secondOption) =>
+      firstOption.label.localeCompare(
+        secondOption.label,
+        undefined,
+        {
+          sensitivity: "base",
+        },
+      ),
+    );
 }
 
 type FilterRegistrationsOptions = {
@@ -111,6 +175,7 @@ type FilterRegistrationsOptions = {
   searchTerm: string;
   selectedEventId: string;
   statusFilter: RegistrationStatusFilter;
+  participantCategoryFilter: string;
 };
 
 export function filterRegistrations({
@@ -118,9 +183,15 @@ export function filterRegistrations({
   searchTerm,
   selectedEventId,
   statusFilter,
+  participantCategoryFilter,
 }: FilterRegistrationsOptions) {
   const normalizedSearch =
     normalizeValue(searchTerm);
+
+  const normalizedCategoryFilter =
+    normalizeValue(
+      participantCategoryFilter,
+    );
 
   return registrations.filter(
     (registration) => {
@@ -135,11 +206,21 @@ export function filterRegistrations({
           registration.rsvp_status,
         ) === statusFilter;
 
+      const matchesParticipantCategory =
+        participantCategoryFilter ===
+          "all" ||
+        normalizeValue(
+          registration.participant_category,
+        ) ===
+          normalizedCategoryFilter;
+
       const searchableText = [
         registration.participant_name,
         registration.participant_email,
         registration.event_title,
         registration.participant_municipality,
+        registration.participant_category,
+        registration.participant_category_other,
       ]
         .map(normalizeValue)
         .join(" ");
@@ -153,6 +234,7 @@ export function filterRegistrations({
       return (
         matchesEvent &&
         matchesStatus &&
+        matchesParticipantCategory &&
         matchesSearch
       );
     },
