@@ -10,6 +10,8 @@ import {
 import { supabase } from "@/lib/supabase";
 
 import type {
+  MunicipalParticipantCategoryBreakdownItem,
+  MunicipalParticipantCategoryOption,
   MunicipalReportEvent,
   MunicipalReportEventOption,
   MunicipalReportEventStatus,
@@ -32,35 +34,53 @@ type RawAssignment = {
   event_id?: string | number | null;
   municipal_status?: string | null;
   registration_open?: boolean | null;
+
   event?:
-  | RawRelatedEvent
-  | RawRelatedEvent[]
-  | null;
+    | RawRelatedEvent
+    | RawRelatedEvent[]
+    | null;
+
   events?:
-  | RawRelatedEvent
-  | RawRelatedEvent[]
-  | null;
+    | RawRelatedEvent
+    | RawRelatedEvent[]
+    | null;
 };
 
 type RawRegistration = {
   rsvp_id?: string | number | null;
+
   event_municipality_id?:
-  | string
-  | number
-  | null;
+    | string
+    | number
+    | null;
+
   event_title?: string | null;
+
   rsvp_status?: string | null;
+
+  participant_category?:
+    | string
+    | null;
+
+  participant_category_other?:
+    | string
+    | null;
 };
 
 type RawAttendance = {
   rsvp_id?: string | number | null;
+
   event_municipality_id?:
-  | string
-  | number
-  | null;
+    | string
+    | number
+    | null;
+
   event_title?: string | null;
+
   event_status?: string | null;
+
   attendance_status?: string | null;
+
   attendance_method?: string | null;
 };
 
@@ -124,8 +144,7 @@ function formatFallbackTitle(
   const title =
     String(value ?? "").trim();
 
-  return title ||
-    "Untitled Event";
+  return title || "Untitled Event";
 }
 
 function getDateTimestamp(
@@ -155,6 +174,211 @@ function isAttendanceEligibleStatus(
   );
 }
 
+function getParticipantCategoryValue(
+  registration: RawRegistration,
+) {
+  return (
+    normalizeValue(
+      registration.participant_category,
+    ) || "not_set"
+  );
+}
+
+const PARTICIPANT_CATEGORY_LABELS: Record<
+  string,
+  string
+> = {
+  farmer: "Farmer",
+  senior_citizen: "Senior Citizen",
+  "senior citizen": "Senior Citizen",
+  "4ps": "4Ps",
+  fisherman: "Fisherman",
+  others: "Others",
+  not_set: "Not Set",
+};
+
+function formatParticipantCategoryLabel(
+  value: string,
+) {
+  const normalizedValue =
+    normalizeValue(value);
+
+  const knownLabel =
+    PARTICIPANT_CATEGORY_LABELS[
+      normalizedValue
+    ];
+
+  if (knownLabel) {
+    return knownLabel;
+  }
+
+  return normalizedValue
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase(),
+    );
+}
+
+function getUniqueRegistrationRows(
+  registrations: RawRegistration[],
+) {
+  const uniqueRows =
+    new Map<string, RawRegistration>();
+
+  registrations.forEach(
+    (registration, index) => {
+      const eventMunicipalityId =
+        normalizeId(
+          registration.event_municipality_id,
+        );
+
+      const rsvpId =
+        normalizeId(
+          registration.rsvp_id,
+        );
+
+      const key =
+        rsvpId ||
+        `${eventMunicipalityId}-registration-${index}`;
+
+      uniqueRows.set(
+        key,
+        registration,
+      );
+    },
+  );
+
+  return Array.from(
+    uniqueRows.values(),
+  );
+}
+
+function getUniqueAttendanceRows(
+  attendance: RawAttendance[],
+) {
+  const uniqueRows =
+    new Map<string, RawAttendance>();
+
+  attendance.forEach(
+    (record, index) => {
+      const eventMunicipalityId =
+        normalizeId(
+          record.event_municipality_id,
+        );
+
+      const rsvpId =
+        normalizeId(
+          record.rsvp_id,
+        );
+
+      const key =
+        rsvpId ||
+        `${eventMunicipalityId}-attendance-${index}`;
+
+      uniqueRows.set(
+        key,
+        record,
+      );
+    },
+  );
+
+  return Array.from(
+    uniqueRows.values(),
+  );
+}
+
+function calculateEventMetrics(
+  baseEvent: MunicipalReportEvent,
+  registrations: RawRegistration[],
+  attendance: RawAttendance[],
+): MunicipalReportEvent {
+  const uniqueRegistrations =
+    getUniqueRegistrationRows(
+      registrations,
+    );
+
+  const uniqueAttendance =
+    getUniqueAttendanceRows(
+      attendance,
+    );
+
+  const presentCount =
+    uniqueAttendance.filter(
+      (record) =>
+        normalizeValue(
+          record.attendance_status,
+        ) === "present",
+    ).length;
+
+  const lateCount =
+    uniqueAttendance.filter(
+      (record) =>
+        normalizeValue(
+          record.attendance_status,
+        ) === "late",
+    ).length;
+
+  const absentCount =
+    uniqueAttendance.filter(
+      (record) =>
+        normalizeValue(
+          record.attendance_status,
+        ) === "absent",
+    ).length;
+
+  const pendingCount =
+    uniqueAttendance.filter(
+      (record) =>
+        normalizeValue(
+          record.attendance_status,
+        ) === "pending",
+    ).length;
+
+  const qrCheckInCount =
+    uniqueAttendance.filter(
+      (record) =>
+        normalizeValue(
+          record.attendance_method,
+        ) === "qr",
+    ).length;
+
+  const manualCheckInCount =
+    uniqueAttendance.filter(
+      (record) =>
+        normalizeValue(
+          record.attendance_method,
+        ) === "manual",
+    ).length;
+
+  const totalRegistrations =
+    uniqueRegistrations.length;
+
+  const attendedCount =
+    presentCount + lateCount;
+
+  const attendanceRate =
+    isAttendanceEligibleStatus(
+      baseEvent.eventStatus,
+    ) &&
+    totalRegistrations > 0
+      ? (attendedCount /
+          totalRegistrations) *
+        100
+      : 0;
+
+  return {
+    ...baseEvent,
+    totalRegistrations,
+    presentCount,
+    lateCount,
+    absentCount,
+    pendingCount,
+    qrCheckInCount,
+    manualCheckInCount,
+    attendanceRate,
+  };
+}
+
 function calculateSummary(
   events: MunicipalReportEvent[],
 ): MunicipalReportSummary {
@@ -163,20 +387,9 @@ function calculateSummary(
       (current, event) => {
         current.assignedEvents += 1;
 
-        /*
-         * All registrations remain visible
-         * in the general registration total.
-         */
         current.totalRegistrations +=
           event.totalRegistrations;
 
-        /*
-         * Attendance calculations include
-         * ongoing and completed events only.
-         *
-         * Cancelled and not-yet-started events
-         * are excluded from attendance metrics.
-         */
         if (
           isAttendanceEligibleStatus(
             event.eventStatus,
@@ -227,10 +440,10 @@ function calculateSummary(
 
   summary.attendanceRate =
     summary.attendanceEligibleRegistrations >
-      0
+    0
       ? (summary.attendedCount /
-        summary.attendanceEligibleRegistrations) *
-      100
+          summary.attendanceEligibleRegistrations) *
+        100
       : 0;
 
   return summary;
@@ -244,27 +457,53 @@ export default function useMunicipalReports() {
     MunicipalReportEvent[]
   >([]);
 
-  const [municipality, setMunicipality] =
-    useState<string | null>(null);
+  const [
+    registrations,
+    setRegistrations,
+  ] = useState<
+    RawRegistration[]
+  >([]);
+
+  const [
+    attendanceRecords,
+    setAttendanceRecords,
+  ] = useState<
+    RawAttendance[]
+  >([]);
+
+  const [
+    municipality,
+    setMunicipality,
+  ] = useState<string | null>(
+    null,
+  );
 
   const [loading, setLoading] =
     useState(true);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const [
+    refreshing,
+    setRefreshing,
+  ] = useState(false);
 
   const [
     errorMessage,
     setErrorMessage,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null,
+  );
 
   const [
     warningMessage,
     setWarningMessage,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null,
+  );
 
-  const [searchTerm, setSearchTerm] =
-    useState("");
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] = useState("");
 
   const [
     selectedEventId,
@@ -279,549 +518,643 @@ export default function useMunicipalReports() {
       "all",
     );
 
-  const [dateFrom, setDateFrom] =
-    useState("");
+  const [
+    participantCategoryFilter,
+    setParticipantCategoryFilter,
+  ] = useState("all");
 
-  const [dateTo, setDateTo] =
-    useState("");
+  const [
+    dateFrom,
+    setDateFrom,
+  ] = useState("");
 
-  const [currentPage, setCurrentPage] =
-    useState(1);
+  const [
+    dateTo,
+    setDateTo,
+  ] = useState("");
 
-  const [pageSize, setPageSize] =
-    useState(DEFAULT_PAGE_SIZE);
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
 
-  const fetchReports = useCallback(
-    async (
-      showRefreshingState = false,
-    ) => {
-      if (showRefreshingState) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+  const [
+    pageSize,
+    setPageSize,
+  ] = useState(
+    DEFAULT_PAGE_SIZE,
+  );
 
-      setErrorMessage(null);
-      setWarningMessage(null);
-
-      try {
-        const {
-          data: { user },
-          error: userError,
-        } =
-          await supabase.auth.getUser();
-
-        if (userError || !user) {
-          throw new Error(
-            "You must be logged in first.",
-          );
-        }
-
-        const {
-          data: profile,
-          error: profileError,
-        } = await supabase
-          .from("profiles")
-          .select("role, municipality")
-          .eq("id", user.id)
-          .single<MunicipalReportProfile>();
-
+  const fetchReports =
+    useCallback(
+      async (
+        showRefreshingState =
+          false,
+      ) => {
         if (
-          profileError ||
-          !profile
+          showRefreshingState
         ) {
-          throw new Error(
-            profileError?.message ||
-            "Profile not found.",
-          );
+          setRefreshing(true);
+        } else {
+          setLoading(true);
         }
 
-        if (
-          profile.role !==
-          "municipal_admin"
-        ) {
-          throw new Error(
-            "Only municipal administrators can view municipal reports.",
-          );
-        }
+        setErrorMessage(null);
+        setWarningMessage(null);
 
-        if (!profile.municipality) {
-          throw new Error(
-            "Your account has no assigned municipality.",
-          );
-        }
+        try {
+          const {
+            data: { user },
+            error: userError,
+          } =
+            await supabase.auth.getUser();
 
-        setMunicipality(
-          profile.municipality,
-        );
+          if (
+            userError ||
+            !user
+          ) {
+            throw new Error(
+              "You must be logged in first.",
+            );
+          }
 
-        const [
-          assignmentsResult,
-          registrationsResult,
-          attendanceResult,
-        ] = await Promise.all([
-          supabase
-            .from(
-              "event_municipalities",
+          const {
+            data: profile,
+            error: profileError,
+          } = await supabase
+            .from("profiles")
+            .select(
+              "role, municipality",
             )
-            .select(`
-              id,
-              event_id,
-              municipal_status,
-              registration_open,
-              event:events (
-                id,
-                title,
-                status,
-                start_at,
-                end_at
+            .eq("id", user.id)
+            .single<MunicipalReportProfile>();
+
+          if (
+            profileError ||
+            !profile
+          ) {
+            throw new Error(
+              profileError?.message ||
+                "Profile not found.",
+            );
+          }
+
+          if (
+            profile.role !==
+            "municipal_admin"
+          ) {
+            throw new Error(
+              "Only municipal administrators can view municipal reports.",
+            );
+          }
+
+          if (
+            !profile.municipality
+          ) {
+            throw new Error(
+              "Your account has no assigned municipality.",
+            );
+          }
+
+          setMunicipality(
+            profile.municipality,
+          );
+
+          const [
+            assignmentsResult,
+            registrationsResult,
+            attendanceResult,
+          ] = await Promise.all([
+            supabase
+              .from(
+                "event_municipalities",
               )
-            `)
-            .eq(
-              "municipality",
-              profile.municipality,
+              .select(`
+                id,
+                event_id,
+                municipal_status,
+                registration_open,
+                event:events (
+                  id,
+                  title,
+                  status,
+                  start_at,
+                  end_at
+                )
+              `)
+              .eq(
+                "municipality",
+                profile.municipality,
+              ),
+
+            supabase.rpc(
+              "get_municipal_registrations",
+              {
+                p_event_municipality_id:
+                  null,
+              },
             ),
 
-          supabase.rpc(
-            "get_municipal_registrations",
-            {
-              p_event_municipality_id:
-                null,
-            },
-          ),
-
-          supabase.rpc(
-            "get_municipal_attendance",
-            {
-              p_event_municipality_id:
-                null,
-            },
-          ),
-        ]);
-
-        if (
-          registrationsResult.error
-        ) {
-          throw registrationsResult.error;
-        }
-
-        if (attendanceResult.error) {
-          throw attendanceResult.error;
-        }
-
-        const assignments =
-          (assignmentsResult.data ??
-            []) as unknown as RawAssignment[];
-
-        const registrations =
-          (registrationsResult.data ??
-            []) as RawRegistration[];
-
-        const attendance =
-          (attendanceResult.data ??
-            []) as RawAttendance[];
-
-        if (
-          assignmentsResult.error
-        ) {
-          console.warn(
-            "Municipal report assignment query warning:",
-            assignmentsResult.error,
-          );
-
-          setWarningMessage(
-            "Assigned events could not be loaded directly. The report is using events found in registration and attendance records.",
-          );
-        }
-
-        const baseMap = new Map<
-          string,
-          ReportEventBase
-        >();
-
-        assignments.forEach(
-          (assignment) => {
-            const assignmentId =
-              normalizeId(
-                assignment.id,
-              );
-
-            if (!assignmentId) {
-              return;
-            }
-
-            const relatedEvent =
-              getRelatedEvent(
-                assignment,
-              );
-
-            baseMap.set(
-              assignmentId,
+            supabase.rpc(
+              "get_municipal_attendance",
               {
-                eventMunicipalityId:
-                  assignmentId,
-
-                eventId:
-                  normalizeId(
-                    assignment.event_id ??
-                    relatedEvent?.id,
-                  ) || null,
-
-                eventTitle:
-                  formatFallbackTitle(
-                    relatedEvent?.title,
-                  ),
-
-                eventStatus:
-                  normalizeValue(
-                    relatedEvent?.status,
-                  ) || "unknown",
-
-                municipalStatus:
-                  normalizeValue(
-                    assignment.municipal_status,
-                  ) || "pending",
-
-                registrationOpen:
-                  assignment.registration_open ===
-                  true,
-
-                startAt:
-                  relatedEvent?.start_at ??
-                  null,
-
-                endAt:
-                  relatedEvent?.end_at ??
+                p_event_municipality_id:
                   null,
               },
+            ),
+          ]);
+
+          if (
+            registrationsResult.error
+          ) {
+            throw registrationsResult.error;
+          }
+
+          if (
+            attendanceResult.error
+          ) {
+            throw attendanceResult.error;
+          }
+
+          const assignments =
+            (assignmentsResult.data ??
+              []) as unknown as RawAssignment[];
+
+          const nextRegistrations =
+            (registrationsResult.data ??
+              []) as RawRegistration[];
+
+          const nextAttendance =
+            (attendanceResult.data ??
+              []) as RawAttendance[];
+
+          setRegistrations(
+            nextRegistrations,
+          );
+
+          setAttendanceRecords(
+            nextAttendance,
+          );
+
+          if (
+            assignmentsResult.error
+          ) {
+            console.warn(
+              "Municipal report assignment query warning:",
+              assignmentsResult.error,
             );
-          },
-        );
 
-        registrations.forEach(
-          (registration) => {
-            const assignmentId =
-              normalizeId(
-                registration.event_municipality_id,
-              );
-
-            if (
-              !assignmentId ||
-              baseMap.has(
-                assignmentId,
-              )
-            ) {
-              return;
-            }
-
-            baseMap.set(
-              assignmentId,
-              {
-                eventMunicipalityId:
-                  assignmentId,
-                eventId: null,
-                eventTitle:
-                  formatFallbackTitle(
-                    registration.event_title,
-                  ),
-                eventStatus: "unknown",
-                municipalStatus:
-                  "unknown",
-                registrationOpen:
-                  false,
-                startAt: null,
-                endAt: null,
-              },
+            setWarningMessage(
+              "Assigned events could not be loaded directly. The report is using events found in registration and attendance records.",
             );
-          },
-        );
+          }
 
-        attendance.forEach(
-          (record) => {
-            const assignmentId =
-              normalizeId(
-                record.event_municipality_id,
-              );
+          const baseMap =
+            new Map<
+              string,
+              ReportEventBase
+            >();
 
-            if (!assignmentId) {
-              return;
-            }
+          assignments.forEach(
+            (assignment) => {
+              const assignmentId =
+                normalizeId(
+                  assignment.id,
+                );
 
-            const existing =
-              baseMap.get(
-                assignmentId,
-              );
-
-            if (existing) {
               if (
-                existing.eventStatus ===
-                "unknown" &&
-                record.event_status
+                !assignmentId
               ) {
-                existing.eventStatus =
-                  normalizeValue(
-                    record.event_status,
-                  ) || "unknown";
+                return;
               }
 
-              return;
-            }
-
-            baseMap.set(
-              assignmentId,
-              {
-                eventMunicipalityId:
-                  assignmentId,
-                eventId: null,
-                eventTitle:
-                  formatFallbackTitle(
-                    record.event_title,
-                  ),
-                eventStatus:
-                  normalizeValue(
-                    record.event_status,
-                  ) || "unknown",
-                municipalStatus:
-                  "unknown",
-                registrationOpen:
-                  false,
-                startAt: null,
-                endAt: null,
-              },
-            );
-          },
-        );
-
-        const registrationsByEvent =
-          new Map<
-            string,
-            RawRegistration[]
-          >();
-
-        registrations.forEach(
-          (registration) => {
-            const assignmentId =
-              normalizeId(
-                registration.event_municipality_id,
-              );
-
-            if (!assignmentId) {
-              return;
-            }
-
-            const current =
-              registrationsByEvent.get(
-                assignmentId,
-              ) ?? [];
-
-            current.push(registration);
-
-            registrationsByEvent.set(
-              assignmentId,
-              current,
-            );
-          },
-        );
-
-        const attendanceByEvent =
-          new Map<
-            string,
-            RawAttendance[]
-          >();
-
-        attendance.forEach(
-          (record) => {
-            const assignmentId =
-              normalizeId(
-                record.event_municipality_id,
-              );
-
-            if (!assignmentId) {
-              return;
-            }
-
-            const current =
-              attendanceByEvent.get(
-                assignmentId,
-              ) ?? [];
-
-            current.push(record);
-
-            attendanceByEvent.set(
-              assignmentId,
-              current,
-            );
-          },
-        );
-
-        const nextEvents =
-          Array.from(
-            baseMap.values(),
-          ).map(
-            (
-              base,
-            ): MunicipalReportEvent => {
-              const eventRegistrations =
-                registrationsByEvent.get(
-                  base.eventMunicipalityId,
-                ) ?? [];
-
-              const eventAttendance =
-                attendanceByEvent.get(
-                  base.eventMunicipalityId,
-                ) ?? [];
-
-              const uniqueRegistrationIds =
-                new Set(
-                  eventRegistrations.map(
-                    (registration, index) =>
-                      normalizeId(
-                        registration.rsvp_id,
-                      ) ||
-                      `registration-${index}`,
-                  ),
+              const relatedEvent =
+                getRelatedEvent(
+                  assignment,
                 );
 
-              const uniqueAttendance =
-                new Map<
-                  string,
-                  RawAttendance
-                >();
+              baseMap.set(
+                assignmentId,
+                {
+                  eventMunicipalityId:
+                    assignmentId,
 
-              eventAttendance.forEach(
-                (record, index) => {
-                  const recordId =
+                  eventId:
                     normalizeId(
-                      record.rsvp_id,
-                    ) ||
-                    `attendance-${index}`;
+                      assignment.event_id ??
+                        relatedEvent?.id,
+                    ) || null,
 
-                  uniqueAttendance.set(
-                    recordId,
-                    record,
-                  );
+                  eventTitle:
+                    formatFallbackTitle(
+                      relatedEvent?.title,
+                    ),
+
+                  eventStatus:
+                    normalizeValue(
+                      relatedEvent?.status,
+                    ) || "unknown",
+
+                  municipalStatus:
+                    normalizeValue(
+                      assignment.municipal_status,
+                    ) || "pending",
+
+                  registrationOpen:
+                    assignment.registration_open ===
+                    true,
+
+                  startAt:
+                    relatedEvent?.start_at ??
+                    null,
+
+                  endAt:
+                    relatedEvent?.end_at ??
+                    null,
                 },
               );
+            },
+          );
 
-              const attendanceRows =
-                Array.from(
-                  uniqueAttendance.values(),
+          nextRegistrations.forEach(
+            (registration) => {
+              const assignmentId =
+                normalizeId(
+                  registration.event_municipality_id,
                 );
 
-              const presentCount =
-                attendanceRows.filter(
-                  (record) =>
-                    normalizeValue(
-                      record.attendance_status,
-                    ) === "present",
-                ).length;
+              if (
+                !assignmentId ||
+                baseMap.has(
+                  assignmentId,
+                )
+              ) {
+                return;
+              }
 
-              const lateCount =
-                attendanceRows.filter(
-                  (record) =>
-                    normalizeValue(
-                      record.attendance_status,
-                    ) === "late",
-                ).length;
+              baseMap.set(
+                assignmentId,
+                {
+                  eventMunicipalityId:
+                    assignmentId,
 
-              const absentCount =
-                attendanceRows.filter(
-                  (record) =>
-                    normalizeValue(
-                      record.attendance_status,
-                    ) === "absent",
-                ).length;
+                  eventId: null,
 
-              const pendingCount =
-                attendanceRows.filter(
-                  (record) =>
-                    normalizeValue(
-                      record.attendance_status,
-                    ) === "pending",
-                ).length;
+                  eventTitle:
+                    formatFallbackTitle(
+                      registration.event_title,
+                    ),
 
-              const qrCheckInCount =
-                attendanceRows.filter(
-                  (record) =>
-                    normalizeValue(
-                      record.attendance_method,
-                    ) === "qr",
-                ).length;
+                  eventStatus:
+                    "unknown",
 
-              const manualCheckInCount =
-                attendanceRows.filter(
-                  (record) =>
-                    normalizeValue(
-                      record.attendance_method,
-                    ) === "manual",
-                ).length;
+                  municipalStatus:
+                    "unknown",
 
-              const totalRegistrations =
-                uniqueRegistrationIds.size >
-                  0
-                  ? uniqueRegistrationIds.size
-                  : uniqueAttendance.size;
+                  registrationOpen:
+                    false,
 
-              const attendedCount =
-                presentCount +
-                lateCount;
+                  startAt: null,
 
-              const attendanceRate =
-                isAttendanceEligibleStatus(
-                  base.eventStatus,
-                ) &&
-                  totalRegistrations > 0
-                  ? (attendedCount /
-                    totalRegistrations) *
-                  100
-                  : 0;
-
-              return {
-                ...base,
-                totalRegistrations,
-                presentCount,
-                lateCount,
-                absentCount,
-                pendingCount,
-                qrCheckInCount,
-                manualCheckInCount,
-                attendanceRate,
-              };
+                  endAt: null,
+                },
+              );
             },
-          )
-            .sort(
-              (first, second) =>
-                getDateTimestamp(
-                  second.startAt,
-                ) -
-                getDateTimestamp(
-                  first.startAt,
-                ),
-            );
+          );
 
-        setReportEvents(
-          nextEvents,
-        );
-      } catch (error) {
-        console.error(
-          "Municipal reports error:",
-          error,
-        );
+          nextAttendance.forEach(
+            (record) => {
+              const assignmentId =
+                normalizeId(
+                  record.event_municipality_id,
+                );
 
-        setReportEvents([]);
+              if (
+                !assignmentId
+              ) {
+                return;
+              }
 
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to load municipal reports.",
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [],
-  );
+              const existing =
+                baseMap.get(
+                  assignmentId,
+                );
+
+              if (existing) {
+                if (
+                  existing.eventStatus ===
+                    "unknown" &&
+                  record.event_status
+                ) {
+                  existing.eventStatus =
+                    normalizeValue(
+                      record.event_status,
+                    ) ||
+                    "unknown";
+                }
+
+                return;
+              }
+
+              baseMap.set(
+                assignmentId,
+                {
+                  eventMunicipalityId:
+                    assignmentId,
+
+                  eventId: null,
+
+                  eventTitle:
+                    formatFallbackTitle(
+                      record.event_title,
+                    ),
+
+                  eventStatus:
+                    normalizeValue(
+                      record.event_status,
+                    ) || "unknown",
+
+                  municipalStatus:
+                    "unknown",
+
+                  registrationOpen:
+                    false,
+
+                  startAt: null,
+
+                  endAt: null,
+                },
+              );
+            },
+          );
+
+          const registrationsByEvent =
+            new Map<
+              string,
+              RawRegistration[]
+            >();
+
+          nextRegistrations.forEach(
+            (registration) => {
+              const assignmentId =
+                normalizeId(
+                  registration.event_municipality_id,
+                );
+
+              if (
+                !assignmentId
+              ) {
+                return;
+              }
+
+              const current =
+                registrationsByEvent.get(
+                  assignmentId,
+                ) ?? [];
+
+              current.push(
+                registration,
+              );
+
+              registrationsByEvent.set(
+                assignmentId,
+                current,
+              );
+            },
+          );
+
+          const attendanceByEvent =
+            new Map<
+              string,
+              RawAttendance[]
+            >();
+
+          nextAttendance.forEach(
+            (record) => {
+              const assignmentId =
+                normalizeId(
+                  record.event_municipality_id,
+                );
+
+              if (
+                !assignmentId
+              ) {
+                return;
+              }
+
+              const current =
+                attendanceByEvent.get(
+                  assignmentId,
+                ) ?? [];
+
+              current.push(record);
+
+              attendanceByEvent.set(
+                assignmentId,
+                current,
+              );
+            },
+          );
+
+          const nextEvents =
+            Array.from(
+              baseMap.values(),
+            )
+              .map(
+                (
+                  base,
+                ): MunicipalReportEvent => {
+                  const eventRegistrations =
+                    registrationsByEvent.get(
+                      base.eventMunicipalityId,
+                    ) ?? [];
+
+                  const eventAttendance =
+                    attendanceByEvent.get(
+                      base.eventMunicipalityId,
+                    ) ?? [];
+
+                  const uniqueRegistrationIds =
+                    new Set(
+                      eventRegistrations.map(
+                        (
+                          registration,
+                          index,
+                        ) =>
+                          normalizeId(
+                            registration.rsvp_id,
+                          ) ||
+                          `registration-${index}`,
+                      ),
+                    );
+
+                  const uniqueAttendance =
+                    new Map<
+                      string,
+                      RawAttendance
+                    >();
+
+                  eventAttendance.forEach(
+                    (
+                      record,
+                      index,
+                    ) => {
+                      const recordId =
+                        normalizeId(
+                          record.rsvp_id,
+                        ) ||
+                        `attendance-${index}`;
+
+                      uniqueAttendance.set(
+                        recordId,
+                        record,
+                      );
+                    },
+                  );
+
+                  const attendanceRows =
+                    Array.from(
+                      uniqueAttendance.values(),
+                    );
+
+                  const presentCount =
+                    attendanceRows.filter(
+                      (record) =>
+                        normalizeValue(
+                          record.attendance_status,
+                        ) ===
+                        "present",
+                    ).length;
+
+                  const lateCount =
+                    attendanceRows.filter(
+                      (record) =>
+                        normalizeValue(
+                          record.attendance_status,
+                        ) ===
+                        "late",
+                    ).length;
+
+                  const absentCount =
+                    attendanceRows.filter(
+                      (record) =>
+                        normalizeValue(
+                          record.attendance_status,
+                        ) ===
+                        "absent",
+                    ).length;
+
+                  const pendingCount =
+                    attendanceRows.filter(
+                      (record) =>
+                        normalizeValue(
+                          record.attendance_status,
+                        ) ===
+                        "pending",
+                    ).length;
+
+                  const qrCheckInCount =
+                    attendanceRows.filter(
+                      (record) =>
+                        normalizeValue(
+                          record.attendance_method,
+                        ) === "qr",
+                    ).length;
+
+                  const manualCheckInCount =
+                    attendanceRows.filter(
+                      (record) =>
+                        normalizeValue(
+                          record.attendance_method,
+                        ) ===
+                        "manual",
+                    ).length;
+
+                  const totalRegistrations =
+                    uniqueRegistrationIds.size >
+                    0
+                      ? uniqueRegistrationIds.size
+                      : uniqueAttendance.size;
+
+                  const attendedCount =
+                    presentCount +
+                    lateCount;
+
+                  const attendanceRate =
+                    isAttendanceEligibleStatus(
+                      base.eventStatus,
+                    ) &&
+                    totalRegistrations >
+                      0
+                      ? (attendedCount /
+                          totalRegistrations) *
+                        100
+                      : 0;
+
+                  return {
+                    ...base,
+
+                    totalRegistrations,
+
+                    presentCount,
+
+                    lateCount,
+
+                    absentCount,
+
+                    pendingCount,
+
+                    qrCheckInCount,
+
+                    manualCheckInCount,
+
+                    attendanceRate,
+                  };
+                },
+              )
+              .sort(
+                (
+                  first,
+                  second,
+                ) =>
+                  getDateTimestamp(
+                    second.startAt,
+                  ) -
+                  getDateTimestamp(
+                    first.startAt,
+                  ),
+              );
+
+          setReportEvents(
+            nextEvents,
+          );
+        } catch (error) {
+          console.error(
+            "Municipal reports error:",
+            error,
+          );
+
+          setReportEvents([]);
+
+          setRegistrations([]);
+
+          setAttendanceRecords(
+            [],
+          );
+
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load municipal reports.",
+          );
+        } finally {
+          setLoading(false);
+
+          setRefreshing(false);
+        }
+      },
+      [],
+    );
 
   useEffect(() => {
     void fetchReports();
@@ -856,6 +1189,7 @@ export default function useMunicipalReports() {
           (event) => ({
             eventMunicipalityId:
               event.eventMunicipalityId,
+
             eventTitle:
               event.eventTitle,
           }),
@@ -863,23 +1197,58 @@ export default function useMunicipalReports() {
       [reportEvents],
     );
 
-  const filteredEvents =
+  const participantCategoryOptions =
+    useMemo<
+      MunicipalParticipantCategoryOption[]
+    >(() => {
+      const values =
+        Array.from(
+          new Set(
+            registrations.map(
+              (registration) =>
+                getParticipantCategoryValue(
+                  registration,
+                ),
+            ),
+          ),
+        );
+
+      return values
+        .map((value) => ({
+          value,
+
+          label:
+            formatParticipantCategoryLabel(
+              value,
+            ),
+        }))
+        .sort(
+          (first, second) =>
+            first.label.localeCompare(
+              second.label,
+            ),
+        );
+    }, [registrations]);
+
+  const eventFilteredEvents =
     useMemo(() => {
       const normalizedSearch =
-        normalizeValue(searchTerm);
+        normalizeValue(
+          searchTerm,
+        );
 
       const fromTimestamp =
         dateFrom
           ? new Date(
-            `${dateFrom}T00:00:00`,
-          ).getTime()
+              `${dateFrom}T00:00:00`,
+            ).getTime()
           : null;
 
       const toTimestamp =
         dateTo
           ? new Date(
-            `${dateTo}T23:59:59.999`,
-          ).getTime()
+              `${dateTo}T23:59:59.999`,
+            ).getTime()
           : null;
 
       return reportEvents.filter(
@@ -894,16 +1263,17 @@ export default function useMunicipalReports() {
 
           const matchesEvent =
             selectedEventId ===
-            "all" ||
+              "all" ||
             event.eventMunicipalityId ===
-            selectedEventId;
+              selectedEventId;
 
           const matchesStatus =
             statusFilter ===
-            "all" ||
+              "all" ||
             normalizeValue(
               event.eventStatus,
-            ) === statusFilter;
+            ) ===
+              statusFilter;
 
           const eventTimestamp =
             getDateTimestamp(
@@ -911,16 +1281,18 @@ export default function useMunicipalReports() {
             );
 
           const matchesFrom =
-            fromTimestamp === null ||
+            fromTimestamp ===
+              null ||
             (eventTimestamp > 0 &&
               eventTimestamp >=
-              fromTimestamp);
+                fromTimestamp);
 
           const matchesTo =
-            toTimestamp === null ||
+            toTimestamp ===
+              null ||
             (eventTimestamp > 0 &&
               eventTimestamp <=
-              toTimestamp);
+                toTimestamp);
 
           return (
             matchesSearch &&
@@ -940,21 +1312,303 @@ export default function useMunicipalReports() {
       statusFilter,
     ]);
 
-  const summary = useMemo(
-    () =>
-      calculateSummary(
-        filteredEvents,
-      ),
-    [filteredEvents],
-  );
+  const filteredEvents =
+    useMemo(() => {
+      if (
+        participantCategoryFilter ===
+        "all"
+      ) {
+        return eventFilteredEvents;
+      }
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(
-      filteredEvents.length /
-      pageSize,
-    ),
-  );
+      return eventFilteredEvents
+        .map(
+          (
+            event,
+          ):
+            | MunicipalReportEvent
+            | null => {
+            const eventRegistrations =
+              registrations.filter(
+                (registration) =>
+                  normalizeId(
+                    registration.event_municipality_id,
+                  ) ===
+                    event.eventMunicipalityId &&
+                  getParticipantCategoryValue(
+                    registration,
+                  ) ===
+                    participantCategoryFilter,
+              );
+
+            const uniqueRegistrations =
+              getUniqueRegistrationRows(
+                eventRegistrations,
+              );
+
+            if (
+              uniqueRegistrations.length ===
+              0
+            ) {
+              return null;
+            }
+
+            const matchingRsvpIds =
+              new Set(
+                uniqueRegistrations
+                  .map(
+                    (
+                      registration,
+                    ) =>
+                      normalizeId(
+                        registration.rsvp_id,
+                      ),
+                  )
+                  .filter(Boolean),
+              );
+
+            const eventAttendance =
+              attendanceRecords.filter(
+                (record) => {
+                  if (
+                    normalizeId(
+                      record.event_municipality_id,
+                    ) !==
+                    event.eventMunicipalityId
+                  ) {
+                    return false;
+                  }
+
+                  const rsvpId =
+                    normalizeId(
+                      record.rsvp_id,
+                    );
+
+                  return (
+                    Boolean(
+                      rsvpId,
+                    ) &&
+                    matchingRsvpIds.has(
+                      rsvpId,
+                    )
+                  );
+                },
+              );
+
+            return calculateEventMetrics(
+              event,
+              uniqueRegistrations,
+              eventAttendance,
+            );
+          },
+        )
+        .filter(
+          (
+            event,
+          ): event is MunicipalReportEvent =>
+            event !== null,
+        );
+    }, [
+      attendanceRecords,
+      eventFilteredEvents,
+      participantCategoryFilter,
+      registrations,
+    ]);
+
+  const participantCategoryBreakdown =
+    useMemo<
+      MunicipalParticipantCategoryBreakdownItem[]
+    >(() => {
+      const visibleAssignmentIds =
+        new Set(
+          eventFilteredEvents.map(
+            (event) =>
+              event.eventMunicipalityId,
+          ),
+        );
+
+      const relevantRegistrations =
+        getUniqueRegistrationRows(
+          registrations.filter(
+            (registration) => {
+              const assignmentId =
+                normalizeId(
+                  registration.event_municipality_id,
+                );
+
+              if (
+                !visibleAssignmentIds.has(
+                  assignmentId,
+                )
+              ) {
+                return false;
+              }
+
+              if (
+                participantCategoryFilter ===
+                "all"
+              ) {
+                return true;
+              }
+
+              return (
+                getParticipantCategoryValue(
+                  registration,
+                ) ===
+                participantCategoryFilter
+              );
+            },
+          ),
+        );
+
+      const breakdownMap =
+        new Map<
+          string,
+          {
+            count: number;
+
+            details: Map<
+              string,
+              number
+            >;
+          }
+        >();
+
+      relevantRegistrations.forEach(
+        (registration) => {
+          const value =
+            getParticipantCategoryValue(
+              registration,
+            );
+
+          const current =
+            breakdownMap.get(
+              value,
+            ) ?? {
+              count: 0,
+
+              details:
+                new Map<
+                  string,
+                  number
+                >(),
+            };
+
+          current.count += 1;
+
+          if (
+            value === "others"
+          ) {
+            const detailLabel =
+              String(
+                registration.participant_category_other ??
+                  "",
+              ).trim() ||
+              "Unspecified";
+
+            current.details.set(
+              detailLabel,
+              (current.details.get(
+                detailLabel,
+              ) ?? 0) + 1,
+            );
+          }
+
+          breakdownMap.set(
+            value,
+            current,
+          );
+        },
+      );
+
+      const total =
+        relevantRegistrations.length;
+
+      return Array.from(
+        breakdownMap.entries(),
+      )
+        .map(
+          ([
+            value,
+            item,
+          ]) => ({
+            value,
+
+            label:
+              formatParticipantCategoryLabel(
+                value,
+              ),
+
+            count: item.count,
+
+            percentage:
+              total > 0
+                ? (item.count /
+                    total) *
+                  100
+                : 0,
+
+            details:
+              Array.from(
+                item.details.entries(),
+              )
+                .map(
+                  ([
+                    label,
+                    count,
+                  ]) => ({
+                    label,
+
+                    count,
+                  }),
+                )
+                .sort(
+                  (
+                    first,
+                    second,
+                  ) =>
+                    second.count -
+                      first.count ||
+                    first.label.localeCompare(
+                      second.label,
+                    ),
+                ),
+          }),
+        )
+        .sort(
+          (
+            first,
+            second,
+          ) =>
+            second.count -
+              first.count ||
+            first.label.localeCompare(
+              second.label,
+            ),
+        );
+    }, [
+      eventFilteredEvents,
+      participantCategoryFilter,
+      registrations,
+    ]);
+
+  const summary =
+    useMemo(
+      () =>
+        calculateSummary(
+          filteredEvents,
+        ),
+      [filteredEvents],
+    );
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredEvents.length /
+          pageSize,
+      ),
+    );
 
   const paginatedEvents =
     useMemo(() => {
@@ -973,21 +1627,28 @@ export default function useMunicipalReports() {
     ]);
 
   const firstVisibleItem =
-    filteredEvents.length === 0
+    filteredEvents.length ===
+    0
       ? 0
       : (currentPage - 1) *
-      pageSize +
-      1;
+          pageSize +
+        1;
 
-  const lastVisibleItem = Math.min(
-    currentPage * pageSize,
-    filteredEvents.length,
-  );
+  const lastVisibleItem =
+    Math.min(
+      currentPage *
+        pageSize,
+      filteredEvents.length,
+    );
 
   const hasActiveFilters =
-    searchTerm.trim().length > 0 ||
-    selectedEventId !== "all" ||
+    searchTerm.trim().length >
+      0 ||
+    selectedEventId !==
+      "all" ||
     statusFilter !== "all" ||
+    participantCategoryFilter !==
+      "all" ||
     Boolean(dateFrom) ||
     Boolean(dateTo);
 
@@ -997,6 +1658,7 @@ export default function useMunicipalReports() {
     dateFrom,
     dateTo,
     pageSize,
+    participantCategoryFilter,
     searchTerm,
     selectedEventId,
     statusFilter,
@@ -1015,14 +1677,16 @@ export default function useMunicipalReports() {
   function changeSelectedEvent(
     value: string,
   ) {
-    setSelectedEventId(value);
+    setSelectedEventId(
+      value,
+    );
 
     const nextUrl =
       value === "all"
         ? "/dashboard/municipal/reports"
         : `/dashboard/municipal/reports?eventMunicipalityId=${encodeURIComponent(
-          value,
-        )}`;
+            value,
+          )}`;
 
     window.history.replaceState(
       {},
@@ -1033,10 +1697,23 @@ export default function useMunicipalReports() {
 
   function clearFilters() {
     setSearchTerm("");
-    setSelectedEventId("all");
-    setStatusFilter("all");
+
+    setSelectedEventId(
+      "all",
+    );
+
+    setStatusFilter(
+      "all",
+    );
+
+    setParticipantCategoryFilter(
+      "all",
+    );
+
     setDateFrom("");
+
     setDateTo("");
+
     setCurrentPage(1);
 
     window.history.replaceState(
@@ -1050,6 +1727,7 @@ export default function useMunicipalReports() {
     value: number,
   ) {
     setPageSize(value);
+
     setCurrentPage(1);
   }
 
@@ -1075,38 +1753,71 @@ export default function useMunicipalReports() {
 
   return {
     reportEvents,
+
     filteredEvents,
+
     paginatedEvents,
+
     eventOptions,
+
     municipality,
+
     summary,
 
+    participantCategoryOptions,
+
+    participantCategoryBreakdown,
+
     loading,
+
     refreshing,
+
     errorMessage,
+
     warningMessage,
 
     searchTerm,
+
     selectedEventId,
+
     statusFilter,
+
+    participantCategoryFilter,
+
     dateFrom,
+
     dateTo,
+
     currentPage,
+
     pageSize,
+
     totalPages,
+
     firstVisibleItem,
+
     lastVisibleItem,
+
     hasActiveFilters,
 
     setSearchTerm,
+
     changeSelectedEvent,
+
     setStatusFilter,
+
+    setParticipantCategoryFilter,
+
     setDateFrom,
+
     setDateTo,
+
     clearFilters,
 
     changePageSize,
+
     goToPreviousPage,
+
     goToNextPage,
 
     refreshReports: () =>

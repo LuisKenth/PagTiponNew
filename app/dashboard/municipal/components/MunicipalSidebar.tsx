@@ -22,6 +22,7 @@ import {
   Menu,
   ScanLine,
   Settings,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
@@ -70,6 +71,11 @@ const navigationGroups = [
   {
     label: "Management",
     links: [
+      {
+        name: "Event Staff",
+        href: "/dashboard/municipal/event-staff",
+        icon: UserCog,
+      },
       {
         name: "Venues",
         href: "/dashboard/municipal/venues",
@@ -282,8 +288,8 @@ export default function MunicipalSidebar() {
       {/* Sidebar */}
       <aside
         className={`fixed left-0 top-0 z-50 h-screen w-72 transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${mobileOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
+          ? "translate-x-0"
+          : "-translate-x-full"
           }`}
       >
         <div className="flex h-full min-h-0 flex-col">
@@ -363,15 +369,15 @@ export default function MunicipalSidebar() {
                                   : undefined
                               }
                               className={`group flex min-h-10 items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${active
-                                  ? "bg-slate-950 text-white shadow-sm"
-                                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                                ? "bg-slate-950 text-white shadow-sm"
+                                : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                                 }`}
                             >
                               <span className="flex min-w-0 items-center gap-3">
                                 <Icon
                                   className={`h-[18px] w-[18px] shrink-0 ${active
-                                      ? "text-white"
-                                      : "text-slate-400 transition group-hover:text-slate-700"
+                                    ? "text-white"
+                                    : "text-slate-400 transition group-hover:text-slate-700"
                                     }`}
                                 />
 
@@ -396,8 +402,8 @@ export default function MunicipalSidebar() {
 
                                 <ChevronRight
                                   className={`h-4 w-4 ${active
-                                      ? "text-slate-300"
-                                      : "text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500"
+                                    ? "text-slate-300"
+                                    : "text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500"
                                     }`}
                                 />
                               </span>

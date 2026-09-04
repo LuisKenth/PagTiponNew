@@ -23,6 +23,7 @@ import {
   LogOut,
   Menu,
   Settings,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -93,6 +94,11 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: "Administration",
     links: [
+      {
+        name: "Admin Management",
+        href: "/dashboard/provincial/admins",
+        icon: Users,
+      },
       {
         name: "Notifications",
         href: "/dashboard/provincial/notifications",

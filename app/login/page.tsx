@@ -102,16 +102,27 @@ export default function LoginPage() {
         });
 
       if (loginError) {
+        const loginErrorMessage =
+          loginError.message.toLowerCase();
+
         if (
-          loginError.message
-            .toLowerCase()
-            .includes("invalid login credentials")
+          loginErrorMessage.includes(
+            "invalid login credentials",
+          )
         ) {
           setErrorMessage(
-            "Incorrect email or password. Please check your credentials and try again."
+            "Incorrect email or password. Please check your credentials and try again.",
+          );
+        } else if (
+          loginErrorMessage.includes("banned")
+        ) {
+          setErrorMessage(
+            "This account has been deactivated. Please contact your administrator for assistance.",
           );
         } else {
-          setErrorMessage(loginError.message);
+          setErrorMessage(
+            "Unable to sign in. Please try again or contact the system administrator.",
+          );
         }
 
         return;

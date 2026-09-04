@@ -8,6 +8,7 @@ import {
 import AttendanceBreakdown from "./components/AttendanceBreakdown";
 import EventPerformanceTable from "./components/EventPerformanceTable";
 import MunicipalReportsHeader from "./components/MunicipalReportsHeader";
+import ParticipantCategoryBreakdown from "./components/ParticipantCategoryBreakdown";
 import ReportFilters from "./components/ReportFilters";
 import ReportSummaryCards from "./components/ReportSummaryCards";
 import ReportsPagination from "./components/ReportsPagination";
@@ -23,6 +24,8 @@ export default function MunicipalReportsPage() {
     filteredEvents,
     paginatedEvents,
     eventOptions,
+    participantCategoryOptions,
+    participantCategoryBreakdown,
     municipality,
     summary,
 
@@ -34,6 +37,7 @@ export default function MunicipalReportsPage() {
     searchTerm,
     selectedEventId,
     statusFilter,
+    participantCategoryFilter,
     dateFrom,
     dateTo,
     currentPage,
@@ -46,6 +50,7 @@ export default function MunicipalReportsPage() {
     setSearchTerm,
     changeSelectedEvent,
     setStatusFilter,
+    setParticipantCategoryFilter,
     setDateFrom,
     setDateTo,
     clearFilters,
@@ -60,7 +65,12 @@ export default function MunicipalReportsPage() {
   function handleExport() {
     exportMunicipalReportCsv({
       events: filteredEvents,
+
       municipality,
+
+      participantCategoryFilter,
+
+      participantCategoryBreakdown,
     });
   }
 
@@ -72,8 +82,7 @@ export default function MunicipalReportsPage() {
         refreshing={refreshing}
         exportDisabled={
           loading ||
-          filteredEvents.length ===
-            0
+          filteredEvents.length === 0
         }
         onExport={handleExport}
         onRefresh={() =>
@@ -122,10 +131,20 @@ export default function MunicipalReportsPage() {
         selectedEventId={
           selectedEventId
         }
-        statusFilter={statusFilter}
+        statusFilter={
+          statusFilter
+        }
+        participantCategoryFilter={
+          participantCategoryFilter
+        }
         dateFrom={dateFrom}
         dateTo={dateTo}
-        eventOptions={eventOptions}
+        eventOptions={
+          eventOptions
+        }
+        participantCategoryOptions={
+          participantCategoryOptions
+        }
         resultCount={
           filteredEvents.length
         }
@@ -141,11 +160,18 @@ export default function MunicipalReportsPage() {
         onStatusChange={
           setStatusFilter
         }
+        onParticipantCategoryChange={
+          setParticipantCategoryFilter
+        }
         onDateFromChange={
           setDateFrom
         }
-        onDateToChange={setDateTo}
-        onClearFilters={clearFilters}
+        onDateToChange={
+          setDateTo
+        }
+        onClearFilters={
+          clearFilters
+        }
       />
 
       <ReportSummaryCards
@@ -154,6 +180,16 @@ export default function MunicipalReportsPage() {
 
       <AttendanceBreakdown
         summary={summary}
+      />
+
+      <ParticipantCategoryBreakdown
+        data={
+          participantCategoryBreakdown
+        }
+        loading={loading}
+        errorMessage={
+          errorMessage
+        }
       />
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -182,7 +218,9 @@ export default function MunicipalReportsPage() {
         <EventPerformanceTable
           events={paginatedEvents}
           loading={loading}
-          errorMessage={errorMessage}
+          errorMessage={
+            errorMessage
+          }
         />
 
         {!loading &&
@@ -191,8 +229,12 @@ export default function MunicipalReportsPage() {
               currentPage={
                 currentPage
               }
-              totalPages={totalPages}
-              pageSize={pageSize}
+              totalPages={
+                totalPages
+              }
+              pageSize={
+                pageSize
+              }
               totalItems={
                 filteredEvents.length
               }

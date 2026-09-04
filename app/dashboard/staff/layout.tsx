@@ -126,7 +126,7 @@ export default function StaffDashboardLayout({
           await supabase.auth.signOut();
 
           alert(
-            "Your event staff application has been rejected."
+            "Your Event Staff account has been deactivated. Please contact your Municipal Administrator."
           );
 
           if (mounted) {
