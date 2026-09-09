@@ -13,6 +13,7 @@ export type NotificationRow = {
 export type NotificationFilter =
     | "all"
     | "unread"
+    | "invitations"
     | "registrations"
     | "event_updates"
     | "cancellations"
@@ -21,6 +22,7 @@ export type NotificationFilter =
 export type NotificationCounts = {
     total: number;
     unread: number;
+    invitations: number;
     registrations: number;
     eventUpdates: number;
     cancellations: number;

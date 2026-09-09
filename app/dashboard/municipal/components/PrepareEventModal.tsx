@@ -4,12 +4,15 @@ import { useEffect } from "react";
 
 import {
   Ban,
+  Building2,
+  CalendarClock,
   CheckCircle2,
   ClipboardList,
   Clock3,
   FileText,
   LoaderCircle,
   LockKeyhole,
+  MapPin,
   Save,
   TriangleAlert,
   UsersRound,
@@ -18,26 +21,48 @@ import {
 } from "lucide-react";
 
 import type {
+  MunicipalVenue,
   PreparationStatus,
   ReceivedEvent,
 } from "../types/municipalDashboard";
 
 type PrepareEventModalProps = {
   selectedEvent: ReceivedEvent | null;
+
   preparationStatus: PreparationStatus;
+
   localInstructions: string;
+
   registrationOpen: boolean;
+
   saving: boolean;
+
+  venues: MunicipalVenue[];
+
+  venuesLoading: boolean;
+
+  selectedVenueId: string;
+
+  venueError: string | null;
+
   onStatusChange: (
     value: PreparationStatus,
   ) => void;
+
+  onVenueChange: (
+    value: string,
+  ) => void;
+
   onInstructionsChange: (
     value: string,
   ) => void;
+
   onRegistrationChange: (
     value: boolean,
   ) => void;
+
   onClose: () => void;
+
   onSave: () => void | Promise<void>;
 };
 
@@ -86,13 +111,55 @@ const statusOptions: StatusOption[] = [
   },
 ];
 
+function formatEventDateTime(
+  value: string | null | undefined,
+) {
+  if (!value) {
+    return "Schedule not available";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Schedule not available";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-PH",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(date);
+}
+
+function formatCapacity(
+  capacity: number | null,
+) {
+  if (
+    capacity === null ||
+    !Number.isFinite(capacity)
+  ) {
+    return "Capacity not set";
+  }
+
+  return `${capacity.toLocaleString()} capacity`;
+}
+
 export default function PrepareEventModal({
   selectedEvent,
   preparationStatus,
   localInstructions,
   registrationOpen,
   saving,
+
+  venues,
+  venuesLoading,
+  selectedVenueId,
+  venueError,
+
   onStatusChange,
+  onVenueChange,
   onInstructionsChange,
   onRegistrationChange,
   onClose,
@@ -119,6 +186,12 @@ export default function PrepareEventModal({
 
   const isPrepared =
     preparationStatus === "prepared";
+
+  const selectedVenue =
+    venues.find(
+      (venue) =>
+        venue.id === selectedVenueId,
+    ) ?? null;
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -264,7 +337,7 @@ export default function PrepareEventModal({
                 >
                   {isCancelled
                     ? "This event is available for reference only. Preparation and registration controls are locked."
-                    : "Update the local preparation status, add instructions, and control participant registration."}
+                    : "Assign a local venue, update the preparation status, add instructions, and control participant registration."}
                 </p>
               </div>
             </div>
@@ -285,6 +358,7 @@ export default function PrepareEventModal({
           </div>
 
           <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-5 py-5 sm:px-6">
+
             {/* Event information */}
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start gap-3">
@@ -312,6 +386,32 @@ export default function PrepareEventModal({
                       }
                     </p>
                   )}
+
+                  <div className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-500">
+                    <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+
+                    <div>
+                      <p>
+                        <span className="font-semibold text-slate-700">
+                          Starts:
+                        </span>{" "}
+                        {formatEventDateTime(
+                          selectedEvent.event
+                            ?.start_at,
+                        )}
+                      </p>
+
+                      <p>
+                        <span className="font-semibold text-slate-700">
+                          Ends:
+                        </span>{" "}
+                        {formatEventDateTime(
+                          selectedEvent.event
+                            ?.end_at,
+                        )}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -336,6 +436,151 @@ export default function PrepareEventModal({
                 </div>
               </section>
             )}
+
+            {/* Local venue */}
+            <section className="mt-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+                  <MapPin className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Local Venue
+                  </h3>
+
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Assign a venue from your municipality.
+                    The system automatically prevents
+                    overlapping bookings.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label
+                  htmlFor="municipal-local-venue"
+                  className="sr-only"
+                >
+                  Local venue
+                </label>
+
+                <select
+                  id="municipal-local-venue"
+                  value={selectedVenueId}
+                  disabled={
+                    controlsDisabled ||
+                    venuesLoading
+                  }
+                  onChange={(event) =>
+                    onVenueChange(
+                      event.target.value,
+                    )
+                  }
+                  className={`min-h-12 w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition ${
+                    venueError
+                      ? "border-red-300 text-slate-700 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      : "border-slate-300 text-slate-700 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  } disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500`}
+                >
+                  <option value="">
+                    {venuesLoading
+                      ? "Loading municipal venues..."
+                      : "Select a local venue"}
+                  </option>
+
+                  {venues.map(
+                    (venue) => (
+                      <option
+                        key={venue.id}
+                        value={venue.id}
+                      >
+                        {venue.venue_name}
+                        {typeof venue.capacity ===
+                        "number"
+                          ? ` — Capacity: ${venue.capacity.toLocaleString()}`
+                          : ""}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
+              {!venuesLoading &&
+                venues.length === 0 &&
+                !isCancelled && (
+                  <div className="mt-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+
+                    <div>
+                      <p className="text-sm font-bold text-amber-900">
+                        No municipal venues available
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-amber-700">
+                        Add a venue in the Municipal
+                        Venues page before marking this
+                        event as Prepared.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+              {selectedVenue && (
+                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" />
+
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-violet-950">
+                        {selectedVenue.venue_name}
+                      </p>
+
+                      <p className="mt-1 text-xs text-violet-700">
+                        {formatCapacity(
+                          selectedVenue.capacity,
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {venueError && (
+                <div
+                  role="alert"
+                  className="mt-3 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4"
+                >
+                  <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+
+                  <div>
+                    <p className="text-sm font-bold text-red-900">
+                      {venueError
+                        .toLowerCase()
+                        .includes(
+                          "venue schedule conflict",
+                        )
+                        ? "Venue Schedule Conflict"
+                        : "Venue Required"}
+                    </p>
+
+                    <p className="mt-1 text-sm leading-6 text-red-700">
+                      {venueError.replace(
+                        /^Venue Schedule Conflict:\s*/i,
+                        "",
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!isCancelled && (
+                <p className="mt-2 text-xs leading-5 text-slate-400">
+                  Venue selection is required before
+                  the event can be marked as Prepared.
+                </p>
+              )}
+            </section>
 
             {/* Preparation status */}
             <section className="mt-5">

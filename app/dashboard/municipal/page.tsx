@@ -93,13 +93,26 @@ export default function MunicipalDashboardPage() {
     receivedEvents,
     summary,
     loading,
+
+    /*
+     * Municipal venue assignment data
+     */
+    venues,
+    venuesLoading,
+    selectedVenueId,
+    venueError,
+
     selectedEvent,
     localInstructions,
     registrationOpen,
     savingPreparation,
     preparationStatus,
+
     setLocalInstructions,
     setRegistrationOpen,
+
+    handleVenueChange,
+
     openPrepareModal,
     closePrepareModal,
     handlePreparationStatusChange,
@@ -387,6 +400,7 @@ export default function MunicipalDashboardPage() {
 
         <ReceivedEventsSection
           events={receivedEvents}
+          venues={venues}
           loading={loading}
           highlightedEventId={highlightedEventId}
           onPrepare={openPrepareModal}
@@ -399,8 +413,17 @@ export default function MunicipalDashboardPage() {
         localInstructions={localInstructions}
         registrationOpen={registrationOpen}
         saving={savingPreparation}
+
+        venues={venues}
+        venuesLoading={venuesLoading}
+        selectedVenueId={selectedVenueId}
+        venueError={venueError}
+
         onStatusChange={
           handlePreparationStatusChange
+        }
+        onVenueChange={
+          handleVenueChange
         }
         onInstructionsChange={
           setLocalInstructions

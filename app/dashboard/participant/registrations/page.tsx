@@ -60,6 +60,8 @@ type RegistrationFilter =
     | "completed"
     | "cancelled";
 
+const REGISTRATIONS_PER_PAGE = 5;
+
 function normalizeStatus(
     value: string | null | undefined,
 ) {
@@ -205,276 +207,336 @@ export default function ParticipantRegistrationsPage() {
         setErrorMessage,
     ] = useState("");
 
-    const [activeFilter, setActiveFilter] =
-        useState<RegistrationFilter>("all");
+    const [
+        activeFilter,
+        setActiveFilter,
+    ] =
+        useState<RegistrationFilter>(
+            "all",
+        );
+
+    const [
+        currentPage,
+        setCurrentPage,
+    ] = useState(1);
 
     const fetchRegistrations =
-        useCallback(async (
-            refreshOnly = false,
-        ) => {
-            if (refreshOnly) {
-                setRefreshing(true);
-            } else {
-                setLoading(true);
-            }
-
-            setErrorMessage("");
-
-            try {
-                const {
-                    data: { user },
-                    error: userError,
-                } =
-                    await supabase.auth.getUser();
-
-                if (userError || !user) {
-                    throw new Error(
-                        userError?.message ||
-                        "Participant user not found.",
-                    );
+        useCallback(
+            async (
+                refreshOnly = false,
+            ) => {
+                if (refreshOnly) {
+                    setRefreshing(true);
+                } else {
+                    setLoading(true);
                 }
 
-                const {
-                    data: rsvpRows,
-                    error: rsvpError,
-                } = await supabase
-                    .from("rsvps")
-                    .select(
-                        `
-                            id,
-                            event_municipality_id,
-                            user_id,
-                            municipality,
-                            status,
-                            registered_at
-                        `,
-                    )
-                    .eq("user_id", user.id)
-                    .in("status", [
-                        "registered",
-                        "cancelled",
-                    ])
-                    .order("registered_at", {
-                        ascending: false,
-                    });
+                setErrorMessage("");
 
-                if (rsvpError) {
-                    throw rsvpError;
-                }
+                try {
+                    const {
+                        data: { user },
+                        error: userError,
+                    } =
+                        await supabase.auth.getUser();
 
-                const registeredRsvps =
-                    (rsvpRows || []) as RSVPRow[];
+                    if (
+                        userError ||
+                        !user
+                    ) {
+                        throw new Error(
+                            userError?.message ||
+                                "Participant user not found.",
+                        );
+                    }
 
-                if (
-                    registeredRsvps.length === 0
-                ) {
-                    setRegistrations([]);
-                    return;
-                }
-
-                const assignmentIds =
-                    registeredRsvps.map(
-                        (rsvp) =>
-                            rsvp.event_municipality_id,
-                    );
-
-                const {
-                    data: assignmentRows,
-                    error: assignmentError,
-                } = await supabase
-                    .from(
-                        "event_municipalities",
-                    )
-                    .select(
-                        `
-                            id,
-                            event_id,
-                            municipality,
-                            municipal_status,
-                            registration_open,
-                            local_instructions
-                        `,
-                    )
-                    .in("id", assignmentIds);
-
-                if (assignmentError) {
-                    throw assignmentError;
-                }
-
-                const assignments =
-                    (assignmentRows ||
-                        []) as EventAssignmentRow[];
-
-                if (assignments.length === 0) {
-                    setRegistrations([]);
-                    return;
-                }
-
-                const eventIds = Array.from(
-                    new Set(
-                        assignments.map(
-                            (assignment) =>
-                                assignment.event_id,
-                        ),
-                    ),
-                );
-
-                const {
-                    data: eventRows,
-                    error: eventError,
-                } = await supabase
-                    .from("events")
-                    .select(
-                        `
-                            id,
-                            title,
-                            description,
-                            start_at,
-                            end_at,
-                            status,
-                            created_at
-                        `,
-                    )
-                    .in("id", eventIds);
-
-                if (eventError) {
-                    throw eventError;
-                }
-
-                const events =
-                    (eventRows ||
-                        []) as EventRow[];
-
-                const mappedRegistrations =
-                    registeredRsvps
-                        .map((rsvp) => {
-                            const assignment =
-                                assignments.find(
-                                    (item) =>
-                                        String(
-                                            item.id,
-                                        ) ===
-                                        String(
-                                            rsvp.event_municipality_id,
-                                        ),
-                                );
-
-                            if (!assignment) {
-                                return null;
-                            }
-
-                            const event =
-                                events.find(
-                                    (item) =>
-                                        String(
-                                            item.id,
-                                        ) ===
-                                        String(
-                                            assignment.event_id,
-                                        ),
-                                );
-
-                            if (!event) {
-                                return null;
-                            }
-
-                            return {
-                                rsvp,
-                                assignment,
-                                event,
-                            };
-                        })
-                        .filter(
-                            (
-                                item,
-                            ): item is RegistrationItem =>
-                                item !== null,
+                    const {
+                        data: rsvpRows,
+                        error: rsvpError,
+                    } = await supabase
+                        .from("rsvps")
+                        .select(
+                            `
+                                id,
+                                event_municipality_id,
+                                user_id,
+                                municipality,
+                                status,
+                                registered_at
+                            `,
                         )
-                        .sort(
-                            (
-                                first,
-                                second,
-                            ) => {
-                                const firstActive =
-                                    isActiveEventStatus(
-                                        first.event
-                                            .status,
-                                    );
-
-                                const secondActive =
-                                    isActiveEventStatus(
-                                        second.event
-                                            .status,
-                                    );
-
-                                if (
-                                    firstActive &&
-                                    !secondActive
-                                ) {
-                                    return -1;
-                                }
-
-                                if (
-                                    !firstActive &&
-                                    secondActive
-                                ) {
-                                    return 1;
-                                }
-
-                                const firstDate =
-                                    first.event
-                                        .start_at
-                                        ? new Date(
-                                            first.event.start_at,
-                                        ).getTime()
-                                        : 0;
-
-                                const secondDate =
-                                    second.event
-                                        .start_at
-                                        ? new Date(
-                                            second.event.start_at,
-                                        ).getTime()
-                                        : 0;
-
-                                if (
-                                    firstActive &&
-                                    secondActive
-                                ) {
-                                    return (
-                                        firstDate -
-                                        secondDate
-                                    );
-                                }
-
-                                return (
-                                    secondDate -
-                                    firstDate
-                                );
+                        .eq(
+                            "user_id",
+                            user.id,
+                        )
+                        .in("status", [
+                            "registered",
+                            "cancelled",
+                        ])
+                        .order(
+                            "registered_at",
+                            {
+                                ascending:
+                                    false,
                             },
                         );
 
-                setRegistrations(
-                    mappedRegistrations,
-                );
-            } catch (error) {
-                console.error(
-                    "Participant registrations fetch error:",
-                    error,
-                );
+                    if (rsvpError) {
+                        throw rsvpError;
+                    }
 
-                setRegistrations([]);
+                    const registeredRsvps =
+                        (rsvpRows ||
+                            []) as RSVPRow[];
 
-                setErrorMessage(
-                    error instanceof Error
-                        ? error.message
-                        : "Unable to load your registrations.",
-                );
-            } finally {
-                setLoading(false);
-                setRefreshing(false);
-            }
-        }, []);
+                    if (
+                        registeredRsvps.length ===
+                        0
+                    ) {
+                        setRegistrations(
+                            [],
+                        );
+                        return;
+                    }
+
+                    const assignmentIds =
+                        registeredRsvps.map(
+                            (rsvp) =>
+                                rsvp.event_municipality_id,
+                        );
+
+                    const {
+                        data: assignmentRows,
+                        error:
+                            assignmentError,
+                    } = await supabase
+                        .from(
+                            "event_municipalities",
+                        )
+                        .select(
+                            `
+                                id,
+                                event_id,
+                                municipality,
+                                municipal_status,
+                                registration_open,
+                                local_instructions
+                            `,
+                        )
+                        .in(
+                            "id",
+                            assignmentIds,
+                        );
+
+                    if (
+                        assignmentError
+                    ) {
+                        throw assignmentError;
+                    }
+
+                    const assignments =
+                        (assignmentRows ||
+                            []) as EventAssignmentRow[];
+
+                    if (
+                        assignments.length ===
+                        0
+                    ) {
+                        setRegistrations(
+                            [],
+                        );
+                        return;
+                    }
+
+                    const eventIds =
+                        Array.from(
+                            new Set(
+                                assignments.map(
+                                    (
+                                        assignment,
+                                    ) =>
+                                        assignment.event_id,
+                                ),
+                            ),
+                        );
+
+                    const {
+                        data: eventRows,
+                        error: eventError,
+                    } = await supabase
+                        .from("events")
+                        .select(
+                            `
+                                id,
+                                title,
+                                description,
+                                start_at,
+                                end_at,
+                                status,
+                                created_at
+                            `,
+                        )
+                        .in(
+                            "id",
+                            eventIds,
+                        );
+
+                    if (eventError) {
+                        throw eventError;
+                    }
+
+                    const events =
+                        (eventRows ||
+                            []) as EventRow[];
+
+                    const mappedRegistrations =
+                        registeredRsvps
+                            .map(
+                                (rsvp) => {
+                                    const assignment =
+                                        assignments.find(
+                                            (
+                                                item,
+                                            ) =>
+                                                String(
+                                                    item.id,
+                                                ) ===
+                                                String(
+                                                    rsvp.event_municipality_id,
+                                                ),
+                                        );
+
+                                    if (
+                                        !assignment
+                                    ) {
+                                        return null;
+                                    }
+
+                                    const event =
+                                        events.find(
+                                            (
+                                                item,
+                                            ) =>
+                                                String(
+                                                    item.id,
+                                                ) ===
+                                                String(
+                                                    assignment.event_id,
+                                                ),
+                                        );
+
+                                    if (
+                                        !event
+                                    ) {
+                                        return null;
+                                    }
+
+                                    return {
+                                        rsvp,
+                                        assignment,
+                                        event,
+                                    };
+                                },
+                            )
+                            .filter(
+                                (
+                                    item,
+                                ): item is RegistrationItem =>
+                                    item !==
+                                    null,
+                            )
+                            .sort(
+                                (
+                                    first,
+                                    second,
+                                ) => {
+                                    const firstActive =
+                                        isActiveRegistration(
+                                            first,
+                                        );
+
+                                    const secondActive =
+                                        isActiveRegistration(
+                                            second,
+                                        );
+
+                                    if (
+                                        firstActive &&
+                                        !secondActive
+                                    ) {
+                                        return -1;
+                                    }
+
+                                    if (
+                                        !firstActive &&
+                                        secondActive
+                                    ) {
+                                        return 1;
+                                    }
+
+                                    const firstDate =
+                                        first
+                                            .event
+                                            .start_at
+                                            ? new Date(
+                                                  first.event.start_at,
+                                              ).getTime()
+                                            : 0;
+
+                                    const secondDate =
+                                        second
+                                            .event
+                                            .start_at
+                                            ? new Date(
+                                                  second.event.start_at,
+                                              ).getTime()
+                                            : 0;
+
+                                    if (
+                                        firstActive &&
+                                        secondActive
+                                    ) {
+                                        return (
+                                            firstDate -
+                                            secondDate
+                                        );
+                                    }
+
+                                    return (
+                                        secondDate -
+                                        firstDate
+                                    );
+                                },
+                            );
+
+                    setRegistrations(
+                        mappedRegistrations,
+                    );
+                } catch (error) {
+                    console.error(
+                        "Participant registrations fetch error:",
+                        error,
+                    );
+
+                    setRegistrations(
+                        [],
+                    );
+
+                    setErrorMessage(
+                        error instanceof
+                            Error
+                            ? error.message
+                            : "Unable to load your registrations.",
+                    );
+                } finally {
+                    setLoading(false);
+                    setRefreshing(
+                        false,
+                    );
+                }
+            },
+        [],
+    );
 
     useEffect(() => {
         void fetchRegistrations();
@@ -483,7 +545,8 @@ export default function ParticipantRegistrationsPage() {
     const registrationCounts =
         useMemo(() => {
             return {
-                total: registrations.length,
+                total:
+                    registrations.length,
 
                 active:
                     registrations.filter(
@@ -505,7 +568,8 @@ export default function ParticipantRegistrationsPage() {
     const filteredRegistrations =
         useMemo(() => {
             if (
-                activeFilter === "active"
+                activeFilter ===
+                "active"
             ) {
                 return registrations.filter(
                     isActiveRegistration,
@@ -536,53 +600,143 @@ export default function ParticipantRegistrationsPage() {
             registrations,
         ]);
 
+    const totalPages = Math.max(
+        1,
+        Math.ceil(
+            filteredRegistrations.length /
+                REGISTRATIONS_PER_PAGE,
+        ),
+    );
+
+    const paginatedRegistrations =
+        useMemo(() => {
+            const startIndex =
+                (currentPage - 1) *
+                REGISTRATIONS_PER_PAGE;
+
+            const endIndex =
+                startIndex +
+                REGISTRATIONS_PER_PAGE;
+
+            return filteredRegistrations.slice(
+                startIndex,
+                endIndex,
+            );
+        }, [
+            currentPage,
+            filteredRegistrations,
+        ]);
+
+    const firstVisibleRegistration =
+        filteredRegistrations.length ===
+        0
+            ? 0
+            : (currentPage - 1) *
+                  REGISTRATIONS_PER_PAGE +
+              1;
+
+    const lastVisibleRegistration =
+        Math.min(
+            currentPage *
+                REGISTRATIONS_PER_PAGE,
+            filteredRegistrations.length,
+        );
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeFilter]);
+
+    useEffect(() => {
+        if (
+            currentPage >
+            totalPages
+        ) {
+            setCurrentPage(
+                totalPages,
+            );
+        }
+    }, [
+        currentPage,
+        totalPages,
+    ]);
+
+    const goToPreviousPage = () => {
+        setCurrentPage((page) =>
+            Math.max(
+                1,
+                page - 1,
+            ),
+        );
+    };
+
+    const goToNextPage = () => {
+        setCurrentPage((page) =>
+            Math.min(
+                totalPages,
+                page + 1,
+            ),
+        );
+    };
+
+    const goToPage = (
+        pageNumber: number,
+    ) => {
+        setCurrentPage(
+            pageNumber,
+        );
+    };
+
     const filters: {
         value: RegistrationFilter;
         label: string;
         count: number;
     }[] = [
-            {
-                value: "all",
-                label: "All",
-                count:
-                    registrationCounts.total,
-            },
-            {
-                value: "active",
-                label: "Active",
-                count:
-                    registrationCounts.active,
-            },
-            {
-                value: "completed",
-                label: "Completed",
-                count:
-                    registrationCounts.completed,
-            },
-            {
-                value: "cancelled",
-                label: "Cancelled",
-                count:
-                    registrationCounts.cancelled,
-            },
-        ];
+        {
+            value: "all",
+            label: "All",
+            count:
+                registrationCounts.total,
+        },
+        {
+            value: "active",
+            label: "Active",
+            count:
+                registrationCounts.active,
+        },
+        {
+            value: "completed",
+            label: "Completed",
+            count:
+                registrationCounts.completed,
+        },
+        {
+            value: "cancelled",
+            label: "Cancelled",
+            count:
+                registrationCounts.cancelled,
+        },
+    ];
 
     return (
         <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-7xl space-y-6">
+                {/* PAGE HEADER */}
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                Participant Events
+                                Participant
+                                Events
                             </p>
 
                             <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
-                                My Registrations
+                                My
+                                Registrations
                             </h1>
 
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                Review your active,
+                                Review your
+                                active,
                                 completed, and
                                 cancelled event
                                 registrations.
@@ -596,14 +750,17 @@ export default function ParticipantRegistrationsPage() {
                                     true,
                                 )
                             }
-                            disabled={refreshing}
+                            disabled={
+                                refreshing
+                            }
                             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <RefreshCw
-                                className={`size-4 ${refreshing
-                                    ? "animate-spin"
-                                    : ""
-                                    }`}
+                                className={`size-4 ${
+                                    refreshing
+                                        ? "animate-spin"
+                                        : ""
+                                }`}
                                 aria-hidden="true"
                             />
 
@@ -614,6 +771,7 @@ export default function ParticipantRegistrationsPage() {
                     </div>
                 </section>
 
+                {/* SUMMARY CARDS */}
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
@@ -643,7 +801,8 @@ export default function ParticipantRegistrationsPage() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-slate-500">
-                                    Active Events
+                                    Active
+                                    Events
                                 </p>
 
                                 <p className="mt-2 text-2xl font-bold text-slate-950">
@@ -709,16 +868,20 @@ export default function ParticipantRegistrationsPage() {
                     </div>
                 </section>
 
+                {/* REGISTRATIONS */}
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
                             <h2 className="text-xl font-semibold text-slate-950">
-                                Registered Events
+                                Registered
+                                Events
                             </h2>
 
                             <p className="mt-1 text-sm text-slate-500">
-                                View your registration
-                                details and available
+                                View your
+                                registration
+                                details and
+                                available
                                 actions.
                             </p>
                         </div>
@@ -741,10 +904,11 @@ export default function ParticipantRegistrationsPage() {
                                                     filter.value,
                                                 )
                                             }
-                                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selected
-                                                ? "bg-slate-950 text-white"
-                                                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                                                }`}
+                                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                                                selected
+                                                    ? "bg-slate-950 text-white"
+                                                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                                            }`}
                                         >
                                             {
                                                 filter.label
@@ -790,7 +954,9 @@ export default function ParticipantRegistrationsPage() {
                             </p>
 
                             <p className="mt-1 text-sm text-red-600">
-                                {errorMessage}
+                                {
+                                    errorMessage
+                                }
                             </p>
 
                             <button
@@ -804,7 +970,7 @@ export default function ParticipantRegistrationsPage() {
                             </button>
                         </div>
                     ) : registrations.length ===
-                        0 ? (
+                      0 ? (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
                             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
                                 <CalendarCheck2
@@ -814,25 +980,28 @@ export default function ParticipantRegistrationsPage() {
                             </div>
 
                             <h3 className="mt-4 text-lg font-semibold text-slate-950">
-                                No registrations yet
+                                No registrations
+                                yet
                             </h3>
 
                             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                                Register for an
-                                available event to
-                                see it on this page.
+                                Register for
+                                an available
+                                event to see
+                                it on this
+                                page.
                             </p>
 
                             <Link
                                 href="/dashboard/participant/events"
                                 className="mt-5 inline-flex items-center justify-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
                             >
-                                Browse Available
-                                Events
+                                Browse
+                                Available Events
                             </Link>
                         </div>
                     ) : filteredRegistrations.length ===
-                        0 ? (
+                      0 ? (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                             <p className="font-semibold text-slate-800">
                                 No matching
@@ -841,228 +1010,347 @@ export default function ParticipantRegistrationsPage() {
 
                             <p className="mt-1 text-sm text-slate-500">
                                 There are no
-                                registrations under
-                                the selected filter.
+                                registrations
+                                under the
+                                selected
+                                filter.
                             </p>
                         </div>
                     ) : (
-                        <div className="mt-6 grid gap-5 xl:grid-cols-2">
-                            {filteredRegistrations.map(
-                                (item) => {
-                                    const eventStatus =
-                                        normalizeStatus(
-                                            item.event
-                                                .status,
-                                        );
+                        <>
+                            {/* LIST */}
+                            <div className="mt-6 space-y-4">
+                                {paginatedRegistrations.map(
+                                    (
+                                        item,
+                                    ) => {
+                                        const active =
+                                            isActiveRegistration(
+                                                item,
+                                            );
 
-                                    const active =
-                                        isActiveRegistration(item);
+                                        const cancelled =
+                                            isCancelledRegistration(
+                                                item,
+                                            );
 
-                                    const cancelled =
-                                        isCancelledRegistration(item);
+                                        const completed =
+                                            isCompletedRegistration(
+                                                item,
+                                            );
 
-                                    const completed =
-                                        isCompletedRegistration(item);
-
-                                    const rsvpCancelled =
-                                        normalizeStatus(
-                                            item.rsvp.status,
-                                        ) === "cancelled";
-
-                                    return (
-                                        <article
-                                            key={
+                                        const rsvpCancelled =
+                                            normalizeStatus(
                                                 item
                                                     .rsvp
-                                                    .id
-                                            }
-                                            className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                                        >
-                                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <h3 className="text-lg font-semibold text-slate-950">
-                                                        {
-                                                            item
-                                                                .event
-                                                                .title
-                                                        }
-                                                    </h3>
+                                                    .status,
+                                            ) ===
+                                            "cancelled";
 
-                                                    <p className="mt-1 text-sm text-slate-500">
-                                                        {
-                                                            item
-                                                                .assignment
-                                                                .municipality
-                                                        }
-                                                    </p>
-                                                </div>
+                                        return (
+                                            <article
+                                                key={
+                                                    item
+                                                        .rsvp
+                                                        .id
+                                                }
+                                                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                                            >
+                                                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                                                    {/* EVENT INFORMATION */}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h3 className="text-lg font-semibold text-slate-950">
+                                                                {
+                                                                    item
+                                                                        .event
+                                                                        .title
+                                                                }
+                                                            </h3>
 
-                                                <div className="flex flex-wrap gap-2">
-                                                    <span
-                                                        className={`rounded-full px-3 py-1 text-xs font-semibold ${rsvpCancelled
-                                                                ? "bg-red-100 text-red-700"
-                                                                : "bg-violet-100 text-violet-700"
-                                                            }`}
-                                                    >
-                                                        {rsvpCancelled
-                                                            ? "Registration Cancelled"
-                                                            : "Registered"}
-                                                    </span>
+                                                            <span
+                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                                                    rsvpCancelled
+                                                                        ? "bg-red-100 text-red-700"
+                                                                        : "bg-violet-100 text-violet-700"
+                                                                }`}
+                                                            >
+                                                                {rsvpCancelled
+                                                                    ? "Registration Cancelled"
+                                                                    : "Registered"}
+                                                            </span>
 
-                                                    <span
-                                                        className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
-                                                            item
-                                                                .event
-                                                                .status,
-                                                        )}`}
-                                                    >
-                                                        {getEventStatusLabel(
-                                                            item
-                                                                .event
-                                                                .status,
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            </div>
+                                                            <span
+                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
+                                                                    item
+                                                                        .event
+                                                                        .status,
+                                                                )}`}
+                                                            >
+                                                                {getEventStatusLabel(
+                                                                    item
+                                                                        .event
+                                                                        .status,
+                                                                )}
+                                                            </span>
+                                                        </div>
 
-                                            <p className="mt-3 text-sm leading-6 text-slate-600">
-                                                {item
-                                                    .event
-                                                    .description ||
-                                                    "No event description provided."}
-                                            </p>
-
-                                            <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                        Starts
-                                                    </p>
-
-                                                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                        {formatDateTime(
-                                                            item
-                                                                .event
-                                                                .start_at,
-                                                        )}
-                                                    </p>
-                                                </div>
-
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                        Ends
-                                                    </p>
-
-                                                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                        {formatDateTime(
-                                                            item
-                                                                .event
-                                                                .end_at,
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {item
-                                                .assignment
-                                                .local_instructions && (
-                                                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                            Local
-                                                            Instructions
-                                                        </p>
-
-                                                        <p className="mt-1 text-sm leading-6 text-amber-900">
+                                                        <p className="mt-2 text-sm font-medium text-slate-500">
                                                             {
                                                                 item
                                                                     .assignment
-                                                                    .local_instructions
+                                                                    .municipality
                                                             }
                                                         </p>
-                                                    </div>
-                                                )}
 
-                                            <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-                                                <Clock3
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-
-                                                Registered on{" "}
-                                                {formatDateTime(
-                                                    item
-                                                        .rsvp
-                                                        .registered_at,
-                                                )}
-                                            </div>
-
-                                            <div className="mt-auto pt-5">
-                                                {active && (
-                                                    <Link
-                                                        href="/dashboard/participant/attendance-pass"
-                                                        className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                                                    >
-                                                        View
-                                                        Attendance
-                                                        Pass
-                                                    </Link>
-                                                )}
-
-                                                {completed && (
-                                                    <Link
-                                                        href="/dashboard/participant/attendance-history"
-                                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                                                    >
-                                                        <History
-                                                            className="size-4"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        View
-                                                        Attendance
-                                                        Result
-                                                    </Link>
-                                                )}
-
-                                                {cancelled && (
-                                                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                                                        <p className="text-sm font-semibold text-red-800">
-                                                            Event
-                                                            Cancelled
+                                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                                                            {item
+                                                                .event
+                                                                .description ||
+                                                                "No event description provided."}
                                                         </p>
 
-                                                        <p className="mt-1 text-xs leading-5 text-red-600">
-                                                            This
-                                                            registration
-                                                            is kept
-                                                            for your
-                                                            records,
-                                                            but the
-                                                            event is
-                                                            no longer
-                                                            active.
-                                                        </p>
-                                                    </div>
-                                                )}
+                                                        {item
+                                                            .assignment
+                                                            .local_instructions && (
+                                                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                                                                    Local
+                                                                    Instructions
+                                                                </p>
 
-                                                {!active &&
-                                                    !completed &&
-                                                    !cancelled && (
-                                                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                                                            No
-                                                            participant
-                                                            action is
-                                                            currently
-                                                            available
-                                                            for this
-                                                            registration.
+                                                                <p className="mt-1 text-sm leading-6 text-amber-900">
+                                                                    {
+                                                                        item
+                                                                            .assignment
+                                                                            .local_instructions
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* SCHEDULE */}
+                                                    <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[390px]">
+                                                        <div>
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                Starts
+                                                            </p>
+
+                                                            <p className="mt-1 font-semibold text-slate-800">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .event
+                                                                        .start_at,
+                                                                )}
+                                                            </p>
                                                         </div>
-                                                    )}
-                                            </div>
-                                        </article>
-                                    );
-                                },
-                            )}
-                        </div>
+
+                                                        <div>
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                Ends
+                                                            </p>
+
+                                                            <p className="mt-1 font-semibold text-slate-800">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .event
+                                                                        .end_at,
+                                                                )}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="flex items-start gap-2 border-t border-slate-200 pt-3 sm:col-span-2">
+                                                            <Clock3
+                                                                className="mt-0.5 size-4 shrink-0 text-slate-400"
+                                                                aria-hidden="true"
+                                                            />
+
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                    Registered
+                                                                    On
+                                                                </p>
+
+                                                                <p className="mt-1 text-sm font-medium text-slate-700">
+                                                                    {formatDateTime(
+                                                                        item
+                                                                            .rsvp
+                                                                            .registered_at,
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ACTION */}
+                                                    <div className="shrink-0 xl:w-[210px]">
+                                                        {active && (
+                                                            <Link
+                                                                href="/dashboard/participant/attendance-pass"
+                                                                className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
+                                                            >
+                                                                View
+                                                                Attendance
+                                                                Pass
+                                                            </Link>
+                                                        )}
+
+                                                        {completed && (
+                                                            <Link
+                                                                href="/dashboard/participant/attendance-history"
+                                                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+                                                            >
+                                                                <History
+                                                                    className="size-4"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                View
+                                                                Attendance
+                                                                Result
+                                                            </Link>
+                                                        )}
+
+                                                        {cancelled && (
+                                                            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                                                                <p className="text-sm font-semibold text-red-800">
+                                                                    Event
+                                                                    Cancelled
+                                                                </p>
+
+                                                                <p className="mt-1 text-xs leading-5 text-red-600">
+                                                                    This
+                                                                    registration
+                                                                    is kept
+                                                                    for your
+                                                                    records.
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                        {!active &&
+                                                            !completed &&
+                                                            !cancelled && (
+                                                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                                                                    No
+                                                                    participant
+                                                                    action is
+                                                                    currently
+                                                                    available.
+                                                                </div>
+                                                            )}
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        );
+                                    },
+                                )}
+                            </div>
+
+                            {/* PAGINATION */}
+                            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-slate-500">
+                                    Showing{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            firstVisibleRegistration
+                                        }
+                                    </span>
+                                    {" - "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            lastVisibleRegistration
+                                        }
+                                    </span>{" "}
+                                    of{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            filteredRegistrations.length
+                                        }
+                                    </span>{" "}
+                                    registrations
+                                </p>
+
+                                {totalPages >
+                                    1 && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                goToPreviousPage
+                                            }
+                                            disabled={
+                                                currentPage ===
+                                                1
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            Previous
+                                        </button>
+
+                                        {Array.from(
+                                            {
+                                                length:
+                                                    totalPages,
+                                            },
+                                            (
+                                                _,
+                                                index,
+                                            ) => {
+                                                const pageNumber =
+                                                    index +
+                                                    1;
+
+                                                return (
+                                                    <button
+                                                        key={
+                                                            pageNumber
+                                                        }
+                                                        type="button"
+                                                        onClick={() =>
+                                                            goToPage(
+                                                                pageNumber,
+                                                            )
+                                                        }
+                                                        aria-current={
+                                                            currentPage ===
+                                                            pageNumber
+                                                                ? "page"
+                                                                : undefined
+                                                        }
+                                                        className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                                                            currentPage ===
+                                                            pageNumber
+                                                                ? "bg-slate-950 text-white"
+                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                        }`}
+                                                    >
+                                                        {
+                                                            pageNumber
+                                                        }
+                                                    </button>
+                                                );
+                                            },
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                goToNextPage
+                                            }
+                                            disabled={
+                                                currentPage ===
+                                                totalPages
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                 </section>
             </div>

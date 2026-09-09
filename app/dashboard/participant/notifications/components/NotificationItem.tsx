@@ -39,13 +39,15 @@ export default function NotificationItem({
 
     return (
         <article
-            className={`rounded-2xl border p-5 transition ${
+            aria-busy={actionLoading}
+            className={`rounded-2xl border p-5 transition-all ${
                 notification.read
-                    ? "border-slate-200 bg-white"
-                    : "border-blue-200 bg-blue-50/50"
+                    ? "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                    : "border-blue-200 bg-blue-50/50 shadow-sm hover:border-blue-300"
             }`}
         >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                {/* ICON */}
                 <div
                     className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${getNotificationIconClasses(
                         notification.type,
@@ -57,9 +59,10 @@ export default function NotificationItem({
                     />
                 </div>
 
+                {/* CONTENT */}
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-semibold text-slate-950">
                                     {notification.title}
@@ -72,33 +75,42 @@ export default function NotificationItem({
                                 )}
                             </div>
 
-                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
                                 {notification.message}
                             </p>
 
                             <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                                 <Clock3
-                                    className="size-3.5"
+                                    className="size-3.5 shrink-0"
                                     aria-hidden="true"
                                 />
 
-                                {formatNotificationDateTime(
-                                    notification.created_at,
-                                )}
+                                <span>
+                                    {formatNotificationDateTime(
+                                        notification.created_at,
+                                    )}
+                                </span>
                             </div>
                         </div>
                     </div>
 
+                    {/* ACTIONS */}
                     <div className="mt-4 flex flex-wrap gap-2">
                         <button
                             type="button"
                             onClick={() =>
-                                void onOpen(notification)
+                                void onOpen(
+                                    notification,
+                                )
                             }
-                            disabled={actionLoading}
+                            disabled={
+                                actionLoading
+                            }
                             className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            Open
+                            {actionLoading
+                                ? "Processing..."
+                                : "Open"}
                         </button>
 
                         {!notification.read && (
@@ -109,10 +121,14 @@ export default function NotificationItem({
                                         notification.id,
                                     )
                                 }
-                                disabled={actionLoading}
+                                disabled={
+                                    actionLoading
+                                }
                                 className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                Mark as Read
+                                {actionLoading
+                                    ? "Processing..."
+                                    : "Mark as Read"}
                             </button>
                         )}
 
@@ -123,7 +139,9 @@ export default function NotificationItem({
                                     notification.id,
                                 )
                             }
-                            disabled={actionLoading}
+                            disabled={
+                                actionLoading
+                            }
                             className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <Trash2
@@ -131,7 +149,9 @@ export default function NotificationItem({
                                 aria-hidden="true"
                             />
 
-                            Delete
+                            {actionLoading
+                                ? "Processing..."
+                                : "Delete"}
                         </button>
                     </div>
                 </div>

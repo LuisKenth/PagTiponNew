@@ -22,13 +22,26 @@ export default function MunicipalEventsPage() {
     municipality,
     receivedEvents,
     loading,
+
+    /*
+     * Municipal venue assignment
+     */
+    venues,
+    venuesLoading,
+    selectedVenueId,
+    venueError,
+
     selectedEvent,
     localInstructions,
     registrationOpen,
     savingPreparation,
     preparationStatus,
+
     setLocalInstructions,
     setRegistrationOpen,
+
+    handleVenueChange,
+
     openPrepareModal,
     closePrepareModal,
     handlePreparationStatusChange,
@@ -49,10 +62,12 @@ export default function MunicipalEventsPage() {
     firstVisibleItem,
     lastVisibleItem,
     hasActiveFilters,
+
     setSearchTerm,
     setStatusFilter,
     setRegistrationFilter,
     setSortOption,
+
     clearFilters,
     changePageSize,
     goToPreviousPage,
@@ -141,6 +156,7 @@ export default function MunicipalEventsPage() {
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <MunicipalEventsList
             events={paginatedEvents}
+            venues={venues}
             loading={loading}
             firstVisibleItem={
               firstVisibleItem
@@ -192,27 +208,58 @@ export default function MunicipalEventsPage() {
 
       <PrepareEventModal
         selectedEvent={selectedEvent}
+
         preparationStatus={
           preparationStatus
         }
+
         localInstructions={
           localInstructions
         }
+
         registrationOpen={
           registrationOpen
         }
+
         saving={savingPreparation}
+
+        /*
+         * Municipal venue assignment
+         */
+        venues={venues}
+        venuesLoading={
+          venuesLoading
+        }
+        selectedVenueId={
+          selectedVenueId
+        }
+        venueError={
+          venueError
+        }
+
         onStatusChange={
           handlePreparationStatusChange
         }
+
+        onVenueChange={
+          handleVenueChange
+        }
+
         onInstructionsChange={
           setLocalInstructions
         }
+
         onRegistrationChange={
           setRegistrationOpen
         }
-        onClose={closePrepareModal}
-        onSave={savePreparation}
+
+        onClose={
+          closePrepareModal
+        }
+
+        onSave={
+          savePreparation
+        }
       />
     </>
   );

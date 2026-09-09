@@ -37,36 +37,16 @@ const participantCategoryOptions = [
         label: "Farmer",
     },
     {
-        value: "fisherfolk",
-        label: "Fisherfolk",
+        value: "fisherman",
+        label: "Fisherman",
     },
     {
-        value: "agricultural_worker",
-        label: "Agricultural Worker",
+        value: "senior_citizen",
+        label: "Senior Citizen",
     },
     {
-        value: "livestock_raiser",
-        label: "Livestock Raiser",
-    },
-    {
-        value: "entrepreneur",
-        label: "Entrepreneur",
-    },
-    {
-        value: "food_processor",
-        label: "Food Processor",
-    },
-    {
-        value: "agriculture_student",
-        label: "Agriculture Student",
-    },
-    {
-        value: "agriculture_professional",
-        label: "Agriculture Professional",
-    },
-    {
-        value: "government_employee",
-        label: "Government Employee",
+        value: "4ps",
+        label: "4Ps Beneficiary",
     },
     {
         value: "others",
@@ -94,6 +74,42 @@ function formatValue(
         .replace(/\b\w/g, (letter) =>
             letter.toUpperCase(),
         );
+}
+
+function getParticipantCategoryLabel(
+    value: string | null | undefined,
+) {
+    if (!value) {
+        return "Not set";
+    }
+
+    const matchingOption =
+        participantCategoryOptions.find(
+            (option) =>
+                option.value === value,
+        );
+
+    return (
+        matchingOption?.label ??
+        formatValue(value)
+    );
+}
+
+async function getAuthenticatedUser() {
+    const {
+        data: { session },
+        error,
+    } =
+        await supabase.auth.getSession();
+
+    if (error || !session?.user) {
+        throw new Error(
+            error?.message ||
+                "Your login session is unavailable. Please log in again.",
+        );
+    }
+
+    return session.user;
 }
 
 export default function ParticipantProfilePage() {
@@ -138,18 +154,8 @@ export default function ParticipantProfilePage() {
             setSuccessMessage("");
 
             try {
-                const {
-                    data: { user },
-                    error: userError,
-                } =
-                    await supabase.auth.getUser();
-
-                if (userError || !user) {
-                    throw new Error(
-                        userError?.message ||
-                            "Participant account not found.",
-                    );
-                }
+                const user =
+                    await getAuthenticatedUser();
 
                 const {
                     data,
@@ -223,6 +229,26 @@ export default function ParticipantProfilePage() {
     useEffect(() => {
         void fetchProfile();
     }, [fetchProfile]);
+
+    /*
+     * Automatically dismiss success message.
+     */
+    useEffect(() => {
+        if (!successMessage) {
+            return;
+        }
+
+        const timeoutId =
+            window.setTimeout(() => {
+                setSuccessMessage("");
+            }, 3000);
+
+        return () => {
+            window.clearTimeout(
+                timeoutId,
+            );
+        };
+    }, [successMessage]);
 
     const hasUnsavedChanges =
         useMemo(() => {
@@ -307,7 +333,7 @@ export default function ParticipantProfilePage() {
     }, [hasUnsavedChanges]);
 
     /*
-     * Protect Next.js links such as the
+     * Protect Next.js links such as
      * participant sidebar navigation.
      */
     useEffect(() => {
@@ -357,7 +383,9 @@ export default function ParticipantProfilePage() {
             if (
                 !href ||
                 href.startsWith("#") ||
-                href.startsWith("mailto:") ||
+                href.startsWith(
+                    "mailto:",
+                ) ||
                 href.startsWith("tel:")
             ) {
                 return;
@@ -411,10 +439,14 @@ export default function ParticipantProfilePage() {
     const handleParticipantCategoryChange = (
         value: string,
     ) => {
-        setParticipantCategory(value);
+        setParticipantCategory(
+            value,
+        );
 
         if (value !== "others") {
-            setParticipantCategoryOther("");
+            setParticipantCategoryOther(
+                "",
+            );
         }
 
         setErrorMessage("");
@@ -441,6 +473,9 @@ export default function ParticipantProfilePage() {
                 participantCategoryOther,
             );
 
+        /*
+         * Full name validation.
+         */
         if (!normalizedFullName) {
             setSuccessMessage("");
 
@@ -451,6 +486,22 @@ export default function ParticipantProfilePage() {
             return;
         }
 
+        if (
+            normalizedFullName.length <
+            2
+        ) {
+            setSuccessMessage("");
+
+            setErrorMessage(
+                "Please enter a valid full name.",
+            );
+
+            return;
+        }
+
+        /*
+         * Participant category validation.
+         */
         const validParticipantCategory =
             participantCategoryOptions.some(
                 (option) =>
@@ -490,18 +541,8 @@ export default function ParticipantProfilePage() {
         setSuccessMessage("");
 
         try {
-            const {
-                data: { user },
-                error: userError,
-            } =
-                await supabase.auth.getUser();
-
-            if (userError || !user) {
-                throw new Error(
-                    userError?.message ||
-                        "Participant account not found.",
-                );
-            }
+            const user =
+                await getAuthenticatedUser();
 
             const {
                 data,
@@ -544,9 +585,9 @@ export default function ParticipantProfilePage() {
                 data as ParticipantProfile;
 
             /*
-             * Updating profile here also
-             * resets hasUnsavedChanges because
-             * this becomes the new saved state.
+             * Updating profile resets
+             * hasUnsavedChanges because this
+             * becomes the new saved state.
              */
             setProfile(
                 updatedProfile,
@@ -609,6 +650,7 @@ export default function ParticipantProfilePage() {
     return (
         <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-5xl space-y-6">
+                {/* HEADER */}
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                     <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
                         Participant Account
@@ -625,6 +667,7 @@ export default function ParticipantProfilePage() {
                     </p>
                 </section>
 
+                {/* ERROR */}
                 {errorMessage && (
                     <div
                         role="alert"
@@ -648,6 +691,7 @@ export default function ParticipantProfilePage() {
                     </div>
                 )}
 
+                {/* SUCCESS */}
                 {successMessage && (
                     <div
                         role="status"
@@ -666,8 +710,11 @@ export default function ParticipantProfilePage() {
 
                 {profile && (
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+                        {/* PROFILE FORM */}
                         <form
-                            onSubmit={handleSave}
+                            onSubmit={
+                                handleSave
+                            }
                             className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
                         >
                             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -677,20 +724,23 @@ export default function ParticipantProfilePage() {
                                     </h2>
 
                                     <p className="mt-1 text-sm text-slate-500">
-                                        Update your name
-                                        and participant
+                                        Update your
+                                        name and
+                                        participant
                                         category.
                                     </p>
                                 </div>
 
                                 {hasUnsavedChanges && (
                                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                                        Unsaved changes
+                                        Unsaved
+                                        changes
                                     </span>
                                 )}
                             </div>
 
                             <div className="mt-6 space-y-5">
+                                {/* FULL NAME */}
                                 <div>
                                     <label
                                         htmlFor="full-name"
@@ -702,7 +752,9 @@ export default function ParticipantProfilePage() {
                                     <input
                                         id="full-name"
                                         type="text"
-                                        value={fullName}
+                                        value={
+                                            fullName
+                                        }
                                         onChange={(
                                             event,
                                         ) => {
@@ -726,13 +778,16 @@ export default function ParticipantProfilePage() {
                                         maxLength={
                                             120
                                         }
+                                        autoComplete="name"
                                         className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50"
                                     />
                                 </div>
 
+                                {/* EMAIL */}
                                 <div>
                                     <label className="text-sm font-semibold text-slate-700">
-                                        Email Address
+                                        Email
+                                        Address
                                     </label>
 
                                     <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
@@ -748,11 +803,14 @@ export default function ParticipantProfilePage() {
                                     </div>
 
                                     <p className="mt-1.5 text-xs text-slate-400">
-                                        Email cannot be
-                                        changed here.
+                                        Email
+                                        cannot be
+                                        changed
+                                        here.
                                     </p>
                                 </div>
 
+                                {/* MUNICIPALITY */}
                                 <div>
                                     <label className="text-sm font-semibold text-slate-700">
                                         Municipality
@@ -771,18 +829,22 @@ export default function ParticipantProfilePage() {
                                     </div>
 
                                     <p className="mt-1.5 text-xs text-slate-400">
-                                        Municipality is
-                                        assigned to your
-                                        participant account.
+                                        Municipality
+                                        is assigned
+                                        to your
+                                        participant
+                                        account.
                                     </p>
                                 </div>
 
+                                {/* CATEGORY */}
                                 <div>
                                     <label
                                         htmlFor="participant-category"
                                         className="text-sm font-semibold text-slate-700"
                                     >
-                                        Participant Category
+                                        Participant
+                                        Category
                                     </label>
 
                                     <select
@@ -805,7 +867,8 @@ export default function ParticipantProfilePage() {
                                         className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50"
                                     >
                                         <option value="">
-                                            Select participant
+                                            Select
+                                            participant
                                             category
                                         </option>
 
@@ -830,12 +893,16 @@ export default function ParticipantProfilePage() {
                                     </select>
 
                                     <p className="mt-1.5 text-xs text-slate-400">
-                                        Select the category
-                                        that best describes
-                                        your participation.
+                                        Select the
+                                        category
+                                        that best
+                                        describes
+                                        your
+                                        participation.
                                     </p>
                                 </div>
 
+                                {/* OTHER CATEGORY */}
                                 {participantCategory ===
                                     "others" && (
                                     <div>
@@ -843,7 +910,8 @@ export default function ParticipantProfilePage() {
                                             htmlFor="participant-category-other"
                                             className="text-sm font-semibold text-slate-700"
                                         >
-                                            Specify Category
+                                            Specify
+                                            Category
                                         </label>
 
                                         <input
@@ -880,15 +948,20 @@ export default function ParticipantProfilePage() {
                                         />
 
                                         <p className="mt-1.5 text-xs text-slate-400">
-                                            Specify your
-                                            category if it
-                                            is not included
-                                            in the list
+                                            Specify
+                                            your
+                                            category
+                                            if it is
+                                            not
+                                            included
+                                            in the
+                                            list
                                             above.
                                         </p>
                                     </div>
                                 )}
 
+                                {/* SAVE */}
                                 <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
                                     <p className="text-xs text-slate-500">
                                         {hasUnsavedChanges
@@ -924,7 +997,9 @@ export default function ParticipantProfilePage() {
                             </div>
                         </form>
 
+                        {/* SIDE INFORMATION */}
                         <div className="space-y-6">
+                            {/* PARTICIPANT CATEGORY */}
                             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                                 <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                                     <UserRound
@@ -934,12 +1009,15 @@ export default function ParticipantProfilePage() {
                                 </div>
 
                                 <h2 className="mt-4 text-lg font-semibold text-slate-950">
-                                    Participant Category
+                                    Participant
+                                    Category
                                 </h2>
 
                                 <p className="mt-1 text-sm text-slate-500">
-                                    Category recorded for
-                                    your participant
+                                    Category
+                                    recorded for
+                                    your
+                                    participant
                                     account.
                                 </p>
 
@@ -949,7 +1027,7 @@ export default function ParticipantProfilePage() {
                                     </p>
 
                                     <p className="mt-1 font-semibold text-slate-900">
-                                        {formatValue(
+                                        {getParticipantCategoryLabel(
                                             profile.participant_category,
                                         )}
                                     </p>
@@ -973,9 +1051,11 @@ export default function ParticipantProfilePage() {
                                 </div>
                             </section>
 
+                            {/* ACCOUNT STATUS */}
                             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                                 <h2 className="text-lg font-semibold text-slate-950">
-                                    Account Status
+                                    Account
+                                    Status
                                 </h2>
 
                                 <div className="mt-5 space-y-4">

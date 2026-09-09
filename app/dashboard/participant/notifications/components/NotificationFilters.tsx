@@ -40,6 +40,7 @@ export default function NotificationFilters({
                         <button
                             key={filter.value}
                             type="button"
+                            aria-pressed={selected}
                             onClick={() =>
                                 onChange(filter.value)
                             }

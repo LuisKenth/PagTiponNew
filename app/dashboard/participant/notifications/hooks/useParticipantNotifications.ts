@@ -22,8 +22,16 @@ import {
     isAttendanceNotification,
     isCancellationNotification,
     isEventUpdateNotification,
+    isInvitationNotification,
     isRegistrationNotification,
 } from "../utils/participantNotificationUtils";
+
+const NOTIFICATIONS_PER_PAGE = 5;
+
+type FetchMode =
+    | "initial"
+    | "refresh"
+    | "silent";
 
 function dispatchNotificationUpdate() {
     window.dispatchEvent(
@@ -36,6 +44,7 @@ function dispatchNotificationUpdate() {
 const EMPTY_COUNTS: NotificationCounts = {
     total: 0,
     unread: 0,
+    invitations: 0,
     registrations: 0,
     eventUpdates: 0,
     cancellations: 0,
@@ -54,394 +63,800 @@ export function useParticipantNotifications() {
     const [refreshing, setRefreshing] =
         useState(false);
 
-    const [activeFilter, setActiveFilter] =
-        useState<NotificationFilter>("all");
+    const [
+        activeFilter,
+        setActiveFilter,
+    ] =
+        useState<NotificationFilter>(
+            "all",
+        );
 
-    const [actionNotificationId, setActionNotificationId] =
-        useState<string | null>(null);
+    const [
+        currentPage,
+        setCurrentPage,
+    ] = useState(1);
 
-    const [markingAllRead, setMarkingAllRead] =
-        useState(false);
+    const [
+        actionNotificationId,
+        setActionNotificationId,
+    ] =
+        useState<string | null>(
+            null,
+        );
 
-    const [errorMessage, setErrorMessage] =
-        useState("");
+    const [
+        markingAllRead,
+        setMarkingAllRead,
+    ] = useState(false);
 
-    const fetchNotifications =
-        useCallback(async (refreshOnly = false) => {
-            if (refreshOnly) {
-                setRefreshing(true);
-            } else {
-                setLoading(true);
+    const [
+        errorMessage,
+        setErrorMessage,
+    ] = useState("");
+
+    const getCurrentUser =
+        useCallback(async () => {
+            const {
+                data: { session },
+                error: sessionError,
+            } =
+                await supabase.auth.getSession();
+
+            if (
+                sessionError ||
+                !session?.user
+            ) {
+                throw new Error(
+                    sessionError?.message ||
+                        "Your login session is unavailable. Please log in again.",
+                );
             }
 
-            setErrorMessage("");
+            return session.user;
+        }, []);
 
-            try {
-                const {
-                    data: { user },
-                    error: userError,
-                } = await supabase.auth.getUser();
-
-                if (userError || !user) {
-                    throw new Error(
-                        userError?.message ||
-                            "Participant user not found.",
-                    );
+    const fetchNotifications =
+        useCallback(
+            async (
+                mode: FetchMode =
+                    "initial",
+            ) => {
+                if (
+                    mode === "initial"
+                ) {
+                    setLoading(true);
                 }
 
-                const { data, error } = await supabase
-                    .from("notifications")
-                    .select(
-                        `
-                            id,
-                            user_id,
-                            type,
-                            title,
-                            message,
-                            read,
-                            event_id,
-                            event_municipality_id,
-                            created_at
-                        `,
-                    )
-                    .eq("user_id", user.id)
-                    .order("created_at", {
-                        ascending: false,
-                    })
-                    .limit(100);
+                if (
+                    mode === "refresh"
+                ) {
+                    setRefreshing(true);
+                }
+
+                if (
+                    mode !== "silent"
+                ) {
+                    setErrorMessage("");
+                }
+
+                try {
+                    const user =
+                        await getCurrentUser();
+
+                    const {
+                        data,
+                        error,
+                    } = await supabase
+                        .from(
+                            "notifications",
+                        )
+                        .select(
+                            `
+                                id,
+                                user_id,
+                                type,
+                                title,
+                                message,
+                                read,
+                                event_id,
+                                event_municipality_id,
+                                created_at
+                            `,
+                        )
+                        .eq(
+                            "user_id",
+                            user.id,
+                        )
+                        .order(
+                            "created_at",
+                            {
+                                ascending:
+                                    false,
+                            },
+                        )
+                        .limit(100);
+
+                    if (error) {
+                        throw error;
+                    }
+
+                    setItems(
+                        (data ||
+                            []) as NotificationRow[],
+                    );
+
+                    dispatchNotificationUpdate();
+                } catch (error) {
+                    console.error(
+                        "Participant notifications fetch error:",
+                        error,
+                    );
+
+                    if (
+                        mode !== "silent"
+                    ) {
+                        setItems([]);
+
+                        setErrorMessage(
+                            error instanceof
+                                Error
+                                ? error.message
+                                : "Unable to load notifications.",
+                        );
+                    }
+                } finally {
+                    if (
+                        mode === "initial"
+                    ) {
+                        setLoading(
+                            false,
+                        );
+                    }
+
+                    if (
+                        mode === "refresh"
+                    ) {
+                        setRefreshing(
+                            false,
+                        );
+                    }
+                }
+            },
+            [getCurrentUser],
+        );
+
+    /*
+     * Initial load + silent synchronization.
+     */
+    useEffect(() => {
+        void fetchNotifications(
+            "initial",
+        );
+
+        const refreshSilently =
+            () => {
+                void fetchNotifications(
+                    "silent",
+                );
+            };
+
+        const handleVisibilityChange =
+            () => {
+                if (
+                    document.visibilityState ===
+                    "visible"
+                ) {
+                    refreshSilently();
+                }
+            };
+
+        const intervalId =
+            window.setInterval(
+                () => {
+                    if (
+                        document.visibilityState ===
+                        "visible"
+                    ) {
+                        refreshSilently();
+                    }
+                },
+                30000,
+            );
+
+        window.addEventListener(
+            "focus",
+            refreshSilently,
+        );
+
+        document.addEventListener(
+            "visibilitychange",
+            handleVisibilityChange,
+        );
+
+        return () => {
+            window.clearInterval(
+                intervalId,
+            );
+
+            window.removeEventListener(
+                "focus",
+                refreshSilently,
+            );
+
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange,
+            );
+        };
+    }, [fetchNotifications]);
+
+    const counts =
+        useMemo<NotificationCounts>(
+            () => {
+                if (
+                    items.length === 0
+                ) {
+                    return EMPTY_COUNTS;
+                }
+
+                return {
+                    total:
+                        items.length,
+
+                    unread:
+                        items.filter(
+                            (
+                                notification,
+                            ) =>
+                                !notification.read,
+                        ).length,
+
+                    invitations:
+                        items.filter(
+                            (
+                                notification,
+                            ) =>
+                                isInvitationNotification(
+                                    notification.type,
+                                ),
+                        ).length,
+
+                    registrations:
+                        items.filter(
+                            (
+                                notification,
+                            ) =>
+                                isRegistrationNotification(
+                                    notification.type,
+                                ),
+                        ).length,
+
+                    eventUpdates:
+                        items.filter(
+                            (
+                                notification,
+                            ) =>
+                                isEventUpdateNotification(
+                                    notification.type,
+                                ),
+                        ).length,
+
+                    cancellations:
+                        items.filter(
+                            (
+                                notification,
+                            ) =>
+                                isCancellationNotification(
+                                    notification.type,
+                                ),
+                        ).length,
+
+                    attendance:
+                        items.filter(
+                            (
+                                notification,
+                            ) =>
+                                isAttendanceNotification(
+                                    notification.type,
+                                ),
+                        ).length,
+                };
+            },
+            [items],
+        );
+
+    const allFilteredItems =
+        useMemo(() => {
+            if (
+                activeFilter ===
+                "unread"
+            ) {
+                return items.filter(
+                    (
+                        notification,
+                    ) =>
+                        !notification.read,
+                );
+            }
+
+            if (
+                activeFilter ===
+                "invitations"
+            ) {
+                return items.filter(
+                    (
+                        notification,
+                    ) =>
+                        isInvitationNotification(
+                            notification.type,
+                        ),
+                );
+            }
+
+            if (
+                activeFilter ===
+                "registrations"
+            ) {
+                return items.filter(
+                    (
+                        notification,
+                    ) =>
+                        isRegistrationNotification(
+                            notification.type,
+                        ),
+                );
+            }
+
+            if (
+                activeFilter ===
+                "event_updates"
+            ) {
+                return items.filter(
+                    (
+                        notification,
+                    ) =>
+                        isEventUpdateNotification(
+                            notification.type,
+                        ),
+                );
+            }
+
+            if (
+                activeFilter ===
+                "cancellations"
+            ) {
+                return items.filter(
+                    (
+                        notification,
+                    ) =>
+                        isCancellationNotification(
+                            notification.type,
+                        ),
+                );
+            }
+
+            if (
+                activeFilter ===
+                "attendance"
+            ) {
+                return items.filter(
+                    (
+                        notification,
+                    ) =>
+                        isAttendanceNotification(
+                            notification.type,
+                        ),
+                );
+            }
+
+            return items;
+        }, [
+            activeFilter,
+            items,
+        ]);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(
+            allFilteredItems.length /
+                NOTIFICATIONS_PER_PAGE,
+        ),
+    );
+
+    const filteredItems =
+        useMemo(() => {
+            const startIndex =
+                (currentPage - 1) *
+                NOTIFICATIONS_PER_PAGE;
+
+            return allFilteredItems.slice(
+                startIndex,
+                startIndex +
+                    NOTIFICATIONS_PER_PAGE,
+            );
+        }, [
+            allFilteredItems,
+            currentPage,
+        ]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeFilter]);
+
+    useEffect(() => {
+        if (
+            currentPage >
+            totalPages
+        ) {
+            setCurrentPage(
+                totalPages,
+            );
+        }
+    }, [
+        currentPage,
+        totalPages,
+    ]);
+
+    const filters =
+        useMemo<
+            NotificationFilterOption[]
+        >(
+            () => [
+                {
+                    value: "all",
+                    label: "All",
+                    count:
+                        counts.total,
+                },
+                {
+                    value:
+                        "unread",
+                    label: "Unread",
+                    count:
+                        counts.unread,
+                },
+                {
+                    value:
+                        "invitations",
+                    label:
+                        "Invitations",
+                    count:
+                        counts.invitations,
+                },
+                {
+                    value:
+                        "registrations",
+                    label:
+                        "Registrations",
+                    count:
+                        counts.registrations,
+                },
+                {
+                    value:
+                        "event_updates",
+                    label:
+                        "Event Updates",
+                    count:
+                        counts.eventUpdates,
+                },
+                {
+                    value:
+                        "cancellations",
+                    label:
+                        "Cancellations",
+                    count:
+                        counts.cancellations,
+                },
+                {
+                    value:
+                        "attendance",
+                    label:
+                        "Attendance",
+                    count:
+                        counts.attendance,
+                },
+            ],
+            [counts],
+        );
+
+    const markAsRead =
+        async (
+            notificationId: string,
+        ) => {
+            setActionNotificationId(
+                notificationId,
+            );
+
+            try {
+                const user =
+                    await getCurrentUser();
+
+                const { error } =
+                    await supabase
+                        .from(
+                            "notifications",
+                        )
+                        .update({
+                            read: true,
+                        })
+                        .eq(
+                            "id",
+                            notificationId,
+                        )
+                        .eq(
+                            "user_id",
+                            user.id,
+                        );
 
                 if (error) {
                     throw error;
                 }
 
                 setItems(
-                    (data || []) as NotificationRow[],
+                    (
+                        currentItems,
+                    ) =>
+                        currentItems.map(
+                            (
+                                notification,
+                            ) =>
+                                notification.id ===
+                                notificationId
+                                    ? {
+                                          ...notification,
+                                          read: true,
+                                      }
+                                    : notification,
+                        ),
                 );
 
                 dispatchNotificationUpdate();
             } catch (error) {
                 console.error(
-                    "Participant notifications fetch error:",
+                    "Participant notification mark-read error:",
                     error,
                 );
 
-                setItems([]);
-
-                setErrorMessage(
-                    error instanceof Error
-                        ? error.message
-                        : "Unable to load notifications.",
+                alert(
+                    "Unable to mark the notification as read.",
                 );
             } finally {
-                setLoading(false);
-                setRefreshing(false);
+                setActionNotificationId(
+                    null,
+                );
             }
-        }, []);
-
-    useEffect(() => {
-        void fetchNotifications();
-    }, [fetchNotifications]);
-
-    const counts = useMemo<NotificationCounts>(() => {
-        if (items.length === 0) {
-            return EMPTY_COUNTS;
-        }
-
-        return {
-            total: items.length,
-            unread: items.filter(
-                (notification) => !notification.read,
-            ).length,
-            registrations: items.filter(
-                (notification) =>
-                    isRegistrationNotification(
-                        notification.type,
-                    ),
-            ).length,
-            eventUpdates: items.filter(
-                (notification) =>
-                    isEventUpdateNotification(
-                        notification.type,
-                    ),
-            ).length,
-            cancellations: items.filter(
-                (notification) =>
-                    isCancellationNotification(
-                        notification.type,
-                    ),
-            ).length,
-            attendance: items.filter(
-                (notification) =>
-                    isAttendanceNotification(
-                        notification.type,
-                    ),
-            ).length,
         };
-    }, [items]);
 
-    const filteredItems = useMemo(() => {
-        if (activeFilter === "unread") {
-            return items.filter(
-                (notification) => !notification.read,
+    const markAllAsRead =
+        async () => {
+            if (
+                counts.unread ===
+                    0 ||
+                markingAllRead
+            ) {
+                return;
+            }
+
+            setMarkingAllRead(
+                true,
             );
-        }
 
-        if (activeFilter === "registrations") {
-            return items.filter((notification) =>
-                isRegistrationNotification(
-                    notification.type,
-                ),
+            try {
+                const user =
+                    await getCurrentUser();
+
+                const { error } =
+                    await supabase
+                        .from(
+                            "notifications",
+                        )
+                        .update({
+                            read: true,
+                        })
+                        .eq(
+                            "user_id",
+                            user.id,
+                        )
+                        .eq(
+                            "read",
+                            false,
+                        );
+
+                if (error) {
+                    throw error;
+                }
+
+                setItems(
+                    (
+                        currentItems,
+                    ) =>
+                        currentItems.map(
+                            (
+                                notification,
+                            ) => ({
+                                ...notification,
+                                read: true,
+                            }),
+                        ),
+                );
+
+                dispatchNotificationUpdate();
+            } catch (error) {
+                console.error(
+                    "Participant mark-all-read error:",
+                    error,
+                );
+
+                alert(
+                    "Unable to mark all notifications as read.",
+                );
+            } finally {
+                setMarkingAllRead(
+                    false,
+                );
+            }
+        };
+
+    const deleteNotification =
+        async (
+            notificationId: string,
+        ) => {
+            const confirmed =
+                window.confirm(
+                    "Delete this notification?",
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setActionNotificationId(
+                notificationId,
             );
-        }
 
-        if (activeFilter === "event_updates") {
-            return items.filter((notification) =>
-                isEventUpdateNotification(
-                    notification.type,
-                ),
-            );
-        }
+            try {
+                const user =
+                    await getCurrentUser();
 
-        if (activeFilter === "cancellations") {
-            return items.filter((notification) =>
-                isCancellationNotification(
-                    notification.type,
-                ),
-            );
-        }
+                const { error } =
+                    await supabase
+                        .from(
+                            "notifications",
+                        )
+                        .delete()
+                        .eq(
+                            "id",
+                            notificationId,
+                        )
+                        .eq(
+                            "user_id",
+                            user.id,
+                        );
 
-        if (activeFilter === "attendance") {
-            return items.filter((notification) =>
-                isAttendanceNotification(
-                    notification.type,
-                ),
-            );
-        }
+                if (error) {
+                    throw error;
+                }
 
-        return items;
-    }, [activeFilter, items]);
+                setItems(
+                    (
+                        currentItems,
+                    ) =>
+                        currentItems.filter(
+                            (
+                                notification,
+                            ) =>
+                                notification.id !==
+                                notificationId,
+                        ),
+                );
 
-    const filters = useMemo<NotificationFilterOption[]>(
-        () => [
-            {
-                value: "all",
-                label: "All",
-                count: counts.total,
-            },
-            {
-                value: "unread",
-                label: "Unread",
-                count: counts.unread,
-            },
-            {
-                value: "registrations",
-                label: "Registrations",
-                count: counts.registrations,
-            },
-            {
-                value: "event_updates",
-                label: "Event Updates",
-                count: counts.eventUpdates,
-            },
-            {
-                value: "cancellations",
-                label: "Cancellations",
-                count: counts.cancellations,
-            },
-            {
-                value: "attendance",
-                label: "Attendance",
-                count: counts.attendance,
-            },
-        ],
-        [counts],
-    );
+                dispatchNotificationUpdate();
+            } catch (error) {
+                console.error(
+                    "Participant notification delete error:",
+                    error,
+                );
 
-    const markAsRead = async (
-        notificationId: string,
-    ) => {
-        setActionNotificationId(notificationId);
+                alert(
+                    "Unable to delete the notification.",
+                );
+            } finally {
+                setActionNotificationId(
+                    null,
+                );
+            }
+        };
 
-        try {
-            const {
-                data: { user },
-                error: userError,
-            } = await supabase.auth.getUser();
-
-            if (userError || !user) {
-                throw new Error(
-                    "Participant user not found.",
+    const openNotification =
+        async (
+            notification: NotificationRow,
+        ) => {
+            if (
+                !notification.read
+            ) {
+                await markAsRead(
+                    notification.id,
                 );
             }
 
-            const { error } = await supabase
-                .from("notifications")
-                .update({ read: true })
-                .eq("id", notificationId)
-                .eq("user_id", user.id);
-
-            if (error) {
-                throw error;
-            }
-
-            setItems((currentItems) =>
-                currentItems.map((notification) =>
-                    notification.id === notificationId
-                        ? {
-                              ...notification,
-                              read: true,
-                          }
-                        : notification,
+            router.push(
+                getNotificationRoute(
+                    notification,
                 ),
             );
+        };
 
-            dispatchNotificationUpdate();
-        } catch (error) {
-            console.error(
-                "Participant notification mark-read error:",
-                error,
-            );
-
-            alert(
-                "Unable to mark the notification as read.",
-            );
-        } finally {
-            setActionNotificationId(null);
-        }
-    };
-
-    const markAllAsRead = async () => {
-        if (counts.unread === 0 || markingAllRead) {
-            return;
-        }
-
-        setMarkingAllRead(true);
-
-        try {
-            const {
-                data: { user },
-                error: userError,
-            } = await supabase.auth.getUser();
-
-            if (userError || !user) {
-                throw new Error(
-                    "Participant user not found.",
-                );
-            }
-
-            const { error } = await supabase
-                .from("notifications")
-                .update({ read: true })
-                .eq("user_id", user.id)
-                .eq("read", false);
-
-            if (error) {
-                throw error;
-            }
-
-            setItems((currentItems) =>
-                currentItems.map((notification) => ({
-                    ...notification,
-                    read: true,
-                })),
-            );
-
-            dispatchNotificationUpdate();
-        } catch (error) {
-            console.error(
-                "Participant mark-all-read error:",
-                error,
-            );
-
-            alert(
-                "Unable to mark all notifications as read.",
-            );
-        } finally {
-            setMarkingAllRead(false);
-        }
-    };
-
-    const deleteNotification = async (
-        notificationId: string,
+    const changePage = (
+        page: number,
     ) => {
-        const confirmed = window.confirm(
-            "Delete this notification?",
+        setCurrentPage(
+            Math.max(
+                1,
+                Math.min(
+                    totalPages,
+                    page,
+                ),
+            ),
         );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setActionNotificationId(notificationId);
-
-        try {
-            const {
-                data: { user },
-                error: userError,
-            } = await supabase.auth.getUser();
-
-            if (userError || !user) {
-                throw new Error(
-                    "Participant user not found.",
-                );
-            }
-
-            const { error } = await supabase
-                .from("notifications")
-                .delete()
-                .eq("id", notificationId)
-                .eq("user_id", user.id);
-
-            if (error) {
-                throw error;
-            }
-
-            setItems((currentItems) =>
-                currentItems.filter(
-                    (notification) =>
-                        notification.id !== notificationId,
-                ),
-            );
-
-            dispatchNotificationUpdate();
-        } catch (error) {
-            console.error(
-                "Participant notification delete error:",
-                error,
-            );
-
-            alert(
-                "Unable to delete the notification.",
-            );
-        } finally {
-            setActionNotificationId(null);
-        }
     };
 
-    const openNotification = async (
-        notification: NotificationRow,
-    ) => {
-        if (!notification.read) {
-            await markAsRead(notification.id);
-        }
+    const firstVisibleItem =
+        allFilteredItems.length ===
+        0
+            ? 0
+            : (currentPage - 1) *
+                  NOTIFICATIONS_PER_PAGE +
+              1;
 
-        router.push(getNotificationRoute(notification));
-    };
+    const lastVisibleItem =
+        Math.min(
+            currentPage *
+                NOTIFICATIONS_PER_PAGE,
+            allFilteredItems.length,
+        );
 
     return {
         items,
+
+        /*
+         * filteredItems contains only the
+         * current pagination page.
+         */
         filteredItems,
+
+        filteredCount:
+            allFilteredItems.length,
+
         counts,
         filters,
+
         loading,
         refreshing,
         markingAllRead,
         errorMessage,
+
         activeFilter,
         actionNotificationId,
+
+        currentPage,
+        totalPages,
+        firstVisibleItem,
+        lastVisibleItem,
+
         setActiveFilter,
-        refresh: () => fetchNotifications(true),
-        reload: () => fetchNotifications(false),
+
+        changePage,
+
+        refresh: () =>
+            fetchNotifications(
+                "refresh",
+            ),
+
+        reload: () =>
+            fetchNotifications(
+                "initial",
+            ),
+
         markAsRead,
         markAllAsRead,
         deleteNotification,

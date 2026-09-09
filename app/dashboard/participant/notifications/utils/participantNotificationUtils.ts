@@ -30,6 +30,26 @@ export function formatNotificationDateTime(
     });
 }
 
+/*
+ * EVENT INVITATION
+ *
+ * Used when a prepared municipal event
+ * becomes open for participant registration.
+ */
+export function isInvitationNotification(
+    type: string | null,
+) {
+    return (
+        normalizeNotificationType(type) ===
+        "event_invitation"
+    );
+}
+
+/*
+ * REGISTRATION CONFIRMATION
+ *
+ * Kept separate from event invitations.
+ */
 export function isRegistrationNotification(
     type: string | null,
 ) {
@@ -129,7 +149,10 @@ export function getNotificationIcon(
         return UserCheck;
     }
 
-    if (isGeneralEventNotification(type)) {
+    if (
+        isInvitationNotification(type) ||
+        isGeneralEventNotification(type)
+    ) {
         return CalendarDays;
     }
 
@@ -166,7 +189,14 @@ export function getNotificationIconClasses(
         return "bg-amber-100 text-amber-700";
     }
 
-    if (isGeneralEventNotification(type)) {
+    /*
+     * Event invitations and event notices
+     * use blue styling.
+     */
+    if (
+        isInvitationNotification(type) ||
+        isGeneralEventNotification(type)
+    ) {
         return "bg-blue-100 text-blue-700";
     }
 
@@ -177,31 +207,84 @@ export function getNotificationRoute(
     notification: NotificationRow,
 ) {
     const normalizedType =
-        normalizeNotificationType(notification.type);
+        normalizeNotificationType(
+            notification.type,
+        );
 
+    /*
+     * New event invitation:
+     * participant should go directly
+     * to Available Events.
+     */
     if (
-        normalizedType.includes("attendance_pass") ||
+        isInvitationNotification(
+            notification.type,
+        )
+    ) {
+        return "/dashboard/participant/events";
+    }
+
+    /*
+     * Attendance pass / check-in related
+     * notifications.
+     */
+    if (
+        normalizedType.includes(
+            "attendance_pass",
+        ) ||
         normalizedType.includes("check_in") ||
         normalizedType.includes("check-in")
     ) {
         return "/dashboard/participant/attendance-pass";
     }
 
+    /*
+     * Attendance results.
+     */
     if (
-        isAttendanceNotification(notification.type)
+        isAttendanceNotification(
+            notification.type,
+        )
     ) {
         return "/dashboard/participant/attendance-history";
     }
 
+    /*
+     * Registration confirmation.
+     */
     if (
-        isRegistrationNotification(notification.type) ||
-        isCancellationNotification(notification.type)
+        isRegistrationNotification(
+            notification.type,
+        )
     ) {
         return "/dashboard/participant/registrations";
     }
 
+    /*
+     * Event updates and cancellations are
+     * only sent to registered participants,
+     * so My Registrations is the most
+     * appropriate destination.
+     */
     if (
-        isGeneralEventNotification(notification.type) ||
+        isEventUpdateNotification(
+            notification.type,
+        ) ||
+        isCancellationNotification(
+            notification.type,
+        )
+    ) {
+        return "/dashboard/participant/registrations";
+    }
+
+    /*
+     * General reminders / event-related
+     * notifications.
+     */
+    if (
+        isGeneralEventNotification(
+            notification.type,
+        ) ||
         notification.event_id ||
         notification.event_municipality_id
     ) {

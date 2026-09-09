@@ -10,12 +10,16 @@ import {
   FileText,
   ListChecks,
   LockKeyhole,
+  MapPin,
   Settings2,
   TriangleAlert,
   UsersRound,
 } from "lucide-react";
 
-import type { ReceivedEvent } from "../types/municipalDashboard";
+import type {
+  MunicipalVenue,
+  ReceivedEvent,
+} from "../types/municipalDashboard";
 
 import {
   formatDateTime,
@@ -27,11 +31,13 @@ import {
 
 type ReceivedEventCardProps = {
   item: ReceivedEvent;
+  venues?: MunicipalVenue[];
   onPrepare: (item: ReceivedEvent) => void;
 };
 
 export default function ReceivedEventCard({
   item,
+  venues,
   onPrepare,
 }: ReceivedEventCardProps) {
   const municipalStatus = String(
@@ -66,22 +72,36 @@ export default function ReceivedEventCard({
   const registeredParticipants =
     item.registered_participants ?? 0;
 
+  /*
+   * Match the venue assigned to this specific
+   * event_municipalities record.
+   */
+  const safeVenues =
+    Array.isArray(venues)
+      ? venues
+      : [];
+
+  const assignedVenue =
+    safeVenues.find(
+      (venue) =>
+        venue.id === item.local_venue_id,
+    ) ?? null;
+
   const accentClass = isCancelled
     ? "bg-red-500"
     : isPrepared
       ? "bg-emerald-500"
       : normalizedPreparationStatus ===
-          "preparing"
+        "preparing"
         ? "bg-blue-500"
         : "bg-amber-500";
 
   return (
     <article
-      className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-200 ${
-        isCancelled
+      className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-200 ${isCancelled
           ? "border-red-200"
           : "border-slate-200 hover:border-slate-300 hover:shadow-md"
-      }`}
+        }`}
     >
       {/* Left status accent */}
       <div
@@ -139,13 +159,12 @@ export default function ReceivedEventCard({
               )}
 
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
-                  isRegistrationOpen
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${isRegistrationOpen
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                     : isCancelled
                       ? "border-red-200 bg-red-50 text-red-700"
                       : "border-slate-200 bg-slate-50 text-slate-600"
-                }`}
+                  }`}
               >
                 {isRegistrationOpen ? (
                   <CheckCircle2 className="h-3.5 w-3.5" />
@@ -161,63 +180,58 @@ export default function ReceivedEventCard({
 
             {/* Title and description */}
             <h3
-              className={`mt-3 text-xl font-bold tracking-tight sm:text-2xl ${
-                isCancelled
+              className={`mt-3 text-xl font-bold tracking-tight sm:text-2xl ${isCancelled
                   ? "text-red-950"
                   : "text-slate-950"
-              }`}
+                }`}
             >
               {item.event?.title ||
                 "Untitled Event"}
             </h3>
 
             <p
-              className={`mt-2 max-w-3xl text-sm leading-6 ${
-                isCancelled
+              className={`mt-2 max-w-3xl text-sm leading-6 ${isCancelled
                   ? "text-red-800"
                   : "text-slate-600"
-              }`}
+                }`}
             >
               {item.event?.description ||
                 "No description provided."}
             </p>
 
-            {/* Event schedule */}
+            {/* Event schedule + venue */}
             <div
-              className={`mt-5 grid gap-3 rounded-xl border p-4 md:grid-cols-2 ${
-                isCancelled
+              className={`mt-5 grid gap-3 rounded-xl border p-4 md:grid-cols-3 ${isCancelled
                   ? "border-red-200 bg-red-50/60"
                   : "border-slate-200 bg-slate-50"
-              }`}
+                }`}
             >
+              {/* Start */}
               <div className="flex items-start gap-3">
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    isCancelled
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isCancelled
                       ? "bg-red-100 text-red-700"
                       : "bg-white text-slate-600 shadow-sm ring-1 ring-slate-200"
-                  }`}
+                    }`}
                 >
                   <CalendarClock className="h-4 w-4" />
                 </div>
 
                 <div className="min-w-0">
                   <p
-                    className={`text-[11px] font-bold uppercase tracking-wide ${
-                      isCancelled
+                    className={`text-[11px] font-bold uppercase tracking-wide ${isCancelled
                         ? "text-red-500"
                         : "text-slate-400"
-                    }`}
+                      }`}
                   >
                     Start Date and Time
                   </p>
 
                   <p
-                    className={`mt-1 text-sm font-semibold ${
-                      isCancelled
+                    className={`mt-1 text-sm font-semibold ${isCancelled
                         ? "text-red-900"
                         : "text-slate-800"
-                    }`}
+                      }`}
                   >
                     {formatDateTime(
                       item.event?.start_at,
@@ -226,39 +240,83 @@ export default function ReceivedEventCard({
                 </div>
               </div>
 
+              {/* End */}
               <div className="flex items-start gap-3">
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    isCancelled
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isCancelled
                       ? "bg-red-100 text-red-700"
                       : "bg-white text-slate-600 shadow-sm ring-1 ring-slate-200"
-                  }`}
+                    }`}
                 >
                   <Clock3 className="h-4 w-4" />
                 </div>
 
                 <div className="min-w-0">
                   <p
-                    className={`text-[11px] font-bold uppercase tracking-wide ${
-                      isCancelled
+                    className={`text-[11px] font-bold uppercase tracking-wide ${isCancelled
                         ? "text-red-500"
                         : "text-slate-400"
-                    }`}
+                      }`}
                   >
                     End Date and Time
                   </p>
 
                   <p
-                    className={`mt-1 text-sm font-semibold ${
-                      isCancelled
+                    className={`mt-1 text-sm font-semibold ${isCancelled
                         ? "text-red-900"
                         : "text-slate-800"
-                    }`}
+                      }`}
                   >
                     {formatDateTime(
                       item.event?.end_at,
                     )}
                   </p>
+                </div>
+              </div>
+
+              {/* Local venue */}
+              <div className="flex items-start gap-3">
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isCancelled
+                      ? "bg-red-100 text-red-700"
+                      : assignedVenue
+                        ? "bg-violet-50 text-violet-700 ring-1 ring-violet-100"
+                        : "bg-white text-slate-400 shadow-sm ring-1 ring-slate-200"
+                    }`}
+                >
+                  <MapPin className="h-4 w-4" />
+                </div>
+
+                <div className="min-w-0">
+                  <p
+                    className={`text-[11px] font-bold uppercase tracking-wide ${isCancelled
+                        ? "text-red-500"
+                        : "text-slate-400"
+                      }`}
+                  >
+                    Local Venue
+                  </p>
+
+                  <p
+                    className={`mt-1 break-words text-sm font-semibold ${isCancelled
+                        ? "text-red-900"
+                        : assignedVenue
+                          ? "text-slate-800"
+                          : "text-slate-500"
+                      }`}
+                  >
+                    {assignedVenue?.venue_name ||
+                      "Not assigned yet"}
+                  </p>
+
+                  {assignedVenue &&
+                    typeof assignedVenue.capacity ===
+                    "number" && (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Capacity:{" "}
+                        {assignedVenue.capacity.toLocaleString()}
+                      </p>
+                    )}
                 </div>
               </div>
             </div>
@@ -268,43 +326,38 @@ export default function ReceivedEventCard({
               href={`/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
                 String(item.id),
               )}`}
-              aria-label={`View registered participants for ${
-                item.event?.title ||
+              aria-label={`View registered participants for ${item.event?.title ||
                 "this event"
-              }`}
-              className={`group mt-4 flex items-center gap-3 rounded-xl border p-4 transition ${
-                isCancelled
+                }`}
+              className={`group mt-4 flex items-center gap-3 rounded-xl border p-4 transition ${isCancelled
                   ? "border-red-200 bg-red-50/50 hover:bg-red-100/60"
                   : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50"
-              }`}
+                }`}
             >
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                  isCancelled
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isCancelled
                     ? "bg-red-100 text-red-700"
                     : "bg-emerald-50 text-emerald-700"
-                }`}
+                  }`}
               >
                 <UsersRound className="h-4 w-4" />
               </div>
 
               <div className="min-w-0 flex-1">
                 <p
-                  className={`text-[11px] font-bold uppercase tracking-wide ${
-                    isCancelled
+                  className={`text-[11px] font-bold uppercase tracking-wide ${isCancelled
                       ? "text-red-500"
                       : "text-slate-400"
-                  }`}
+                    }`}
                 >
                   Registered Participants
                 </p>
 
                 <p
-                  className={`mt-1 text-sm font-semibold ${
-                    isCancelled
+                  className={`mt-1 text-sm font-semibold ${isCancelled
                       ? "text-red-900"
                       : "text-slate-800"
-                  }`}
+                    }`}
                 >
                   {registeredParticipants}{" "}
                   {registeredParticipants === 1
@@ -314,11 +367,10 @@ export default function ReceivedEventCard({
               </div>
 
               <div
-                className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
-                  isCancelled
+                className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${isCancelled
                     ? "text-red-600"
                     : "text-emerald-700"
-                }`}
+                  }`}
               >
                 <span className="hidden sm:inline">
                   View records
@@ -331,40 +383,36 @@ export default function ReceivedEventCard({
 
           {/* Right-side actions */}
           <aside
-            className={`flex flex-col rounded-xl border p-4 ${
-              isCancelled
+            className={`flex flex-col rounded-xl border p-4 ${isCancelled
                 ? "border-red-200 bg-red-50/50"
                 : "border-slate-200 bg-slate-50"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <div
-                className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                  isCancelled
+                className={`flex h-9 w-9 items-center justify-center rounded-lg ${isCancelled
                     ? "bg-red-100 text-red-700"
                     : "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200"
-                }`}
+                  }`}
               >
                 <ListChecks className="h-4 w-4" />
               </div>
 
               <div>
                 <p
-                  className={`text-xs font-bold ${
-                    isCancelled
+                  className={`text-xs font-bold ${isCancelled
                       ? "text-red-900"
                       : "text-slate-900"
-                  }`}
+                    }`}
                 >
                   Event Actions
                 </p>
 
                 <p
-                  className={`mt-0.5 text-xs ${
-                    isCancelled
+                  className={`mt-0.5 text-xs ${isCancelled
                       ? "text-red-600"
                       : "text-slate-500"
-                  }`}
+                    }`}
                 >
                   Review or manage
                 </p>
@@ -377,11 +425,10 @@ export default function ReceivedEventCard({
                   href={item.event.memo_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition ${
-                    isCancelled
+                  className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition ${isCancelled
                       ? "bg-red-800 hover:bg-red-700"
                       : "bg-slate-950 hover:bg-slate-800"
-                  }`}
+                    }`}
                 >
                   <FileText className="h-4 w-4" />
                   View Memo
@@ -418,11 +465,10 @@ export default function ReceivedEventCard({
             </div>
 
             <p
-              className={`mt-4 border-t pt-3 text-xs leading-5 ${
-                isCancelled
+              className={`mt-4 border-t pt-3 text-xs leading-5 ${isCancelled
                   ? "border-red-200 text-red-600"
                   : "border-slate-200 text-slate-500"
-              }`}
+                }`}
             >
               {isCancelled
                 ? "Preparation and registration controls are disabled for this event."

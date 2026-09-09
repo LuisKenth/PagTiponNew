@@ -3,25 +3,32 @@ import {
   Search,
 } from "lucide-react";
 
-import type { ReceivedEvent } from "../../types/municipalDashboard";
+import type {
+  MunicipalVenue,
+  ReceivedEvent,
+} from "../../types/municipalDashboard";
 
 import ReceivedEventCard from "../../components/ReceivedEventCard";
 
 type MunicipalEventsListProps = {
   events: ReceivedEvent[];
+  venues: MunicipalVenue[];
   loading: boolean;
   firstVisibleItem: number;
   lastVisibleItem: number;
   totalFilteredEvents: number;
   hasActiveFilters: boolean;
+
   onPrepare: (
     item: ReceivedEvent,
   ) => void;
+
   onClearFilters: () => void;
 };
 
 export default function MunicipalEventsList({
   events,
+  venues,
   loading,
   firstVisibleItem,
   lastVisibleItem,
@@ -39,8 +46,9 @@ export default function MunicipalEventsList({
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Open an event to manage its
-            preparation and registration.
+            Open an event to review its schedule,
+            assigned venue, preparation, and
+            registration.
           </p>
         </div>
 
@@ -97,6 +105,7 @@ export default function MunicipalEventsList({
               <ReceivedEventCard
                 key={item.id}
                 item={item}
+                venues={venues}
                 onPrepare={onPrepare}
               />
             ))}

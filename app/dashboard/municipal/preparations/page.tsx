@@ -13,13 +13,26 @@ export default function MunicipalPreparationsPage() {
   const {
     receivedEvents,
     loading,
+
+    /*
+     * Municipal venue assignment
+     */
+    venues,
+    venuesLoading,
+    selectedVenueId,
+    venueError,
+
     selectedEvent,
     localInstructions,
     registrationOpen,
     savingPreparation,
     preparationStatus,
+
     setLocalInstructions,
     setRegistrationOpen,
+
+    handleVenueChange,
+
     openPrepareModal,
     closePrepareModal,
     handlePreparationStatusChange,
@@ -49,23 +62,27 @@ export default function MunicipalPreparationsPage() {
                 </h1>
 
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Review provincial events, update municipal
-                  preparation progress, provide local instructions,
-                  and control participant registration.
+                  Review provincial events, assign local venues,
+                  update municipal preparation progress, provide
+                  local instructions, and control participant
+                  registration.
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() =>
+                window.location.reload()
+              }
               disabled={loading}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw
-                className={`h-4 w-4 ${
-                  loading ? "animate-spin" : ""
-                }`}
+                className={`h-4 w-4 ${loading
+                    ? "animate-spin"
+                    : ""
+                  }`}
               />
 
               Refresh
@@ -109,24 +126,73 @@ export default function MunicipalPreparationsPage() {
         {/* Received events */}
         <ReceivedEventsSection
           events={receivedEvents}
+          venues={venues}
           loading={loading}
           highlightedEventId={null}
           onPrepare={openPrepareModal}
         />
       </div>
 
-      {/* Existing preparation modal */}
+      {/* Preparation modal */}
       <PrepareEventModal
         selectedEvent={selectedEvent}
-        preparationStatus={preparationStatus}
-        localInstructions={localInstructions}
-        registrationOpen={registrationOpen}
-        saving={savingPreparation}
-        onStatusChange={handlePreparationStatusChange}
-        onInstructionsChange={setLocalInstructions}
-        onRegistrationChange={setRegistrationOpen}
-        onClose={closePrepareModal}
-        onSave={savePreparation}
+
+        preparationStatus={
+          preparationStatus
+        }
+
+        localInstructions={
+          localInstructions
+        }
+
+        registrationOpen={
+          registrationOpen
+        }
+
+        saving={
+          savingPreparation
+        }
+
+        /*
+         * Municipal venue assignment
+         */
+        venues={venues}
+
+        venuesLoading={
+          venuesLoading
+        }
+
+        selectedVenueId={
+          selectedVenueId
+        }
+
+        venueError={
+          venueError
+        }
+
+        onStatusChange={
+          handlePreparationStatusChange
+        }
+
+        onVenueChange={
+          handleVenueChange
+        }
+
+        onInstructionsChange={
+          setLocalInstructions
+        }
+
+        onRegistrationChange={
+          setRegistrationOpen
+        }
+
+        onClose={
+          closePrepareModal
+        }
+
+        onSave={
+          savePreparation
+        }
       />
     </>
   );

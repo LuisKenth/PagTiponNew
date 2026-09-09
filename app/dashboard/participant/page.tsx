@@ -2,14 +2,16 @@
 
 import {
     ArrowRight,
+    Bell,
     CalendarDays,
     CheckCircle2,
     ClipboardCheck,
-    Clock3,
     History,
+    MapPin,
     QrCode,
     RefreshCw,
     TicketCheck,
+    UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -36,7 +38,14 @@ type EventAssignmentRow = {
     municipality: string;
     municipal_status: string | null;
     registration_open: boolean | null;
+    local_venue_id: string | null;
     local_instructions: string | null;
+};
+
+type VenueRow = {
+    id: string;
+    venue_name: string;
+    municipality: string;
 };
 
 type RSVPRow = {
@@ -55,6 +64,7 @@ type AttendanceRow = {
 type DashboardEventItem = {
     event: EventRow;
     assignment: EventAssignmentRow;
+    venue: VenueRow | null;
     rsvp: RSVPRow | null;
     registered: boolean;
 };
@@ -66,6 +76,11 @@ type ParticipantDashboardData = {
     attendanceRecords: AttendanceRow[];
     nextEvent: DashboardEventItem | null;
 };
+
+type FetchMode =
+    | "initial"
+    | "refresh"
+    | "silent";
 
 const REGISTRATION_ALLOWED_STATUSES = [
     "published",
@@ -107,6 +122,20 @@ const participantActions = [
         href: "/dashboard/participant/attendance-history",
         icon: History,
     },
+    {
+        title: "Notifications",
+        description:
+            "Review invitations, updates, and attendance notices.",
+        href: "/dashboard/participant/notifications",
+        icon: Bell,
+    },
+    {
+        title: "My Profile",
+        description:
+            "Update your name and participant category.",
+        href: "/dashboard/participant/profile",
+        icon: UserRound,
+    },
 ];
 
 const initialDashboardData: ParticipantDashboardData = {
@@ -130,13 +159,16 @@ function formatDateTime(
         return "Not set";
     }
 
-    return new Date(value).toLocaleString(
-        "en-PH",
-        {
-            dateStyle: "medium",
-            timeStyle: "short",
-        },
-    );
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "Not set";
+    }
+
+    return date.toLocaleString("en-PH", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    });
 }
 
 function getTimeValue(
@@ -211,13 +243,30 @@ function getEventStatusClasses(
     return "bg-slate-100 text-slate-600";
 }
 
+async function getAuthenticatedUser() {
+    const {
+        data: { session },
+        error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session?.user) {
+        throw new Error(
+            error?.message ||
+            "Your login session is unavailable. Please log in again.",
+        );
+    }
+
+    return session.user;
+}
+
 export default function ParticipantDashboardPage() {
     const [
         dashboardData,
         setDashboardData,
-    ] = useState<ParticipantDashboardData>(
-        initialDashboardData,
-    );
+    ] =
+        useState<ParticipantDashboardData>(
+            initialDashboardData,
+        );
 
     const [loading, setLoading] =
         useState(true);
@@ -231,474 +280,784 @@ export default function ParticipantDashboardPage() {
     ] = useState("");
 
     const fetchDashboardData =
-        useCallback(async (
-            refreshOnly = false,
-        ) => {
-            if (refreshOnly) {
-                setRefreshing(true);
-            } else {
-                setLoading(true);
-            }
-
-            setErrorMessage("");
-
-            try {
-                const {
-                    data: { user },
-                    error: userError,
-                } =
-                    await supabase.auth.getUser();
-
-                if (userError || !user) {
-                    throw new Error(
-                        userError?.message ||
-                        "Participant user not found.",
-                    );
+        useCallback(
+            async (
+                mode: FetchMode = "initial",
+            ) => {
+                if (mode === "initial") {
+                    setLoading(true);
                 }
 
-                const {
-                    data: profile,
-                    error: profileError,
-                } = await supabase
-                    .from("profiles")
-                    .select("municipality")
-                    .eq("id", user.id)
-                    .maybeSingle();
-
-                if (
-                    profileError ||
-                    !profile?.municipality
-                ) {
-                    throw new Error(
-                        profileError?.message ||
-                        "Participant municipality not found.",
-                    );
+                if (mode === "refresh") {
+                    setRefreshing(true);
                 }
 
-                const municipality =
-                    profile.municipality;
-
-                const [
-                    openAssignmentsResult,
-                    rsvpsResult,
-                    attendanceResult,
-                ] = await Promise.all([
-                    supabase
-                        .from(
-                            "event_municipalities",
-                        )
-                        .select(
-                            `
-                                id,
-                                event_id,
-                                municipality,
-                                municipal_status,
-                                registration_open,
-                                local_instructions
-                            `,
-                        )
-                        .eq(
-                            "municipality",
-                            municipality,
-                        )
-                        .eq(
-                            "municipal_status",
-                            "prepared",
-                        )
-                        .eq(
-                            "registration_open",
-                            true,
-                        ),
-
-                    supabase
-                        .from("rsvps")
-                        .select(
-                            `
-                                id,
-                                event_municipality_id,
-                                status,
-                                registered_at
-                            `,
-                        )
-                        .eq(
-                            "user_id",
-                            user.id,
-                        )
-                        .eq(
-                            "status",
-                            "registered",
-                        )
-                        .order(
-                            "registered_at",
-                            {
-                                ascending: false,
-                            },
-                        ),
-
-                    supabase
-                        .from("attendance")
-                        .select(
-                            `
-                                id,
-                                status,
-                                checked_in_at
-                            `,
-                        )
-                        .eq(
-                            "user_id",
-                            user.id,
-                        ),
-                ]);
-
-                if (
-                    openAssignmentsResult.error
-                ) {
-                    throw openAssignmentsResult.error;
+                if (mode !== "silent") {
+                    setErrorMessage("");
                 }
 
-                if (rsvpsResult.error) {
-                    throw rsvpsResult.error;
-                }
+                try {
+                    const user =
+                        await getAuthenticatedUser();
 
-                if (attendanceResult.error) {
-                    throw attendanceResult.error;
-                }
-
-                const openAssignments =
-                    (openAssignmentsResult.data ||
-                        []) as EventAssignmentRow[];
-
-                const rsvps =
-                    (rsvpsResult.data ||
-                        []) as RSVPRow[];
-
-                const attendanceRecords =
-                    (attendanceResult.data ||
-                        []) as AttendanceRow[];
-
-                const registeredAssignmentIds =
-                    Array.from(
-                        new Set(
-                            rsvps.map(
-                                (rsvp) =>
-                                    rsvp.event_municipality_id,
-                            ),
-                        ),
-                    );
-
-                let registeredAssignments: EventAssignmentRow[] =
-                    [];
-
-                if (
-                    registeredAssignmentIds.length >
-                    0
-                ) {
+                    /*
+                     * PARTICIPANT PROFILE
+                     */
                     const {
-                        data:
-                        registeredAssignmentRows,
-                        error:
-                        registeredAssignmentError,
+                        data: profile,
+                        error: profileError,
                     } = await supabase
-                        .from(
-                            "event_municipalities",
-                        )
-                        .select(
-                            `
-                                id,
-                                event_id,
+                        .from("profiles")
+                        .select("municipality")
+                        .eq("id", user.id)
+                        .maybeSingle();
+
+                    if (
+                        profileError ||
+                        !profile?.municipality
+                    ) {
+                        throw new Error(
+                            profileError?.message ||
+                            "Participant municipality not found.",
+                        );
+                    }
+
+                    const municipality =
+                        profile.municipality;
+
+                    /*
+                     * LOAD OPEN ASSIGNMENTS,
+                     * REGISTERED RSVPS,
+                     * AND ATTENDANCE.
+                     */
+                    const [
+                        openAssignmentsResult,
+                        rsvpsResult,
+                        attendanceResult,
+                    ] = await Promise.all([
+                        supabase
+                            .from(
+                                "event_municipalities",
+                            )
+                            .select(
+                                `
+                                    id,
+                                    event_id,
+                                    municipality,
+                                    municipal_status,
+                                    registration_open,
+                                    local_venue_id,
+                                    local_instructions
+                                `,
+                            )
+                            .eq(
+                                "municipality",
                                 municipality,
-                                municipal_status,
-                                registration_open,
-                                local_instructions
-                            `,
-                        )
-                        .in(
-                            "id",
-                            registeredAssignmentIds,
+                            )
+                            .eq(
+                                "municipal_status",
+                                "prepared",
+                            )
+                            .eq(
+                                "registration_open",
+                                true,
+                            ),
+
+                        supabase
+                            .from("rsvps")
+                            .select(
+                                `
+                                    id,
+                                    event_municipality_id,
+                                    status,
+                                    registered_at
+                                `,
+                            )
+                            .eq(
+                                "user_id",
+                                user.id,
+                            )
+                            .eq(
+                                "status",
+                                "registered",
+                            )
+                            .order(
+                                "registered_at",
+                                {
+                                    ascending:
+                                        false,
+                                },
+                            ),
+
+                        supabase
+                            .from("attendance")
+                            .select(
+                                `
+                                    id,
+                                    status,
+                                    checked_in_at
+                                `,
+                            )
+                            .eq(
+                                "user_id",
+                                user.id,
+                            ),
+                    ]);
+
+                    if (
+                        openAssignmentsResult.error
+                    ) {
+                        throw openAssignmentsResult.error;
+                    }
+
+                    if (rsvpsResult.error) {
+                        throw rsvpsResult.error;
+                    }
+
+                    if (
+                        attendanceResult.error
+                    ) {
+                        throw attendanceResult.error;
+                    }
+
+                    const openAssignments =
+                        (openAssignmentsResult.data ||
+                            []) as EventAssignmentRow[];
+
+                    const rsvps =
+                        (rsvpsResult.data ||
+                            []) as RSVPRow[];
+
+                    const attendanceRecords =
+                        (attendanceResult.data ||
+                            []) as AttendanceRow[];
+
+                    /*
+                     * LOAD ASSIGNMENTS USED BY
+                     * REGISTERED RSVPS.
+                     */
+                    const registeredAssignmentIds =
+                        Array.from(
+                            new Set(
+                                rsvps.map(
+                                    (rsvp) =>
+                                        rsvp.event_municipality_id,
+                                ),
+                            ),
                         );
 
-                    if (
-                        registeredAssignmentError
-                    ) {
-                        throw registeredAssignmentError;
-                    }
-
-                    registeredAssignments =
-                        (registeredAssignmentRows ||
-                            []) as EventAssignmentRow[];
-                }
-
-                const assignmentMap =
-                    new Map<
-                        string,
-                        EventAssignmentRow
-                    >();
-
-                [
-                    ...openAssignments,
-                    ...registeredAssignments,
-                ].forEach((assignment) => {
-                    assignmentMap.set(
-                        String(assignment.id),
-                        assignment,
-                    );
-                });
-
-                const allAssignments =
-                    Array.from(
-                        assignmentMap.values(),
-                    );
-
-                const eventIds = Array.from(
-                    new Set(
-                        allAssignments.map(
-                            (assignment) =>
-                                assignment.event_id,
-                        ),
-                    ),
-                );
-
-                let events: EventRow[] = [];
-
-                if (eventIds.length > 0) {
-                    const {
-                        data: eventRows,
-                        error: eventError,
-                    } = await supabase
-                        .from("events")
-                        .select(
-                            `
-                                id,
-                                title,
-                                description,
-                                start_at,
-                                end_at,
-                                status
-                            `,
-                        )
-                        .in("id", eventIds);
-
-                    if (eventError) {
-                        throw eventError;
-                    }
-
-                    events =
-                        (eventRows ||
-                            []) as EventRow[];
-                }
-
-                const eventMap = new Map<
-                    string,
-                    EventRow
-                >();
-
-                events.forEach((event) => {
-                    eventMap.set(
-                        String(event.id),
-                        event,
-                    );
-                });
-
-                const rsvpMap = new Map<
-                    string,
-                    RSVPRow
-                >();
-
-                rsvps.forEach((rsvp) => {
-                    rsvpMap.set(
-                        String(
-                            rsvp.event_municipality_id,
-                        ),
-                        rsvp,
-                    );
-                });
-
-                const availableEvents: DashboardEventItem[] = [];
-
-                for (const assignment of openAssignments) {
-                    const event = eventMap.get(
-                        String(assignment.event_id),
-                    );
-
-                    if (!event) {
-                        continue;
-                    }
-
-                    const eventStatus = normalizeStatus(
-                        event.status,
-                    );
+                    let registeredAssignments: EventAssignmentRow[] =
+                        [];
 
                     if (
-                        !REGISTRATION_ALLOWED_STATUSES.includes(
-                            eventStatus,
-                        )
+                        registeredAssignmentIds.length >
+                        0
                     ) {
-                        continue;
+                        const {
+                            data:
+                            registeredAssignmentRows,
+                            error:
+                            registeredAssignmentError,
+                        } = await supabase
+                            .from(
+                                "event_municipalities",
+                            )
+                            .select(
+                                `
+                                    id,
+                                    event_id,
+                                    municipality,
+                                    municipal_status,
+                                    registration_open,
+                                    local_venue_id,
+                                    local_instructions
+                                `,
+                            )
+                            .in(
+                                "id",
+                                registeredAssignmentIds,
+                            );
+
+                        if (
+                            registeredAssignmentError
+                        ) {
+                            throw registeredAssignmentError;
+                        }
+
+                        registeredAssignments =
+                            (registeredAssignmentRows ||
+                                []) as EventAssignmentRow[];
                     }
 
-                    const rsvp =
-                        rsvpMap.get(
-                            String(assignment.id),
-                        ) ?? null;
+                    /*
+                     * REMOVE DUPLICATE ASSIGNMENTS.
+                     */
+                    const assignmentMap =
+                        new Map<
+                            string,
+                            EventAssignmentRow
+                        >();
 
-                    availableEvents.push({
-                        event,
-                        assignment,
-                        rsvp,
-                        registered: Boolean(rsvp),
-                    });
-                }
-
-                availableEvents.sort(
-                    (first, second) =>
-                        getTimeValue(
-                            first.event.start_at,
-                        ) -
-                        getTimeValue(
-                            second.event.start_at,
-                        ),
-                );
-
-                const registrations: DashboardEventItem[] =
-                    [];
-
-                for (const rsvp of rsvps) {
-                    const assignment = assignmentMap.get(
-                        String(
-                            rsvp.event_municipality_id,
-                        ),
+                    [
+                        ...openAssignments,
+                        ...registeredAssignments,
+                    ].forEach(
+                        (assignment) => {
+                            assignmentMap.set(
+                                String(
+                                    assignment.id,
+                                ),
+                                assignment,
+                            );
+                        },
                     );
 
-                    if (!assignment) {
-                        continue;
+                    const allAssignments =
+                        Array.from(
+                            assignmentMap.values(),
+                        );
+
+                    /*
+                     * LOAD EVENTS.
+                     */
+                    const eventIds =
+                        Array.from(
+                            new Set(
+                                allAssignments.map(
+                                    (
+                                        assignment,
+                                    ) =>
+                                        assignment.event_id,
+                                ),
+                            ),
+                        );
+
+                    let events: EventRow[] =
+                        [];
+
+                    if (
+                        eventIds.length > 0
+                    ) {
+                        const {
+                            data: eventRows,
+                            error: eventError,
+                        } = await supabase
+                            .from("events")
+                            .select(
+                                `
+                                    id,
+                                    title,
+                                    description,
+                                    start_at,
+                                    end_at,
+                                    status
+                                `,
+                            )
+                            .in(
+                                "id",
+                                eventIds,
+                            );
+
+                        if (eventError) {
+                            throw eventError;
+                        }
+
+                        events =
+                            (eventRows ||
+                                []) as EventRow[];
                     }
 
-                    const event = eventMap.get(
-                        String(assignment.event_id),
+                    const eventMap =
+                        new Map<
+                            string,
+                            EventRow
+                        >();
+
+                    events.forEach(
+                        (event) => {
+                            eventMap.set(
+                                String(event.id),
+                                event,
+                            );
+                        },
                     );
 
-                    if (!event) {
-                        continue;
+                    /*
+                     * LOAD VENUES.
+                     *
+                     * Venue failure is non-fatal.
+                     */
+                    const venueIds =
+                        Array.from(
+                            new Set(
+                                allAssignments
+                                    .map(
+                                        (
+                                            assignment,
+                                        ) =>
+                                            assignment.local_venue_id,
+                                    )
+                                    .filter(
+                                        (
+                                            venueId,
+                                        ): venueId is string =>
+                                            Boolean(
+                                                venueId,
+                                            ),
+                                    ),
+                            ),
+                        );
+
+                    let venues: VenueRow[] =
+                        [];
+
+                    if (
+                        venueIds.length > 0
+                    ) {
+                        const {
+                            data: venueRows,
+                            error: venueError,
+                        } = await supabase
+                            .from("venues")
+                            .select(
+                                `
+                                    id,
+                                    venue_name,
+                                    municipality
+                                `,
+                            )
+                            .in(
+                                "id",
+                                venueIds,
+                            );
+
+                        if (venueError) {
+                            console.warn(
+                                "Participant dashboard venue fetch error:",
+                                venueError.message,
+                            );
+                        } else {
+                            venues =
+                                (venueRows ||
+                                    []) as VenueRow[];
+                        }
                     }
 
-                    registrations.push({
-                        event,
-                        assignment,
-                        rsvp,
-                        registered: true,
-                    });
-                }
+                    const venueMap =
+                        new Map<
+                            string,
+                            VenueRow
+                        >();
 
-                registrations.sort(
-                    (first, second) =>
-                        getTimeValue(
-                            second.rsvp?.registered_at ??
-                            null,
-                            0,
-                        ) -
-                        getTimeValue(
-                            first.rsvp?.registered_at ??
-                            null,
-                            0,
-                        ),
-                );
+                    venues.forEach(
+                        (venue) => {
+                            venueMap.set(
+                                String(venue.id),
+                                venue,
+                            );
+                        },
+                    );
 
-                const currentTime =
-                    Date.now();
+                    /*
+                     * RSVP LOOKUP.
+                     */
+                    const rsvpMap =
+                        new Map<
+                            string,
+                            RSVPRow
+                        >();
 
-                const activeRegisteredEvents =
-                    registrations
-                        .filter((item) => {
-                            const eventStatus =
-                                normalizeStatus(
-                                    item.event
-                                        .status,
-                                );
+                    rsvps.forEach(
+                        (rsvp) => {
+                            rsvpMap.set(
+                                String(
+                                    rsvp.event_municipality_id,
+                                ),
+                                rsvp,
+                            );
+                        },
+                    );
 
-                            const eventEndTime =
+                    /*
+                     * AVAILABLE EVENTS
+                     *
+                     * IMPORTANT:
+                     * Registered events are excluded
+                     * so this matches the Available
+                     * Events page.
+                     */
+                    const availableEvents: DashboardEventItem[] =
+                        [];
+
+                    for (
+                        const assignment of
+                        openAssignments
+                    ) {
+                        const event =
+                            eventMap.get(
+                                String(
+                                    assignment.event_id,
+                                ),
+                            );
+
+                        if (!event) {
+                            continue;
+                        }
+
+                        const eventStatus =
+                            normalizeStatus(
+                                event.status,
+                            );
+
+                        if (
+                            !REGISTRATION_ALLOWED_STATUSES.includes(
+                                eventStatus,
+                            )
+                        ) {
+                            continue;
+                        }
+
+                        const existingRsvp =
+                            rsvpMap.get(
+                                String(
+                                    assignment.id,
+                                ),
+                            );
+
+                        /*
+                         * Already registered events
+                         * are NOT available anymore.
+                         */
+                        if (existingRsvp) {
+                            continue;
+                        }
+
+                        const venue =
+                            assignment.local_venue_id
+                                ? venueMap.get(
+                                    String(
+                                        assignment.local_venue_id,
+                                    ),
+                                ) ??
+                                null
+                                : null;
+
+                        availableEvents.push(
+                            {
+                                event,
+                                assignment,
+                                venue,
+                                rsvp: null,
+                                registered:
+                                    false,
+                            },
+                        );
+                    }
+
+                    availableEvents.sort(
+                        (
+                            first,
+                            second,
+                        ) =>
+                            getTimeValue(
+                                first.event
+                                    .start_at,
+                            ) -
+                            getTimeValue(
+                                second.event
+                                    .start_at,
+                            ),
+                    );
+
+                    /*
+                     * REGISTRATIONS.
+                     */
+                    const registrations: DashboardEventItem[] =
+                        [];
+
+                    for (
+                        const rsvp of rsvps
+                    ) {
+                        const assignment =
+                            assignmentMap.get(
+                                String(
+                                    rsvp.event_municipality_id,
+                                ),
+                            );
+
+                        if (!assignment) {
+                            continue;
+                        }
+
+                        const event =
+                            eventMap.get(
+                                String(
+                                    assignment.event_id,
+                                ),
+                            );
+
+                        if (!event) {
+                            continue;
+                        }
+
+                        const venue =
+                            assignment.local_venue_id
+                                ? venueMap.get(
+                                    String(
+                                        assignment.local_venue_id,
+                                    ),
+                                ) ??
+                                null
+                                : null;
+
+                        registrations.push(
+                            {
+                                event,
+                                assignment,
+                                venue,
+                                rsvp,
+                                registered:
+                                    true,
+                            },
+                        );
+                    }
+
+                    registrations.sort(
+                        (
+                            first,
+                            second,
+                        ) =>
+                            getTimeValue(
+                                second.rsvp
+                                    ?.registered_at ??
+                                null,
+                                0,
+                            ) -
+                            getTimeValue(
+                                first.rsvp
+                                    ?.registered_at ??
+                                null,
+                                0,
+                            ),
+                    );
+
+                    /*
+                     * NEXT EVENT.
+                     *
+                     * Priority:
+                     * 1. registered active event
+                     * 2. available event
+                     */
+                    const currentTime =
+                        Date.now();
+
+                    const activeRegisteredEvents =
+                        registrations
+                            .filter(
+                                (
+                                    item,
+                                ) => {
+                                    const eventStatus =
+                                        normalizeStatus(
+                                            item
+                                                .event
+                                                .status,
+                                        );
+
+                                    const eventEndTime =
+                                        getTimeValue(
+                                            item
+                                                .event
+                                                .end_at,
+                                        );
+
+                                    return (
+                                        ACTIVE_PASS_STATUSES.includes(
+                                            eventStatus,
+                                        ) &&
+                                        eventEndTime >=
+                                        currentTime
+                                    );
+                                },
+                            )
+                            .sort(
+                                (
+                                    first,
+                                    second,
+                                ) =>
+                                    getTimeValue(
+                                        first
+                                            .event
+                                            .start_at,
+                                    ) -
+                                    getTimeValue(
+                                        second
+                                            .event
+                                            .start_at,
+                                    ),
+                            );
+
+                    const availableFutureEvents =
+                        availableEvents.filter(
+                            (item) =>
                                 getTimeValue(
                                     item.event
                                         .end_at,
-                                );
-
-                            return (
-                                ACTIVE_PASS_STATUSES.includes(
-                                    eventStatus,
-                                ) &&
-                                eventEndTime >=
-                                currentTime
-                            );
-                        })
-                        .sort(
-                            (
-                                first,
-                                second,
-                            ) =>
-                                getTimeValue(
-                                    first.event
-                                        .start_at,
-                                ) -
-                                getTimeValue(
-                                    second.event
-                                        .start_at,
-                                ),
+                                ) >=
+                                currentTime,
                         );
 
-                const availableFutureEvents =
-                    availableEvents.filter(
-                        (item) =>
-                            getTimeValue(
-                                item.event.end_at,
-                            ) >= currentTime,
+                    const nextEvent =
+                        activeRegisteredEvents[0] ||
+                        availableFutureEvents[0] ||
+                        null;
+
+                    setDashboardData({
+                        municipality,
+                        availableEvents,
+                        registrations,
+                        attendanceRecords,
+                        nextEvent,
+                    });
+                } catch (error) {
+                    console.error(
+                        "Participant dashboard fetch error:",
+                        error,
                     );
 
-                const nextEvent =
-                    activeRegisteredEvents[0] ||
-                    availableFutureEvents[0] ||
-                    null;
+                    /*
+                     * Silent refresh failures should
+                     * not erase working dashboard data.
+                     */
+                    if (
+                        mode !== "silent"
+                    ) {
+                        setDashboardData(
+                            initialDashboardData,
+                        );
 
-                setDashboardData({
-                    municipality,
-                    availableEvents,
-                    registrations,
-                    attendanceRecords,
-                    nextEvent,
-                });
-            } catch (error) {
-                console.error(
-                    "Participant dashboard fetch error:",
-                    error,
-                );
+                        setErrorMessage(
+                            error instanceof
+                                Error
+                                ? error.message
+                                : "Unable to load the participant dashboard.",
+                        );
+                    }
+                } finally {
+                    if (
+                        mode === "initial"
+                    ) {
+                        setLoading(false);
+                    }
 
-                setDashboardData(
-                    initialDashboardData,
-                );
+                    if (
+                        mode === "refresh"
+                    ) {
+                        setRefreshing(
+                            false,
+                        );
+                    }
+                }
+            },
+            [],
+        );
 
-                setErrorMessage(
-                    error instanceof Error
-                        ? error.message
-                        : "Unable to load the participant dashboard.",
-                );
-            } finally {
-                setLoading(false);
-                setRefreshing(false);
-            }
-        }, []);
-
+    /*
+     * Initial fetch and silent refresh.
+     */
     useEffect(() => {
-        void fetchDashboardData();
+        void fetchDashboardData(
+            "initial",
+        );
+
+        const refreshSilently =
+            () => {
+                void fetchDashboardData(
+                    "silent",
+                );
+            };
+
+        const handleVisibilityChange =
+            () => {
+                if (
+                    document.visibilityState ===
+                    "visible"
+                ) {
+                    refreshSilently();
+                }
+            };
+
+        const intervalId =
+            window.setInterval(
+                () => {
+                    if (
+                        document.visibilityState ===
+                        "visible"
+                    ) {
+                        refreshSilently();
+                    }
+                },
+                30000,
+            );
+
+        window.addEventListener(
+            "focus",
+            refreshSilently,
+        );
+
+        document.addEventListener(
+            "visibilitychange",
+            handleVisibilityChange,
+        );
+
+        return () => {
+            window.clearInterval(
+                intervalId,
+            );
+
+            window.removeEventListener(
+                "focus",
+                refreshSilently,
+            );
+
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange,
+            );
+        };
     }, [fetchDashboardData]);
 
+    /*
+     * DASHBOARD COUNTS.
+     */
     const dashboardCounts =
         useMemo(() => {
+            const currentTime =
+                Date.now();
+
             const activePasses =
                 dashboardData.registrations.filter(
-                    (item) =>
-                        ACTIVE_PASS_STATUSES.includes(
+                    (item) => {
+                        const eventStatus =
                             normalizeStatus(
-                                item.event.status,
-                            ),
-                        ),
+                                item.event
+                                    .status,
+                            );
+
+                        const eventEndTime =
+                            getTimeValue(
+                                item.event
+                                    .end_at,
+                            );
+
+                        return (
+                            ACTIVE_PASS_STATUSES.includes(
+                                eventStatus,
+                            ) &&
+                            eventEndTime >=
+                            currentTime
+                        );
+                    },
                 ).length;
 
             const presentAttendance =
@@ -711,11 +1070,13 @@ export default function ParticipantDashboardPage() {
 
             return {
                 available:
-                    dashboardData.availableEvents
+                    dashboardData
+                        .availableEvents
                         .length,
 
                 registrations:
-                    dashboardData.registrations
+                    dashboardData
+                        .registrations
                         .length,
 
                 activePasses,
@@ -724,7 +1085,8 @@ export default function ParticipantDashboardPage() {
 
                 attendanceTotal:
                     dashboardData
-                        .attendanceRecords.length,
+                        .attendanceRecords
+                        .length,
             };
         }, [dashboardData]);
 
@@ -735,7 +1097,9 @@ export default function ParticipantDashboardPage() {
                     0,
                     3,
                 ),
-            [dashboardData.registrations],
+            [
+                dashboardData.registrations,
+            ],
         );
 
     const nextEvent =
@@ -747,6 +1111,7 @@ export default function ParticipantDashboardPage() {
     return (
         <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-7xl space-y-6">
+                {/* HEADER */}
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                     <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -788,10 +1153,12 @@ export default function ParticipantDashboardPage() {
                             type="button"
                             onClick={() =>
                                 void fetchDashboardData(
-                                    true,
+                                    "refresh",
                                 )
                             }
-                            disabled={refreshing}
+                            disabled={
+                                refreshing
+                            }
                             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <RefreshCw
@@ -809,6 +1176,7 @@ export default function ParticipantDashboardPage() {
                     </div>
                 </section>
 
+                {/* ERROR */}
                 {errorMessage && (
                     <div
                         role="alert"
@@ -824,6 +1192,7 @@ export default function ParticipantDashboardPage() {
                     </div>
                 )}
 
+                {/* SUMMARY */}
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <Link
                         href="/dashboard/participant/events"
@@ -934,17 +1303,18 @@ export default function ParticipantDashboardPage() {
                     </Link>
                 </section>
 
+                {/* NEXT EVENT + RECENT REGISTRATIONS */}
                 <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+                    {/* NEXT EVENT */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between gap-4">
                             <div>
                                 <h2 className="text-xl font-semibold text-slate-950">
-                                    Next Event
+                                    Current / Next Event
                                 </h2>
 
                                 <p className="mt-1 text-sm text-slate-500">
-                                    Your nearest active
-                                    or available event.
+                                    Your current ongoing event or nearest upcoming event.
                                 </p>
                             </div>
 
@@ -959,8 +1329,7 @@ export default function ParticipantDashboardPage() {
                                 <div className="mx-auto size-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
 
                                 <p className="mt-3 text-sm text-slate-500">
-                                    Loading next
-                                    event...
+                                    Loading next event...
                                 </p>
                             </div>
                         ) : nextEvent ? (
@@ -975,13 +1344,27 @@ export default function ParticipantDashboardPage() {
                                             }
                                         </h3>
 
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            {
-                                                nextEvent
-                                                    .assignment
-                                                    .municipality
-                                            }
-                                        </p>
+                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+                                            <span>
+                                                {
+                                                    nextEvent
+                                                        .assignment
+                                                        .municipality
+                                                }
+                                            </span>
+
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <MapPin
+                                                    className="size-4"
+                                                    aria-hidden="true"
+                                                />
+
+                                                {nextEvent
+                                                    .venue
+                                                    ?.venue_name ||
+                                                    "Venue not assigned"}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="flex flex-wrap gap-2">
@@ -1081,18 +1464,19 @@ export default function ParticipantDashboardPage() {
                         ) : (
                             <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                                 <p className="font-semibold text-slate-800">
-                                    No upcoming event
+                                    No current or upcoming event
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-500">
-                                    There are currently
-                                    no active or
+                                    There are currently no
+                                    active registered or
                                     available events.
                                 </p>
                             </div>
                         )}
                     </div>
 
+                    {/* RECENT REGISTRATIONS */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div>
                             <h2 className="text-xl font-semibold text-slate-950">
@@ -1132,6 +1516,20 @@ export default function ParticipantDashboardPage() {
                                                                 .title
                                                         }
                                                     </p>
+
+                                                    <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                                                        <MapPin
+                                                            className="size-3.5 shrink-0"
+                                                            aria-hidden="true"
+                                                        />
+
+                                                        <span className="truncate">
+                                                            {item
+                                                                .venue
+                                                                ?.venue_name ||
+                                                                "Venue not assigned"}
+                                                        </span>
+                                                    </div>
 
                                                     <p className="mt-1 text-xs text-slate-500">
                                                         Registered{" "}
@@ -1181,15 +1579,15 @@ export default function ParticipantDashboardPage() {
                                 </p>
 
                                 <p className="mt-1 text-sm text-slate-500">
-                                    Your registered
-                                    events will appear
-                                    here.
+                                    Your registered events
+                                    will appear here.
                                 </p>
                             </div>
                         )}
                     </div>
                 </section>
 
+                {/* QUICK ACCESS */}
                 <section>
                     <div>
                         <h2 className="text-lg font-semibold text-slate-950">
@@ -1197,12 +1595,12 @@ export default function ParticipantDashboardPage() {
                         </h2>
 
                         <p className="mt-1 text-sm text-slate-500">
-                            Select a participant
-                            service below.
+                            Select a participant service
+                            below.
                         </p>
                     </div>
 
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                         {participantActions.map(
                             (item) => {
                                 const Icon =

@@ -15,15 +15,28 @@ export type EventRow = {
   created_at: string | null;
 };
 
+export type MunicipalVenue = {
+  id: string;
+  venue_name: string;
+  municipality: string | null;
+  capacity: number | null;
+};
+
 export type ReceivedEvent = {
   id: string;
   event_id: string;
   municipality: string | null;
   municipal_status: PreparationStatus | null;
+
+  /*
+   * Municipal venue assigned specifically
+   * to this event_municipalities record.
+   */
+  local_venue_id: string | null;
+
   registration_open: boolean | null;
   local_instructions: string | null;
   created_at: string | null;
-
   registered_participants: number;
 
   event: EventRow | null;

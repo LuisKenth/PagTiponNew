@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
     useCallback,
     useEffect,
+    useMemo,
     useState,
 } from "react";
 
@@ -59,6 +60,8 @@ const REGISTRATION_ALLOWED_EVENT_STATUSES = [
     "published",
     "upcoming",
 ];
+
+const EVENTS_PER_PAGE = 5;
 
 function normalizeStatus(
     value: string | null | undefined,
@@ -151,9 +154,14 @@ export default function ParticipantEventsPage() {
         setRegisteringId,
     ] = useState<string | null>(null);
 
+    const [currentPage, setCurrentPage] =
+        useState(1);
+
     const fetchOpenEvents =
-        useCallback(async () => {
-            setLoading(true);
+        useCallback(async (showLoading = true) => {
+            if (showLoading) {
+                setLoading(true);
+            }
 
             try {
                 const {
@@ -271,15 +279,18 @@ export default function ParticipantEventsPage() {
                     )
                     .eq("user_id", user.id);
 
+                const currentRsvps: RSVP[] =
+                    rsvpError
+                        ? []
+                        : rsvpData || [];
+
                 if (rsvpError) {
                     console.error(
                         rsvpError.message,
                     );
-
-                    setRsvps([]);
-                } else {
-                    setRsvps(rsvpData || []);
                 }
+
+                setRsvps(currentRsvps);
 
                 if (
                     !localEvents ||
@@ -349,16 +360,47 @@ export default function ParticipantEventsPage() {
                         }),
                     );
 
+                const registeredEventMunicipalityIds =
+                    new Set(
+                        currentRsvps
+                            .filter(
+                                (rsvp) =>
+                                    normalizeStatus(
+                                        rsvp.status,
+                                    ) ===
+                                    "registered",
+                            )
+                            .map((rsvp) =>
+                                String(
+                                    rsvp.event_municipality_id,
+                                ),
+                            ),
+                    );
+
                 setOpenEvents(
                     mappedEvents.filter(
-                        (item) =>
-                            item.event !==
-                                null &&
-                            normalizeStatus(
-                                item.event
-                                    .status,
-                            ) !==
-                                "cancelled",
+                        (item) => {
+                            const eventIsValid =
+                                item.event !==
+                                    null &&
+                                normalizeStatus(
+                                    item.event
+                                        ?.status,
+                                ) !==
+                                    "cancelled";
+
+                            const alreadyRegistered =
+                                registeredEventMunicipalityIds.has(
+                                    String(
+                                        item.id,
+                                    ),
+                                );
+
+                            return (
+                                eventIsValid &&
+                                !alreadyRegistered
+                            );
+                        },
                     ),
                 );
             } catch (error) {
@@ -369,13 +411,133 @@ export default function ParticipantEventsPage() {
 
                 setOpenEvents([]);
             } finally {
-                setLoading(false);
+                if (showLoading) {
+                    setLoading(false);
+                }
             }
         }, []);
 
     useEffect(() => {
-        void fetchOpenEvents();
+        void fetchOpenEvents(true);
+
+        const refreshSilently = () => {
+            void fetchOpenEvents(false);
+        };
+
+        const handleVisibilityChange =
+            () => {
+                if (
+                    document.visibilityState ===
+                    "visible"
+                ) {
+                    refreshSilently();
+                }
+            };
+
+        const intervalId =
+            window.setInterval(() => {
+                if (
+                    document.visibilityState ===
+                    "visible"
+                ) {
+                    refreshSilently();
+                }
+            }, 30000);
+
+        window.addEventListener(
+            "focus",
+            refreshSilently,
+        );
+
+        document.addEventListener(
+            "visibilitychange",
+            handleVisibilityChange,
+        );
+
+        return () => {
+            window.clearInterval(
+                intervalId,
+            );
+
+            window.removeEventListener(
+                "focus",
+                refreshSilently,
+            );
+
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange,
+            );
+        };
     }, [fetchOpenEvents]);
+
+    const openEventIds = useMemo(
+        () =>
+            openEvents
+                .map((item) => item.id)
+                .join("|"),
+        [openEvents],
+    );
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [openEventIds]);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(
+            openEvents.length /
+                EVENTS_PER_PAGE,
+        ),
+    );
+
+    const paginatedEvents = useMemo(() => {
+        const startIndex =
+            (currentPage - 1) *
+            EVENTS_PER_PAGE;
+
+        const endIndex =
+            startIndex +
+            EVENTS_PER_PAGE;
+
+        return openEvents.slice(
+            startIndex,
+            endIndex,
+        );
+    }, [openEvents, currentPage]);
+
+    const firstVisibleEvent =
+        openEvents.length === 0
+            ? 0
+            : (currentPage - 1) *
+                  EVENTS_PER_PAGE +
+              1;
+
+    const lastVisibleEvent = Math.min(
+        currentPage * EVENTS_PER_PAGE,
+        openEvents.length,
+    );
+
+    const goToPreviousPage = () => {
+        setCurrentPage((page) =>
+            Math.max(1, page - 1),
+        );
+    };
+
+    const goToNextPage = () => {
+        setCurrentPage((page) =>
+            Math.min(
+                totalPages,
+                page + 1,
+            ),
+        );
+    };
+
+    const goToPage = (
+        pageNumber: number,
+    ) => {
+        setCurrentPage(pageNumber);
+    };
 
     const isRegistered = (
         eventMunicipalityId: string,
@@ -424,11 +586,6 @@ export default function ParticipantEventsPage() {
         setRegisteringId(item.id);
 
         try {
-            /*
-             * Verify the authenticated user again.
-             * Do not rely only on the user ID stored
-             * in the browser state.
-             */
             const {
                 data: { user },
                 error: userError,
@@ -447,10 +604,6 @@ export default function ParticipantEventsPage() {
                 );
             }
 
-            /*
-             * Freshly check the municipality-event
-             * assignment immediately before registration.
-             */
             const {
                 data: currentAssignment,
                 error: assignmentError,
@@ -508,11 +661,6 @@ export default function ParticipantEventsPage() {
                 );
             }
 
-            /*
-             * Fetch the actual event status again.
-             * This catches cancellations made after
-             * the participant page was initially loaded.
-             */
             const {
                 data: currentEvent,
                 error: eventError,
@@ -561,11 +709,6 @@ export default function ParticipantEventsPage() {
                 );
             }
 
-            /*
-             * Fresh duplicate check from the database.
-             * Do not rely only on the rsvps state
-             * that was loaded with the page.
-             */
             const {
                 data: existingRsvp,
                 error:
@@ -618,27 +761,21 @@ export default function ParticipantEventsPage() {
                 crypto.randomUUID(),
             ].join("-");
 
-            const { error: insertError } =
-                await supabase
-                    .from("rsvps")
-                    .insert({
-                        event_municipality_id:
-                            currentAssignment.id,
-                        user_id: user.id,
-                        municipality:
-                            currentAssignment.municipality,
-                        qr_token:
-                            qrToken,
-                        status:
-                            "registered",
-                    });
+            const {
+                error: insertError,
+            } = await supabase
+                .from("rsvps")
+                .insert({
+                    event_municipality_id:
+                        currentAssignment.id,
+                    user_id: user.id,
+                    municipality:
+                        currentAssignment.municipality,
+                    qr_token: qrToken,
+                    status: "registered",
+                });
 
             if (insertError) {
-                /*
-                 * The database trigger catches the
-                 * cancellation if it happens after
-                 * the checks above but before INSERT.
-                 */
                 throw insertError;
             }
 
@@ -795,229 +932,300 @@ export default function ParticipantEventsPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-                            {openEvents.map(
-                                (item) => {
-                                    const registered =
-                                        isRegistered(
-                                            item.id,
-                                        );
+                        <>
+                            <div className="mt-5 space-y-4">
+                                {paginatedEvents.map(
+                                    (item) => {
+                                        const registered =
+                                            isRegistered(
+                                                item.id,
+                                            );
 
-                                    const eventStatus =
-                                        normalizeStatus(
-                                            item
-                                                .event
-                                                ?.status,
-                                        );
-
-                                    const cancelled =
-                                        eventStatus ===
-                                        "cancelled";
-
-                                    const registrationClosed =
-                                        item.registration_open !==
-                                        true;
-
-                                    const eventNotReady =
-                                        normalizeStatus(
-                                            item.municipal_status,
-                                        ) !==
-                                        "prepared";
-
-                                    const buttonDisabled =
-                                        cancelled ||
-                                        registrationClosed ||
-                                        eventNotReady ||
-                                        registeringId ===
-                                            item.id;
-
-                                    let buttonLabel =
-                                        "Register for Event";
-
-                                    if (
-                                        registeringId ===
-                                        item.id
-                                    ) {
-                                        buttonLabel =
-                                            "Checking registration...";
-                                    } else if (
-                                        cancelled
-                                    ) {
-                                        buttonLabel =
-                                            "Event Cancelled";
-                                    } else if (
-                                        registrationClosed
-                                    ) {
-                                        buttonLabel =
-                                            "Registration Closed";
-                                    } else if (
-                                        eventNotReady
-                                    ) {
-                                        buttonLabel =
-                                            "Event Not Ready";
-                                    }
-
-                                    return (
-                                        <article
-                                            key={
-                                                item.id
-                                            }
-                                            className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                                        >
-                                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <h3 className="text-lg font-semibold text-slate-950">
-                                                        {item
-                                                            .event
-                                                            ?.title ||
-                                                            "Untitled Event"}
-                                                    </h3>
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2">
-                                                    {!cancelled &&
-                                                        !registrationClosed &&
-                                                        !eventNotReady && (
-                                                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                                                Open
-                                                                Registration
-                                                            </span>
-                                                        )}
-
-                                                    {cancelled && (
-                                                        <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-                                                            Cancelled
-                                                        </span>
-                                                    )}
-
-                                                    {registered && (
-                                                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                                                            Registered
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <p className="mt-3 text-sm leading-6 text-slate-600">
-                                                {item
+                                        const eventStatus =
+                                            normalizeStatus(
+                                                item
                                                     .event
-                                                    ?.description ||
-                                                    "No description provided."}
-                                            </p>
+                                                    ?.status,
+                                            );
 
-                                            <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                        Starts
-                                                    </p>
+                                        const cancelled =
+                                            eventStatus ===
+                                            "cancelled";
 
-                                                    <p className="mt-1 font-medium text-slate-700">
-                                                        {formatDateTime(
-                                                            item
+                                        const registrationClosed =
+                                            item.registration_open !==
+                                            true;
+
+                                        const eventNotReady =
+                                            normalizeStatus(
+                                                item.municipal_status,
+                                            ) !==
+                                            "prepared";
+
+                                        const buttonDisabled =
+                                            cancelled ||
+                                            registrationClosed ||
+                                            eventNotReady ||
+                                            registeringId ===
+                                                item.id;
+
+                                        let buttonLabel =
+                                            "Register for Event";
+
+                                        if (
+                                            registeringId ===
+                                            item.id
+                                        ) {
+                                            buttonLabel =
+                                                "Checking registration...";
+                                        } else if (
+                                            cancelled
+                                        ) {
+                                            buttonLabel =
+                                                "Event Cancelled";
+                                        } else if (
+                                            registrationClosed
+                                        ) {
+                                            buttonLabel =
+                                                "Registration Closed";
+                                        } else if (
+                                            eventNotReady
+                                        ) {
+                                            buttonLabel =
+                                                "Event Not Ready";
+                                        }
+
+                                        return (
+                                            <article
+                                                key={
+                                                    item.id
+                                                }
+                                                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                                            >
+                                                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h3 className="text-lg font-semibold text-slate-950">
+                                                                {item
+                                                                    .event
+                                                                    ?.title ||
+                                                                    "Untitled Event"}
+                                                            </h3>
+
+                                                            {!cancelled &&
+                                                                !registrationClosed &&
+                                                                !eventNotReady && (
+                                                                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                                                        Open
+                                                                        Registration
+                                                                    </span>
+                                                                )}
+
+                                                            {cancelled && (
+                                                                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                                                                    Cancelled
+                                                                </span>
+                                                            )}
+
+                                                            {registered && (
+                                                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                                                                    Registered
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                                                            {item
                                                                 .event
-                                                                ?.start_at ||
-                                                                null,
+                                                                ?.description ||
+                                                                "No description provided."}
+                                                        </p>
+
+                                                        {item.local_instructions && (
+                                                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                                                                    Local
+                                                                    Instructions
+                                                                </p>
+
+                                                                <p className="mt-1 text-sm leading-6 text-amber-900">
+                                                                    {
+                                                                        item.local_instructions
+                                                                    }
+                                                                </p>
+                                                            </div>
                                                         )}
-                                                    </p>
-                                                </div>
+                                                    </div>
 
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                        Ends
-                                                    </p>
-
-                                                    <p className="mt-1 font-medium text-slate-700">
-                                                        {formatDateTime(
-                                                            item
-                                                                .event
-                                                                ?.end_at ||
-                                                                null,
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {item.local_instructions && (
-                                                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                        Local
-                                                        Instructions
-                                                    </p>
-
-                                                    <p className="mt-1 text-sm leading-6 text-amber-900">
-                                                        {
-                                                            item.local_instructions
-                                                        }
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            <div className="mt-auto pt-5">
-                                                {registered ? (
-                                                    <div className="space-y-3">
-                                                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                                                            <p className="text-sm font-semibold text-blue-900">
-                                                                Registration
-                                                                Confirmed
+                                                    <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[380px]">
+                                                        <div>
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                Starts
                                                             </p>
 
-                                                            <p className="mt-1 text-xs leading-5 text-blue-700">
-                                                                You
-                                                                are
-                                                                already
-                                                                registered
-                                                                for
-                                                                this
-                                                                event.
-                                                                Open
-                                                                your
-                                                                attendance
-                                                                pass
-                                                                to
-                                                                view
-                                                                your
-                                                                QR
-                                                                code
-                                                                and
-                                                                manual
-                                                                attendance
-                                                                code.
+                                                            <p className="mt-1 font-medium text-slate-700">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .event
+                                                                        ?.start_at ||
+                                                                        null,
+                                                                )}
                                                             </p>
                                                         </div>
 
-                                                        <Link
-                                                            href="/dashboard/participant/attendance-pass"
-                                                            className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                                                        >
-                                                            View
-                                                            Attendance
-                                                            Pass
-                                                        </Link>
+                                                        <div>
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                Ends
+                                                            </p>
+
+                                                            <p className="mt-1 font-medium text-slate-700">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .event
+                                                                        ?.end_at ||
+                                                                        null,
+                                                                )}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                ) : (
+
+                                                    <div className="shrink-0 xl:w-[190px]">
+                                                        {registered ? (
+                                                            <Link
+                                                                href="/dashboard/participant/attendance-pass"
+                                                                className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                                                            >
+                                                                View
+                                                                Attendance
+                                                                Pass
+                                                            </Link>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    void handleRegister(
+                                                                        item,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    buttonDisabled
+                                                                }
+                                                                className="w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                                            >
+                                                                {
+                                                                    buttonLabel
+                                                                }
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        );
+                                    },
+                                )}
+                            </div>
+
+                            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-slate-500">
+                                    Showing{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            firstVisibleEvent
+                                        }
+                                    </span>
+                                    {" - "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            lastVisibleEvent
+                                        }
+                                    </span>{" "}
+                                    of{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            openEvents.length
+                                        }
+                                    </span>{" "}
+                                    events
+                                </p>
+
+                                {totalPages > 1 && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                goToPreviousPage
+                                            }
+                                            disabled={
+                                                currentPage ===
+                                                1
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            Previous
+                                        </button>
+
+                                        {Array.from(
+                                            {
+                                                length:
+                                                    totalPages,
+                                            },
+                                            (
+                                                _,
+                                                index,
+                                            ) => {
+                                                const pageNumber =
+                                                    index +
+                                                    1;
+
+                                                return (
                                                     <button
+                                                        key={
+                                                            pageNumber
+                                                        }
                                                         type="button"
                                                         onClick={() =>
-                                                            void handleRegister(
-                                                                item,
+                                                            goToPage(
+                                                                pageNumber,
                                                             )
                                                         }
-                                                        disabled={
-                                                            buttonDisabled
+                                                        aria-current={
+                                                            currentPage ===
+                                                            pageNumber
+                                                                ? "page"
+                                                                : undefined
                                                         }
-                                                        className="w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                                        className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                                                            currentPage ===
+                                                            pageNumber
+                                                                ? "bg-slate-950 text-white"
+                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                        }`}
                                                     >
                                                         {
-                                                            buttonLabel
+                                                            pageNumber
                                                         }
                                                     </button>
-                                                )}
-                                            </div>
-                                        </article>
-                                    );
-                                },
-                            )}
-                        </div>
+                                                );
+                                            },
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                goToNextPage
+                                            }
+                                            disabled={
+                                                currentPage ===
+                                                totalPages
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                 </section>
             </div>

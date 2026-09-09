@@ -89,9 +89,10 @@ export default function NotificationList({
                 </h3>
 
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                    Registration confirmations, event
-                    updates, and attendance results will
-                    appear here.
+                    Event invitations, registration
+                    confirmations, event updates,
+                    cancellations, and attendance
+                    results will appear here.
                 </p>
             </div>
         );

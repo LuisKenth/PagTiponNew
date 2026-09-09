@@ -4,6 +4,7 @@ import {
     CheckCircle2,
     Clock3,
     History,
+    MapPin,
     QrCode,
     RefreshCw,
     ScanLine,
@@ -36,7 +37,14 @@ type EventAssignmentRow = {
     id: string;
     event_id: string;
     municipality: string;
+    local_venue_id: string | null;
     local_instructions: string | null;
+};
+
+type VenueRow = {
+    id: string;
+    venue_name: string;
+    municipality: string;
 };
 
 type EventRow = {
@@ -52,6 +60,7 @@ type AttendanceHistoryItem = {
     attendance: AttendanceRow;
     assignment: EventAssignmentRow;
     event: EventRow;
+    venue: VenueRow | null;
 };
 
 type AttendanceFilter =
@@ -59,6 +68,13 @@ type AttendanceFilter =
     | "present"
     | "absent"
     | "pending";
+
+type FetchMode =
+    | "initial"
+    | "refresh"
+    | "silent";
+
+const RECORDS_PER_PAGE = 5;
 
 function normalizeStatus(
     value: string | null | undefined,
@@ -153,6 +169,34 @@ function getEventStatusLabel(
     return status || "Unknown";
 }
 
+function getEventStatusClasses(
+    status: string | null,
+) {
+    const normalizedStatus =
+        normalizeStatus(status);
+
+    if (normalizedStatus === "ongoing") {
+        return "bg-green-100 text-green-700";
+    }
+
+    if (
+        normalizedStatus === "published" ||
+        normalizedStatus === "upcoming"
+    ) {
+        return "bg-blue-100 text-blue-700";
+    }
+
+    if (normalizedStatus === "completed") {
+        return "bg-slate-100 text-slate-700";
+    }
+
+    if (normalizedStatus === "cancelled") {
+        return "bg-red-100 text-red-700";
+    }
+
+    return "bg-slate-100 text-slate-600";
+}
+
 function getCheckInMethodLabel(
     method: string | null,
 ) {
@@ -204,250 +248,503 @@ export default function ParticipantAttendanceHistoryPage() {
         setErrorMessage,
     ] = useState("");
 
-    const [activeFilter, setActiveFilter] =
-        useState<AttendanceFilter>("all");
+    const [
+        activeFilter,
+        setActiveFilter,
+    ] =
+        useState<AttendanceFilter>(
+            "all",
+        );
+
+    const [
+        currentPage,
+        setCurrentPage,
+    ] = useState(1);
 
     const fetchAttendanceHistory =
-        useCallback(async (
-            refreshOnly = false,
-        ) => {
-            if (refreshOnly) {
-                setRefreshing(true);
-            } else {
-                setLoading(true);
-            }
-
-            setErrorMessage("");
-
-            try {
-                const {
-                    data: { user },
-                    error: userError,
-                } =
-                    await supabase.auth.getUser();
-
-                if (userError || !user) {
-                    throw new Error(
-                        userError?.message ||
-                            "Participant user not found.",
-                    );
+        useCallback(
+            async (
+                mode: FetchMode =
+                    "initial",
+            ) => {
+                if (
+                    mode === "initial"
+                ) {
+                    setLoading(true);
                 }
-
-                const {
-                    data: attendanceRows,
-                    error: attendanceError,
-                } = await supabase
-                    .from("attendance")
-                    .select(
-                        `
-                            id,
-                            rsvp_id,
-                            event_municipality_id,
-                            user_id,
-                            status,
-                            method,
-                            checked_in_at,
-                            checked_in_by,
-                            created_at,
-                            updated_at
-                        `,
-                    )
-                    .eq("user_id", user.id)
-                    .order("created_at", {
-                        ascending: false,
-                    });
-
-                if (attendanceError) {
-                    throw attendanceError;
-                }
-
-                const attendanceRecords =
-                    (attendanceRows ||
-                        []) as AttendanceRow[];
 
                 if (
-                    attendanceRecords.length === 0
+                    mode === "refresh"
                 ) {
-                    setAttendanceHistory([]);
-                    return;
+                    setRefreshing(true);
                 }
 
-                const assignmentIds =
-                    Array.from(
-                        new Set(
-                            attendanceRecords.map(
-                                (record) =>
-                                    record.event_municipality_id,
-                            ),
-                        ),
-                    );
-
-                const {
-                    data: assignmentRows,
-                    error: assignmentError,
-                } = await supabase
-                    .from(
-                        "event_municipalities",
-                    )
-                    .select(
-                        `
-                            id,
-                            event_id,
-                            municipality,
-                            local_instructions
-                        `,
-                    )
-                    .in("id", assignmentIds);
-
-                if (assignmentError) {
-                    throw assignmentError;
+                if (
+                    mode !== "silent"
+                ) {
+                    setErrorMessage("");
                 }
 
-                const assignments =
-                    (assignmentRows ||
-                        []) as EventAssignmentRow[];
+                try {
+                    const {
+                        data: { session },
+                        error: sessionError,
+                    } =
+                        await supabase.auth.getSession();
 
-                if (assignments.length === 0) {
-                    setAttendanceHistory([]);
-                    return;
-                }
+                    if (
+                        sessionError ||
+                        !session?.user
+                    ) {
+                        throw new Error(
+                            sessionError?.message ||
+                                "Your login session is unavailable. Please log in again.",
+                        );
+                    }
 
-                const eventIds =
-                    Array.from(
-                        new Set(
-                            assignments.map(
-                                (assignment) =>
-                                    assignment.event_id,
-                            ),
-                        ),
-                    );
+                    const user =
+                        session.user;
 
-                const {
-                    data: eventRows,
-                    error: eventError,
-                } = await supabase
-                    .from("events")
-                    .select(
-                        `
-                            id,
-                            title,
-                            description,
-                            start_at,
-                            end_at,
-                            status
-                        `,
-                    )
-                    .in("id", eventIds);
-
-                if (eventError) {
-                    throw eventError;
-                }
-
-                const events =
-                    (eventRows ||
-                        []) as EventRow[];
-
-                const mappedHistory =
-                    attendanceRecords
-                        .map((attendance) => {
-                            const assignment =
-                                assignments.find(
-                                    (item) =>
-                                        String(
-                                            item.id,
-                                        ) ===
-                                        String(
-                                            attendance.event_municipality_id,
-                                        ),
-                                );
-
-                            if (!assignment) {
-                                return null;
-                            }
-
-                            const event =
-                                events.find(
-                                    (item) =>
-                                        String(
-                                            item.id,
-                                        ) ===
-                                        String(
-                                            assignment.event_id,
-                                        ),
-                                );
-
-                            if (!event) {
-                                return null;
-                            }
-
-                            return {
-                                attendance,
-                                assignment,
-                                event,
-                            };
-                        })
-                        .filter(
-                            (
-                                item,
-                            ): item is AttendanceHistoryItem =>
-                                item !== null,
+                    const {
+                        data:
+                            attendanceRows,
+                        error:
+                            attendanceError,
+                    } = await supabase
+                        .from(
+                            "attendance",
                         )
-                        .sort(
-                            (
-                                first,
-                                second,
-                            ) => {
-                                const firstDate =
-                                    first.event
-                                        .start_at
-                                        ? new Date(
-                                              first.event.start_at,
-                                          ).getTime()
-                                        : new Date(
-                                              first.attendance.created_at,
-                                          ).getTime();
-
-                                const secondDate =
-                                    second.event
-                                        .start_at
-                                        ? new Date(
-                                              second.event.start_at,
-                                          ).getTime()
-                                        : new Date(
-                                              second.attendance.created_at,
-                                          ).getTime();
-
-                                return (
-                                    secondDate -
-                                    firstDate
-                                );
+                        .select(
+                            `
+                                id,
+                                rsvp_id,
+                                event_municipality_id,
+                                user_id,
+                                status,
+                                method,
+                                checked_in_at,
+                                checked_in_by,
+                                created_at,
+                                updated_at
+                            `,
+                        )
+                        .eq(
+                            "user_id",
+                            user.id,
+                        )
+                        .order(
+                            "created_at",
+                            {
+                                ascending:
+                                    false,
                             },
                         );
 
-                setAttendanceHistory(
-                    mappedHistory,
-                );
-            } catch (error) {
-                console.error(
-                    "Participant attendance history fetch error:",
-                    error,
-                );
+                    if (
+                        attendanceError
+                    ) {
+                        throw attendanceError;
+                    }
 
-                setAttendanceHistory([]);
+                    const attendanceRecords =
+                        (attendanceRows ||
+                            []) as AttendanceRow[];
 
-                setErrorMessage(
-                    error instanceof Error
-                        ? error.message
-                        : "Unable to load attendance history.",
-                );
-            } finally {
-                setLoading(false);
-                setRefreshing(false);
-            }
-        }, []);
+                    if (
+                        attendanceRecords.length ===
+                        0
+                    ) {
+                        setAttendanceHistory(
+                            [],
+                        );
+
+                        return;
+                    }
+
+                    const assignmentIds =
+                        Array.from(
+                            new Set(
+                                attendanceRecords.map(
+                                    (
+                                        record,
+                                    ) =>
+                                        record.event_municipality_id,
+                                ),
+                            ),
+                        );
+
+                    const {
+                        data:
+                            assignmentRows,
+                        error:
+                            assignmentError,
+                    } = await supabase
+                        .from(
+                            "event_municipalities",
+                        )
+                        .select(
+                            `
+                                id,
+                                event_id,
+                                municipality,
+                                local_venue_id,
+                                local_instructions
+                            `,
+                        )
+                        .in(
+                            "id",
+                            assignmentIds,
+                        );
+
+                    if (
+                        assignmentError
+                    ) {
+                        throw assignmentError;
+                    }
+
+                    const assignments =
+                        (assignmentRows ||
+                            []) as EventAssignmentRow[];
+
+                    if (
+                        assignments.length ===
+                        0
+                    ) {
+                        setAttendanceHistory(
+                            [],
+                        );
+
+                        return;
+                    }
+
+                    /*
+                     * Venue lookup is non-fatal.
+                     * Attendance history must still
+                     * display even if a venue cannot
+                     * be retrieved.
+                     */
+                    const venueIds =
+                        Array.from(
+                            new Set(
+                                assignments
+                                    .map(
+                                        (
+                                            assignment,
+                                        ) =>
+                                            assignment.local_venue_id,
+                                    )
+                                    .filter(
+                                        (
+                                            venueId,
+                                        ): venueId is string =>
+                                            Boolean(
+                                                venueId,
+                                            ),
+                                    ),
+                            ),
+                        );
+
+                    let venues: VenueRow[] =
+                        [];
+
+                    if (
+                        venueIds.length >
+                        0
+                    ) {
+                        const {
+                            data:
+                                venueRows,
+                            error:
+                                venueError,
+                        } = await supabase
+                            .from(
+                                "venues",
+                            )
+                            .select(
+                                `
+                                    id,
+                                    venue_name,
+                                    municipality
+                                `,
+                            )
+                            .in(
+                                "id",
+                                venueIds,
+                            );
+
+                        if (
+                            venueError
+                        ) {
+                            console.warn(
+                                "Unable to load attendance history venues:",
+                                venueError.message,
+                            );
+                        } else {
+                            venues =
+                                (venueRows ||
+                                    []) as VenueRow[];
+                        }
+                    }
+
+                    const eventIds =
+                        Array.from(
+                            new Set(
+                                assignments.map(
+                                    (
+                                        assignment,
+                                    ) =>
+                                        assignment.event_id,
+                                ),
+                            ),
+                        );
+
+                    const {
+                        data:
+                            eventRows,
+                        error:
+                            eventError,
+                    } = await supabase
+                        .from(
+                            "events",
+                        )
+                        .select(
+                            `
+                                id,
+                                title,
+                                description,
+                                start_at,
+                                end_at,
+                                status
+                            `,
+                        )
+                        .in(
+                            "id",
+                            eventIds,
+                        );
+
+                    if (
+                        eventError
+                    ) {
+                        throw eventError;
+                    }
+
+                    const events =
+                        (eventRows ||
+                            []) as EventRow[];
+
+                    const mappedHistory =
+                        attendanceRecords
+                            .map(
+                                (
+                                    attendance,
+                                ) => {
+                                    const assignment =
+                                        assignments.find(
+                                            (
+                                                item,
+                                            ) =>
+                                                String(
+                                                    item.id,
+                                                ) ===
+                                                String(
+                                                    attendance.event_municipality_id,
+                                                ),
+                                        );
+
+                                    if (
+                                        !assignment
+                                    ) {
+                                        return null;
+                                    }
+
+                                    const event =
+                                        events.find(
+                                            (
+                                                item,
+                                            ) =>
+                                                String(
+                                                    item.id,
+                                                ) ===
+                                                String(
+                                                    assignment.event_id,
+                                                ),
+                                        );
+
+                                    if (
+                                        !event
+                                    ) {
+                                        return null;
+                                    }
+
+                                    const venue =
+                                        assignment.local_venue_id
+                                            ? venues.find(
+                                                  (
+                                                      item,
+                                                  ) =>
+                                                      String(
+                                                          item.id,
+                                                      ) ===
+                                                      String(
+                                                          assignment.local_venue_id,
+                                                      ),
+                                              ) ||
+                                              null
+                                            : null;
+
+                                    return {
+                                        attendance,
+                                        assignment,
+                                        event,
+                                        venue,
+                                    };
+                                },
+                            )
+                            .filter(
+                                (
+                                    item,
+                                ): item is AttendanceHistoryItem =>
+                                    item !==
+                                    null,
+                            )
+                            .sort(
+                                (
+                                    first,
+                                    second,
+                                ) => {
+                                    const firstDate =
+                                        first
+                                            .event
+                                            .start_at
+                                            ? new Date(
+                                                  first.event.start_at,
+                                              ).getTime()
+                                            : new Date(
+                                                  first.attendance.created_at,
+                                              ).getTime();
+
+                                    const secondDate =
+                                        second
+                                            .event
+                                            .start_at
+                                            ? new Date(
+                                                  second.event.start_at,
+                                              ).getTime()
+                                            : new Date(
+                                                  second.attendance.created_at,
+                                              ).getTime();
+
+                                    return (
+                                        secondDate -
+                                        firstDate
+                                    );
+                                },
+                            );
+
+                    setAttendanceHistory(
+                        mappedHistory,
+                    );
+                } catch (error) {
+                    console.error(
+                        "Participant attendance history fetch error:",
+                        error,
+                    );
+
+                    if (
+                        mode !== "silent"
+                    ) {
+                        setAttendanceHistory(
+                            [],
+                        );
+
+                        setErrorMessage(
+                            error instanceof
+                                Error
+                                ? error.message
+                                : "Unable to load attendance history.",
+                        );
+                    }
+                } finally {
+                    if (
+                        mode === "initial"
+                    ) {
+                        setLoading(
+                            false,
+                        );
+                    }
+
+                    if (
+                        mode === "refresh"
+                    ) {
+                        setRefreshing(
+                            false,
+                        );
+                    }
+                }
+            },
+            [],
+        );
 
     useEffect(() => {
-        void fetchAttendanceHistory();
+        void fetchAttendanceHistory(
+            "initial",
+        );
+
+        const refreshSilently =
+            () => {
+                void fetchAttendanceHistory(
+                    "silent",
+                );
+            };
+
+        const handleVisibilityChange =
+            () => {
+                if (
+                    document.visibilityState ===
+                    "visible"
+                ) {
+                    refreshSilently();
+                }
+            };
+
+        const intervalId =
+            window.setInterval(
+                () => {
+                    if (
+                        document.visibilityState ===
+                        "visible"
+                    ) {
+                        refreshSilently();
+                    }
+                },
+                30000,
+            );
+
+        window.addEventListener(
+            "focus",
+            refreshSilently,
+        );
+
+        document.addEventListener(
+            "visibilitychange",
+            handleVisibilityChange,
+        );
+
+        return () => {
+            window.clearInterval(
+                intervalId,
+            );
+
+            window.removeEventListener(
+                "focus",
+                refreshSilently,
+            );
+
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange,
+            );
+        };
     }, [fetchAttendanceHistory]);
 
     const attendanceCounts =
@@ -460,47 +757,129 @@ export default function ParticipantAttendanceHistoryPage() {
                     attendanceHistory.filter(
                         (item) =>
                             normalizeStatus(
-                                item.attendance
+                                item
+                                    .attendance
                                     .status,
-                            ) === "present",
+                            ) ===
+                            "present",
                     ).length,
 
                 absent:
                     attendanceHistory.filter(
                         (item) =>
                             normalizeStatus(
-                                item.attendance
+                                item
+                                    .attendance
                                     .status,
-                            ) === "absent",
+                            ) ===
+                            "absent",
                     ).length,
 
                 pending:
                     attendanceHistory.filter(
                         (item) =>
                             normalizeStatus(
-                                item.attendance
+                                item
+                                    .attendance
                                     .status,
-                            ) === "pending",
+                            ) ===
+                            "pending",
                     ).length,
             };
         }, [attendanceHistory]);
 
     const filteredAttendanceHistory =
         useMemo(() => {
-            if (activeFilter === "all") {
+            if (
+                activeFilter ===
+                "all"
+            ) {
                 return attendanceHistory;
             }
 
             return attendanceHistory.filter(
                 (item) =>
                     normalizeStatus(
-                        item.attendance.status,
-                    ) === activeFilter,
+                        item.attendance
+                            .status,
+                    ) ===
+                    activeFilter,
             );
         }, [
             activeFilter,
             attendanceHistory,
         ]);
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(
+            filteredAttendanceHistory.length /
+                RECORDS_PER_PAGE,
+        ),
+    );
+
+    const paginatedAttendanceHistory =
+        useMemo(() => {
+            const startIndex =
+                (currentPage - 1) *
+                RECORDS_PER_PAGE;
+
+            return filteredAttendanceHistory.slice(
+                startIndex,
+                startIndex +
+                    RECORDS_PER_PAGE,
+            );
+        }, [
+            currentPage,
+            filteredAttendanceHistory,
+        ]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeFilter]);
+
+    useEffect(() => {
+        if (
+            currentPage >
+            totalPages
+        ) {
+            setCurrentPage(
+                totalPages,
+            );
+        }
+    }, [
+        currentPage,
+        totalPages,
+    ]);
+
+    const firstVisibleRecord =
+        filteredAttendanceHistory.length ===
+        0
+            ? 0
+            : (currentPage - 1) *
+                  RECORDS_PER_PAGE +
+              1;
+
+    const lastVisibleRecord =
+        Math.min(
+            currentPage *
+                RECORDS_PER_PAGE,
+            filteredAttendanceHistory.length,
+        );
+
+    const changePage = (
+        page: number,
+    ) => {
+        setCurrentPage(
+            Math.max(
+                1,
+                Math.min(
+                    totalPages,
+                    page,
+                ),
+            ),
+        );
+    };
 
     const filters: {
         value: AttendanceFilter;
@@ -510,7 +889,8 @@ export default function ParticipantAttendanceHistoryPage() {
         {
             value: "all",
             label: "All",
-            count: attendanceCounts.total,
+            count:
+                attendanceCounts.total,
         },
         {
             value: "present",
@@ -521,7 +901,8 @@ export default function ParticipantAttendanceHistoryPage() {
         {
             value: "absent",
             label: "Absent",
-            count: attendanceCounts.absent,
+            count:
+                attendanceCounts.absent,
         },
         {
             value: "pending",
@@ -534,6 +915,7 @@ export default function ParticipantAttendanceHistoryPage() {
     return (
         <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-7xl space-y-6">
+                {/* HEADER */}
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -546,9 +928,10 @@ export default function ParticipantAttendanceHistoryPage() {
                             </h1>
 
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                Review your attendance
-                                results, check-in
-                                methods, and recorded
+                                Review your
+                                attendance results,
+                                check-in methods,
+                                and recorded
                                 check-in times.
                             </p>
                         </div>
@@ -557,10 +940,12 @@ export default function ParticipantAttendanceHistoryPage() {
                             type="button"
                             onClick={() =>
                                 void fetchAttendanceHistory(
-                                    true,
+                                    "refresh",
                                 )
                             }
-                            disabled={refreshing}
+                            disabled={
+                                refreshing
+                            }
                             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <RefreshCw
@@ -579,6 +964,7 @@ export default function ParticipantAttendanceHistoryPage() {
                     </div>
                 </section>
 
+                {/* SUMMARY */}
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="flex items-center justify-between">
@@ -673,6 +1059,7 @@ export default function ParticipantAttendanceHistoryPage() {
                     </div>
                 </section>
 
+                {/* RECORDS */}
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
@@ -682,8 +1069,9 @@ export default function ParticipantAttendanceHistoryPage() {
 
                             <p className="mt-1 text-sm text-slate-500">
                                 View your event
-                                attendance status and
-                                check-in information.
+                                attendance status,
+                                venue, and check-in
+                                information.
                             </p>
                         </div>
 
@@ -740,7 +1128,8 @@ export default function ParticipantAttendanceHistoryPage() {
                             <div className="mx-auto size-9 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
 
                             <p className="mt-4 text-sm font-medium text-slate-600">
-                                Loading attendance
+                                Loading
+                                attendance
                                 history...
                             </p>
                         </div>
@@ -751,7 +1140,8 @@ export default function ParticipantAttendanceHistoryPage() {
                         >
                             <p className="font-semibold text-red-800">
                                 Unable to load
-                                attendance history
+                                attendance
+                                history
                             </p>
 
                             <p className="mt-1 text-sm text-red-600">
@@ -761,7 +1151,9 @@ export default function ParticipantAttendanceHistoryPage() {
                             <button
                                 type="button"
                                 onClick={() =>
-                                    void fetchAttendanceHistory()
+                                    void fetchAttendanceHistory(
+                                        "initial",
+                                    )
                                 }
                                 className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
                             >
@@ -779,298 +1171,427 @@ export default function ParticipantAttendanceHistoryPage() {
                             </div>
 
                             <h3 className="mt-4 text-lg font-semibold text-slate-950">
-                                No attendance records
+                                No attendance
+                                records
                             </h3>
 
                             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
                                 Your attendance
-                                results will appear
-                                here after you register
-                                for an event and an
-                                attendance record is
-                                created.
+                                records will
+                                appear here after
+                                you register for
+                                an event.
                             </p>
                         </div>
                     ) : filteredAttendanceHistory.length ===
                       0 ? (
                         <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                             <p className="font-semibold text-slate-800">
-                                No matching records
+                                No matching
+                                records
                             </p>
 
                             <p className="mt-1 text-sm text-slate-500">
                                 There are no
-                                attendance records
-                                under the selected
-                                filter.
+                                attendance
+                                records under the
+                                selected filter.
                             </p>
                         </div>
                     ) : (
-                        <div className="mt-6 grid gap-5 xl:grid-cols-2">
-                            {filteredAttendanceHistory.map(
-                                (item) => {
-                                    const MethodIcon =
-                                        getCheckInMethodIcon(
-                                            item
-                                                .attendance
-                                                .method,
-                                        );
-
-                                    const attendanceStatus =
-                                        normalizeStatus(
-                                            item
-                                                .attendance
-                                                .status,
-                                        );
-
-                                    return (
-                                        <article
-                                            key={
+                        <>
+                            {/* LIST */}
+                            <div className="mt-6 space-y-4">
+                                {paginatedAttendanceHistory.map(
+                                    (
+                                        item,
+                                    ) => {
+                                        const MethodIcon =
+                                            getCheckInMethodIcon(
                                                 item
                                                     .attendance
-                                                    .id
+                                                    .method,
+                                            );
+
+                                        const attendanceStatus =
+                                            normalizeStatus(
+                                                item
+                                                    .attendance
+                                                    .status,
+                                            );
+
+                                        return (
+                                            <article
+                                                key={
+                                                    item
+                                                        .attendance
+                                                        .id
+                                                }
+                                                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                                            >
+                                                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                                                    {/* EVENT INFORMATION */}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h3 className="text-lg font-semibold text-slate-950">
+                                                                {
+                                                                    item
+                                                                        .event
+                                                                        .title
+                                                                }
+                                                            </h3>
+
+                                                            <span
+                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(
+                                                                    item
+                                                                        .attendance
+                                                                        .status,
+                                                                )}`}
+                                                            >
+                                                                {getAttendanceStatusLabel(
+                                                                    item
+                                                                        .attendance
+                                                                        .status,
+                                                                )}
+                                                            </span>
+
+                                                            <span
+                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
+                                                                    item
+                                                                        .event
+                                                                        .status,
+                                                                )}`}
+                                                            >
+                                                                {getEventStatusLabel(
+                                                                    item
+                                                                        .event
+                                                                        .status,
+                                                                )}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* MUNICIPALITY + VENUE */}
+                                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+                                                            <span className="font-medium">
+                                                                {
+                                                                    item
+                                                                        .assignment
+                                                                        .municipality
+                                                                }
+                                                            </span>
+
+                                                            <span className="inline-flex items-center gap-1.5">
+                                                                <MapPin
+                                                                    className="size-4 shrink-0"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <span className="font-medium">
+                                                                    {item
+                                                                        .venue
+                                                                        ?.venue_name ||
+                                                                        "Venue not assigned"}
+                                                                </span>
+                                                            </span>
+                                                        </div>
+
+                                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                                                            {item
+                                                                .event
+                                                                .description ||
+                                                                "No event description provided."}
+                                                        </p>
+
+                                                        {item
+                                                            .assignment
+                                                            .local_instructions && (
+                                                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                                                                    Local
+                                                                    Instructions
+                                                                </p>
+
+                                                                <p className="mt-1 text-sm leading-6 text-amber-900">
+                                                                    {
+                                                                        item
+                                                                            .assignment
+                                                                            .local_instructions
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* EVENT + CHECK-IN DETAILS */}
+                                                    <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[500px]">
+                                                        <div>
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                Event
+                                                                Starts
+                                                            </p>
+
+                                                            <p className="mt-1 font-semibold text-slate-800">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .event
+                                                                        .start_at,
+                                                                )}
+                                                            </p>
+                                                        </div>
+
+                                                        <div>
+                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                Event
+                                                                Ends
+                                                            </p>
+
+                                                            <p className="mt-1 font-semibold text-slate-800">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .event
+                                                                        .end_at,
+                                                                )}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="border-t border-slate-200 pt-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <MethodIcon
+                                                                    className="size-4 text-slate-500"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                    Check-in
+                                                                    Method
+                                                                </p>
+                                                            </div>
+
+                                                            <p className="mt-1 font-semibold text-slate-800">
+                                                                {getCheckInMethodLabel(
+                                                                    item
+                                                                        .attendance
+                                                                        .method,
+                                                                )}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="border-t border-slate-200 pt-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock3
+                                                                    className="size-4 text-slate-500"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                                                    Check-in
+                                                                    Time
+                                                                </p>
+                                                            </div>
+
+                                                            <p className="mt-1 font-semibold text-slate-800">
+                                                                {formatDateTime(
+                                                                    item
+                                                                        .attendance
+                                                                        .checked_in_at,
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* RESULT */}
+                                                    <div className="shrink-0 xl:w-[230px]">
+                                                        {attendanceStatus ===
+                                                            "present" && (
+                                                            <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+                                                                <CheckCircle2
+                                                                    className="mt-0.5 size-5 shrink-0 text-green-700"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-green-900">
+                                                                        Attendance
+                                                                        Confirmed
+                                                                    </p>
+
+                                                                    <p className="mt-1 text-xs leading-5 text-green-700">
+                                                                        Your
+                                                                        attendance
+                                                                        was
+                                                                        successfully
+                                                                        recorded.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {attendanceStatus ===
+                                                            "absent" && (
+                                                            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                                                                <UserX
+                                                                    className="mt-0.5 size-5 shrink-0 text-red-700"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-red-900">
+                                                                        Marked
+                                                                        Absent
+                                                                    </p>
+
+                                                                    <p className="mt-1 text-xs leading-5 text-red-700">
+                                                                        No
+                                                                        successful
+                                                                        check-in
+                                                                        was
+                                                                        recorded.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {attendanceStatus ===
+                                                            "pending" && (
+                                                            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                                                <Clock3
+                                                                    className="mt-0.5 size-5 shrink-0 text-amber-700"
+                                                                    aria-hidden="true"
+                                                                />
+
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-amber-900">
+                                                                        Attendance
+                                                                        Pending
+                                                                    </p>
+
+                                                                    <p className="mt-1 text-xs leading-5 text-amber-700">
+                                                                        Waiting
+                                                                        for
+                                                                        check-in
+                                                                        or event
+                                                                        completion.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        );
+                                    },
+                                )}
+                            </div>
+
+                            {/* PAGINATION */}
+                            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-slate-500">
+                                    Showing{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            firstVisibleRecord
+                                        }
+                                    </span>
+                                    {" - "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            lastVisibleRecord
+                                        }
+                                    </span>{" "}
+                                    of{" "}
+                                    <span className="font-semibold text-slate-700">
+                                        {
+                                            filteredAttendanceHistory.length
+                                        }
+                                    </span>{" "}
+                                    records
+                                </p>
+
+                                {totalPages >
+                                    1 && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                changePage(
+                                                    currentPage -
+                                                        1,
+                                                )
                                             }
-                                            className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                                            disabled={
+                                                currentPage ===
+                                                1
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
-                                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <h3 className="text-lg font-semibold text-slate-950">
-                                                        {
-                                                            item
-                                                                .event
-                                                                .title
-                                                        }
-                                                    </h3>
+                                            Previous
+                                        </button>
 
-                                                    <p className="mt-1 text-sm text-slate-500">
-                                                        {
-                                                            item
-                                                                .assignment
-                                                                .municipality
-                                                        }
-                                                    </p>
-                                                </div>
+                                        {Array.from(
+                                            {
+                                                length:
+                                                    totalPages,
+                                            },
+                                            (
+                                                _,
+                                                index,
+                                            ) => {
+                                                const pageNumber =
+                                                    index +
+                                                    1;
 
-                                                <div className="flex flex-wrap gap-2">
-                                                    <span
-                                                        className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(
-                                                            item
-                                                                .attendance
-                                                                .status,
-                                                        )}`}
+                                                return (
+                                                    <button
+                                                        key={
+                                                            pageNumber
+                                                        }
+                                                        type="button"
+                                                        onClick={() =>
+                                                            changePage(
+                                                                pageNumber,
+                                                            )
+                                                        }
+                                                        aria-current={
+                                                            currentPage ===
+                                                            pageNumber
+                                                                ? "page"
+                                                                : undefined
+                                                        }
+                                                        className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                                                            currentPage ===
+                                                            pageNumber
+                                                                ? "bg-slate-950 text-white"
+                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                                        }`}
                                                     >
-                                                        {getAttendanceStatusLabel(
-                                                            item
-                                                                .attendance
-                                                                .status,
-                                                        )}
-                                                    </span>
-
-                                                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                                                        {getEventStatusLabel(
-                                                            item
-                                                                .event
-                                                                .status,
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <p className="mt-3 text-sm leading-6 text-slate-600">
-                                                {item
-                                                    .event
-                                                    .description ||
-                                                    "No event description provided."}
-                                            </p>
-
-                                            <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                        Event
-                                                        Starts
-                                                    </p>
-
-                                                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                        {formatDateTime(
-                                                            item
-                                                                .event
-                                                                .start_at,
-                                                        )}
-                                                    </p>
-                                                </div>
-
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                        Event
-                                                        Ends
-                                                    </p>
-
-                                                    <p className="mt-1 text-sm font-semibold text-slate-800">
-                                                        {formatDateTime(
-                                                            item
-                                                                .event
-                                                                .end_at,
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {item
-                                                .assignment
-                                                .local_instructions && (
-                                                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                        Local
-                                                        Instructions
-                                                    </p>
-
-                                                    <p className="mt-1 text-sm leading-6 text-amber-900">
                                                         {
-                                                            item
-                                                                .assignment
-                                                                .local_instructions
+                                                            pageNumber
                                                         }
-                                                    </p>
-                                                </div>
-                                            )}
+                                                    </button>
+                                                );
+                                            },
+                                        )}
 
-                                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                                <div className="rounded-xl border border-slate-200 p-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <MethodIcon
-                                                            className="size-4 text-slate-500"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                            Check-in
-                                                            Method
-                                                        </p>
-                                                    </div>
-
-                                                    <p className="mt-2 text-sm font-semibold text-slate-800">
-                                                        {getCheckInMethodLabel(
-                                                            item
-                                                                .attendance
-                                                                .method,
-                                                        )}
-                                                    </p>
-                                                </div>
-
-                                                <div className="rounded-xl border border-slate-200 p-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock3
-                                                            className="size-4 text-slate-500"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                            Check-in
-                                                            Time
-                                                        </p>
-                                                    </div>
-
-                                                    <p className="mt-2 text-sm font-semibold text-slate-800">
-                                                        {formatDateTime(
-                                                            item
-                                                                .attendance
-                                                                .checked_in_at,
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-auto pt-5">
-                                                {attendanceStatus ===
-                                                    "present" && (
-                                                    <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-                                                        <CheckCircle2
-                                                            className="mt-0.5 size-5 shrink-0 text-green-700"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-green-900">
-                                                                Attendance
-                                                                Confirmed
-                                                            </p>
-
-                                                            <p className="mt-1 text-xs leading-5 text-green-700">
-                                                                Your
-                                                                attendance
-                                                                was
-                                                                successfully
-                                                                recorded
-                                                                for
-                                                                this
-                                                                event.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {attendanceStatus ===
-                                                    "absent" && (
-                                                    <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                                                        <UserX
-                                                            className="mt-0.5 size-5 shrink-0 text-red-700"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-red-900">
-                                                                Marked
-                                                                Absent
-                                                            </p>
-
-                                                            <p className="mt-1 text-xs leading-5 text-red-700">
-                                                                No
-                                                                successful
-                                                                check-in
-                                                                was
-                                                                recorded
-                                                                before
-                                                                the
-                                                                event
-                                                                ended.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {attendanceStatus ===
-                                                    "pending" && (
-                                                    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                        <Clock3
-                                                            className="mt-0.5 size-5 shrink-0 text-amber-700"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-amber-900">
-                                                                Attendance
-                                                                Pending
-                                                            </p>
-
-                                                            <p className="mt-1 text-xs leading-5 text-amber-700">
-                                                                Your
-                                                                attendance
-                                                                result
-                                                                has
-                                                                not
-                                                                yet
-                                                                been
-                                                                finalized.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </article>
-                                    );
-                                },
-                            )}
-                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                changePage(
+                                                    currentPage +
+                                                        1,
+                                                )
+                                            }
+                                            disabled={
+                                                currentPage ===
+                                                totalPages
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                 </section>
             </div>

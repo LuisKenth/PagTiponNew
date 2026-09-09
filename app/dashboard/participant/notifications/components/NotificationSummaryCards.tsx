@@ -2,6 +2,7 @@ import {
     Bell,
     BellRing,
     CalendarDays,
+    MailOpen,
     TicketCheck,
     UserCheck,
 } from "lucide-react";
@@ -18,7 +19,8 @@ export default function NotificationSummaryCards({
     counts,
 }: NotificationSummaryCardsProps) {
     const eventNotices =
-        counts.eventUpdates + counts.cancellations;
+        counts.eventUpdates +
+        counts.cancellations;
 
     const cards = [
         {
@@ -34,6 +36,13 @@ export default function NotificationSummaryCards({
             icon: BellRing,
             iconClasses:
                 "bg-blue-50 text-blue-700",
+        },
+        {
+            label: "Invitations",
+            value: counts.invitations,
+            icon: MailOpen,
+            iconClasses:
+                "bg-sky-50 text-sky-700",
         },
         {
             label: "Registrations",
@@ -59,7 +68,7 @@ export default function NotificationSummaryCards({
     ];
 
     return (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {cards.map((card) => {
                 const Icon = card.icon;
 
@@ -68,9 +77,9 @@ export default function NotificationSummaryCards({
                         key={card.label}
                         className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
                     >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-slate-500">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className="truncate text-sm text-slate-500">
                                     {card.label}
                                 </p>
 
@@ -82,7 +91,7 @@ export default function NotificationSummaryCards({
                             </div>
 
                             <div
-                                className={`flex size-11 items-center justify-center rounded-xl ${card.iconClasses}`}
+                                className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${card.iconClasses}`}
                             >
                                 <Icon
                                     className="size-5"

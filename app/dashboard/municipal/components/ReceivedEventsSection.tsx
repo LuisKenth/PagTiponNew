@@ -14,13 +14,17 @@ import {
   Inbox,
 } from "lucide-react";
 
-import type { ReceivedEvent } from "../types/municipalDashboard";
+import type {
+  MunicipalVenue,
+  ReceivedEvent,
+} from "../types/municipalDashboard";
 
 import MunicipalDashboardLoading from "./MunicipalDashboardLoading";
 import ReceivedEventCard from "./ReceivedEventCard";
 
 type ReceivedEventsSectionProps = {
   events: ReceivedEvent[];
+  venues: MunicipalVenue[];
   loading: boolean;
   highlightedEventId?: string | null;
   onPrepare: (item: ReceivedEvent) => void;
@@ -30,6 +34,7 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20];
 
 export default function ReceivedEventsSection({
   events,
+  venues,
   loading,
   highlightedEventId = null,
   onPrepare,
@@ -205,8 +210,8 @@ export default function ReceivedEventsSection({
             </h2>
 
             <p className="mt-1 text-sm leading-5 text-slate-500">
-              Review event details, update local
-              preparation, and control participant
+              Review event details, assigned local
+              venues, preparation status, and participant
               registration.
             </p>
           </div>
@@ -275,6 +280,7 @@ export default function ReceivedEventsSection({
                   >
                     <ReceivedEventCard
                       item={item}
+                      venues={venues}
                       onPrepare={
                         onPrepare
                       }
