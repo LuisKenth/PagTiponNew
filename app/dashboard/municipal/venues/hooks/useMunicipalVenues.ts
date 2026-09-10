@@ -14,17 +14,45 @@ import type {
   MunicipalVenue,
   MunicipalVenueProfile,
   VenueFeedback,
+  VenueStatus,
 } from "../types/municipalVenues";
 
 const DEFAULT_PAGE_SIZE = 5;
 
+type VenueDatabaseRow = {
+  id: string;
+  venue_name: string;
+  municipality: string;
+  capacity: number | null;
+  status: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 function normalizeValue(
-  value: string | number | null | undefined,
+  value:
+    | string
+    | number
+    | null
+    | undefined,
 ) {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ")
     .toLowerCase();
+}
+
+function normalizeVenueStatus(
+  value:
+    | string
+    | null
+    | undefined,
+): VenueStatus {
+  return normalizeValue(value) ===
+    "inactive"
+    ? "inactive"
+    : "active";
 }
 
 function cleanVenueNameValue(
@@ -136,8 +164,13 @@ export default function useMunicipalVenues() {
   ] = useState<string | null>(null);
 
   const [feedback, setFeedback] =
-    useState<VenueFeedback | null>(null);
+    useState<VenueFeedback | null>(
+      null,
+    );
 
+  /*
+   * LOAD MUNICIPAL VENUES
+   */
   const fetchVenues = useCallback(
     async (
       showRefreshingState = false,
@@ -170,11 +203,16 @@ export default function useMunicipalVenues() {
           error: profileError,
         } = await supabase
           .from("profiles")
-          .select("role, municipality")
+          .select(
+            "role, municipality",
+          )
           .eq("id", user.id)
           .single<MunicipalVenueProfile>();
 
-        if (profileError || !profile) {
+        if (
+          profileError ||
+          !profile
+        ) {
           throw new Error(
             profileError?.message ||
             "Profile not found.",
@@ -200,13 +238,25 @@ export default function useMunicipalVenues() {
           profile.municipality,
         );
 
+        /*
+         * status is now included.
+         */
         const {
           data,
           error,
         } = await supabase
           .from("venues")
           .select(
-            "id, venue_name, municipality, capacity, created_by, created_at, updated_at",
+            `
+              id,
+              venue_name,
+              municipality,
+              capacity,
+              status,
+              created_by,
+              created_at,
+              updated_at
+            `,
           )
           .eq(
             "municipality",
@@ -220,10 +270,47 @@ export default function useMunicipalVenues() {
           throw error;
         }
 
-        setVenues(
+        const venueRows =
           (data ??
-            []) as MunicipalVenue[],
-        );
+            []) as VenueDatabaseRow[];
+
+        /*
+         * Normalize DB status defensively.
+         *
+         * Anything other than explicit
+         * "inactive" is treated as active.
+         */
+        const mappedVenues =
+          venueRows.map<MunicipalVenue>(
+            (venue) => ({
+              id: venue.id,
+
+              venue_name:
+                venue.venue_name,
+
+              municipality:
+                venue.municipality,
+
+              capacity:
+                venue.capacity,
+
+              status:
+                normalizeVenueStatus(
+                  venue.status,
+                ),
+
+              created_by:
+                venue.created_by,
+
+              created_at:
+                venue.created_at,
+
+              updated_at:
+                venue.updated_at,
+            }),
+          );
+
+        setVenues(mappedVenues);
       } catch (error) {
         console.error(
           "Municipal venues error:",
@@ -233,9 +320,10 @@ export default function useMunicipalVenues() {
         setVenues([]);
 
         setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to load municipal venues.",
+          getErrorMessage(
+            error,
+            "Unable to load municipal venues.",
+          ),
         );
       } finally {
         setLoading(false);
@@ -249,6 +337,12 @@ export default function useMunicipalVenues() {
     void fetchVenues();
   }, [fetchVenues]);
 
+  /*
+   * SEARCH
+   *
+   * Status can now also be searched:
+   * active / inactive.
+   */
   const filteredVenues = useMemo(
     () => {
       const normalizedSearch =
@@ -258,19 +352,27 @@ export default function useMunicipalVenues() {
         return venues;
       }
 
-      return venues.filter((venue) => {
-        return [
-          venue.venue_name,
-          venue.municipality,
-          venue.capacity,
-        ].some((value) =>
-          normalizeValue(value).includes(
-            normalizedSearch,
-          ),
-        );
-      });
+      return venues.filter(
+        (venue) => {
+          return [
+            venue.venue_name,
+            venue.municipality,
+            venue.capacity,
+            venue.status,
+          ].some((value) =>
+            normalizeValue(
+              value,
+            ).includes(
+              normalizedSearch,
+            ),
+          );
+        },
+      );
     },
-    [searchTerm, venues],
+    [
+      searchTerm,
+      venues,
+    ],
   );
 
   const totalCapacity = useMemo(
@@ -325,7 +427,10 @@ export default function useMunicipalVenues() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, pageSize]);
+  }, [
+    searchTerm,
+    pageSize,
+  ]);
 
   useEffect(() => {
     setCurrentPage(
@@ -343,6 +448,9 @@ export default function useMunicipalVenues() {
     setEditingVenue(null);
   }
 
+  /*
+   * START EDITING
+   */
   function handleEdit(
     venue: MunicipalVenue,
   ) {
@@ -354,7 +462,9 @@ export default function useMunicipalVenues() {
 
     setCapacity(
       venue.capacity
-        ? String(venue.capacity)
+        ? String(
+          venue.capacity,
+        )
         : "",
     );
 
@@ -371,6 +481,9 @@ export default function useMunicipalVenues() {
     setFeedback(null);
   }
 
+  /*
+   * ADD / UPDATE VENUE
+   */
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -383,10 +496,33 @@ export default function useMunicipalVenues() {
     setFeedback(null);
 
     const cleanVenueName =
-      cleanVenueNameValue(venueName);
+      cleanVenueNameValue(
+        venueName,
+      );
 
     const capacityNumber =
       Number(capacity);
+
+    /*
+     * Read the new Status field
+     * directly from VenueForm.
+     *
+     * This means your existing page.tsx
+     * does not need another prop/state.
+     */
+    const formData =
+      new FormData(
+        event.currentTarget,
+      );
+
+    const selectedStatus =
+      normalizeVenueStatus(
+        String(
+          formData.get(
+            "status",
+          ) ?? "active",
+        ),
+      );
 
     if (!cleanVenueName) {
       setFeedback({
@@ -400,7 +536,9 @@ export default function useMunicipalVenues() {
 
     if (
       !capacity ||
-      Number.isNaN(capacityNumber) ||
+      Number.isNaN(
+        capacityNumber,
+      ) ||
       !Number.isInteger(
         capacityNumber,
       ) ||
@@ -415,7 +553,10 @@ export default function useMunicipalVenues() {
       return;
     }
 
-    if (!municipality || !userId) {
+    if (
+      !municipality ||
+      !userId
+    ) {
       setFeedback({
         type: "error",
         message:
@@ -425,8 +566,14 @@ export default function useMunicipalVenues() {
       return;
     }
 
+    /*
+     * Existing client-side duplicate
+     * venue-name validation.
+     */
     const normalizedVenueName =
-      normalizeValue(cleanVenueName);
+      normalizeValue(
+        cleanVenueName,
+      );
 
     const duplicateVenue =
       venues.find((venue) => {
@@ -434,21 +581,25 @@ export default function useMunicipalVenues() {
           editingVenue?.id ===
           venue.id;
 
-        if (isCurrentEditingVenue) {
+        if (
+          isCurrentEditingVenue
+        ) {
           return false;
         }
 
         return (
           normalizeValue(
             venue.venue_name,
-          ) === normalizedVenueName
+          ) ===
+          normalizedVenueName
         );
       });
 
     if (duplicateVenue) {
       setFeedback({
         type: "error",
-        message: `A venue with this name already exists in ${municipality}.`,
+        message:
+          `A venue with this name already exists in ${municipality}.`,
       });
 
       return;
@@ -458,16 +609,28 @@ export default function useMunicipalVenues() {
 
     try {
       if (editingVenue) {
+        /*
+         * UPDATE VENUE
+         *
+         * Status is saved together with
+         * venue name and capacity.
+         */
         const { error } =
           await supabase
             .from("venues")
             .update({
               venue_name:
                 cleanVenueName,
+
               capacity:
                 capacityNumber,
+
+              status:
+                selectedStatus,
+
               updated_at:
-                new Date().toISOString(),
+                new Date()
+                  .toISOString(),
             })
             .eq(
               "id",
@@ -482,27 +645,49 @@ export default function useMunicipalVenues() {
           throw error;
         }
 
+        const statusText =
+          selectedStatus ===
+            "active"
+            ? "active"
+            : "inactive";
+
         resetForm();
 
-        await fetchVenues(true);
+        await fetchVenues(
+          true,
+        );
 
         setFeedback({
           type: "success",
           action: "updated",
           message:
-            "Venue updated successfully.",
+            `Venue updated successfully and is now ${statusText}.`,
         });
       } else {
+        /*
+         * ADD VENUE
+         *
+         * New venue normally defaults
+         * to Active, but we also save
+         * the selected form value.
+         */
         const { error } =
           await supabase
             .from("venues")
             .insert({
               venue_name:
                 cleanVenueName,
+
               municipality,
+
               capacity:
                 capacityNumber,
-              created_by: userId,
+
+              status:
+                selectedStatus,
+
+              created_by:
+                userId,
             });
 
         if (error) {
@@ -511,7 +696,9 @@ export default function useMunicipalVenues() {
 
         resetForm();
 
-        await fetchVenues(true);
+        await fetchVenues(
+          true,
+        );
 
         setFeedback({
           type: "success",
@@ -527,23 +714,31 @@ export default function useMunicipalVenues() {
       );
 
       const isDuplicateError =
-        getDatabaseErrorCode(error) ===
-        "23505";
+        getDatabaseErrorCode(
+          error,
+        ) === "23505";
 
       setFeedback({
         type: "error",
-        message: isDuplicateError
-          ? `A venue with this name already exists in ${municipality}.`
-          : getErrorMessage(
-            error,
-            "Unable to save the venue.",
-          ),
+        message:
+          isDuplicateError
+            ? `A venue with this name already exists in ${municipality}.`
+            : getErrorMessage(
+              error,
+              "Unable to save the venue.",
+            ),
       });
     } finally {
       setSaving(false);
     }
   }
 
+  /*
+   * DELETE
+   *
+   * Safe-delete protection will be
+   * added/tested separately afterward.
+   */
   async function handleDelete(
     venue: MunicipalVenue,
   ) {
@@ -583,7 +778,10 @@ export default function useMunicipalVenues() {
         await supabase
           .from("venues")
           .delete()
-          .eq("id", venue.id)
+          .eq(
+            "id",
+            venue.id,
+          )
           .eq(
             "municipality",
             municipality,
@@ -600,7 +798,9 @@ export default function useMunicipalVenues() {
         resetForm();
       }
 
-      await fetchVenues(true);
+      await fetchVenues(
+        true,
+      );
 
       setFeedback({
         type: "success",
@@ -609,6 +809,46 @@ export default function useMunicipalVenues() {
           "Venue deleted successfully.",
       });
     } catch (error) {
+      const errorCode =
+        getDatabaseErrorCode(error);
+
+      const errorMessage =
+        getErrorMessage(
+          error,
+          "Unable to delete the venue.",
+        );
+
+      const normalizedMessage =
+        normalizeValue(
+          errorMessage,
+        );
+
+      if (
+        errorCode === "P0001" &&
+        normalizedMessage.includes(
+          "venue deletion blocked",
+        )
+      ) {
+        const friendlyMessage =
+          `"${venue.venue_name}" cannot be deleted because it is currently assigned to an upcoming or ongoing event. Assign another venue to that event or wait until the event has ended.`;
+
+        console.warn(
+          "Venue deletion prevented:",
+          errorMessage,
+        );
+
+        setFeedback({
+          type: "error",
+          message: friendlyMessage,
+        });
+
+        window.alert(
+          `Cannot Delete Venue\n\n${friendlyMessage}`,
+        );
+
+        return;
+      }
+
       console.error(
         "Delete venue error:",
         error,
@@ -617,12 +857,15 @@ export default function useMunicipalVenues() {
       setFeedback({
         type: "error",
         message:
-          error instanceof Error
-            ? error.message
-            : "Unable to delete the venue.",
+          getErrorMessage(
+            error,
+            "Unable to delete the venue.",
+          ),
       });
     } finally {
-      setDeletingVenueId(null);
+      setDeletingVenueId(
+        null,
+      );
     }
   }
 
@@ -660,7 +903,10 @@ export default function useMunicipalVenues() {
 
   async function refreshVenues() {
     setFeedback(null);
-    await fetchVenues(true);
+
+    await fetchVenues(
+      true,
+    );
   }
 
   return {

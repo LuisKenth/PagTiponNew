@@ -20,6 +20,15 @@ export type MunicipalVenue = {
   venue_name: string;
   municipality: string | null;
   capacity: number | null;
+
+  /*
+   * Venue availability.
+   *
+   * Current allowed database values:
+   * - active
+   * - inactive
+   */
+  status: string | null;
 };
 
 export type ReceivedEvent = {

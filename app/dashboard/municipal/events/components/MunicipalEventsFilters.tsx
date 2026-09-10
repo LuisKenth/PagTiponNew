@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 import type {
+  EventStatusFilter,
   RegistrationFilter,
   SortOption,
   StatusFilter,
@@ -13,32 +14,46 @@ import type {
 type MunicipalEventsFiltersProps = {
   searchTerm: string;
   statusFilter: StatusFilter;
+  eventStatusFilter: EventStatusFilter;
   registrationFilter: RegistrationFilter;
   sortOption: SortOption;
   resultCount: number;
   hasActiveFilters: boolean;
-  onSearchChange: (value: string) => void;
+
+  onSearchChange: (
+    value: string,
+  ) => void;
+
   onStatusFilterChange: (
     value: StatusFilter,
   ) => void;
+
+  onEventStatusFilterChange: (
+    value: EventStatusFilter,
+  ) => void;
+
   onRegistrationFilterChange: (
     value: RegistrationFilter,
   ) => void;
+
   onSortChange: (
     value: SortOption,
   ) => void;
+
   onClearFilters: () => void;
 };
 
 export default function MunicipalEventsFilters({
   searchTerm,
   statusFilter,
+  eventStatusFilter,
   registrationFilter,
   sortOption,
   resultCount,
   hasActiveFilters,
   onSearchChange,
   onStatusFilterChange,
+  onEventStatusFilterChange,
   onRegistrationFilterChange,
   onSortChange,
   onClearFilters,
@@ -62,8 +77,8 @@ export default function MunicipalEventsFilters({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(12rem,0.65fr)_minmax(12rem,0.65fr)_minmax(13rem,0.75fr)]">
-        <label className="block">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <label className="block md:col-span-2 xl:col-span-1">
           <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
             Search Events
           </span>
@@ -79,7 +94,7 @@ export default function MunicipalEventsFilters({
                   event.target.value,
                 )
               }
-              placeholder="Search title, description, memo..."
+              placeholder="Search events..."
               className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             />
           </div>
@@ -103,15 +118,52 @@ export default function MunicipalEventsFilters({
             <option value="all">
               All Statuses
             </option>
+
             <option value="pending">
               Pending
             </option>
+
             <option value="preparing">
               Preparing
             </option>
+
             <option value="prepared">
               Prepared
             </option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            Event Status
+          </span>
+
+          <select
+            value={eventStatusFilter}
+            onChange={(event) =>
+              onEventStatusFilterChange(
+                event.target
+                  .value as EventStatusFilter,
+              )
+            }
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+          >
+            <option value="all">
+              All Events
+            </option>
+
+            <option value="upcoming">
+              Upcoming
+            </option>
+
+            <option value="ongoing">
+              Ongoing
+            </option>
+
+            <option value="completed">
+              Completed
+            </option>
+
             <option value="cancelled">
               Cancelled
             </option>
@@ -136,9 +188,11 @@ export default function MunicipalEventsFilters({
             <option value="all">
               All Registration
             </option>
+
             <option value="open">
               Registration Open
             </option>
+
             <option value="closed">
               Registration Closed
             </option>
@@ -163,15 +217,19 @@ export default function MunicipalEventsFilters({
             <option value="newest_received">
               Newest Received
             </option>
+
             <option value="oldest_received">
               Oldest Received
             </option>
+
             <option value="schedule_soonest">
               Event Schedule: Soonest
             </option>
+
             <option value="schedule_latest">
               Event Schedule: Latest
             </option>
+
             <option value="title_asc">
               Event Title: A–Z
             </option>
@@ -187,7 +245,10 @@ export default function MunicipalEventsFilters({
               {resultCount}
             </span>{" "}
             matching event
-            {resultCount === 1 ? "" : "s"}.
+            {resultCount === 1
+              ? ""
+              : "s"}
+            .
           </p>
 
           <button

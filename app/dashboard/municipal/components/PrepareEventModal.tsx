@@ -28,21 +28,14 @@ import type {
 
 type PrepareEventModalProps = {
   selectedEvent: ReceivedEvent | null;
-
   preparationStatus: PreparationStatus;
-
   localInstructions: string;
-
   registrationOpen: boolean;
-
   saving: boolean;
 
   venues: MunicipalVenue[];
-
   venuesLoading: boolean;
-
   selectedVenueId: string;
-
   venueError: string | null;
 
   onStatusChange: (
@@ -63,7 +56,9 @@ type PrepareEventModalProps = {
 
   onClose: () => void;
 
-  onSave: () => void | Promise<void>;
+  onSave: () =>
+    | void
+    | Promise<void>;
 };
 
 type StatusOption = {
@@ -112,7 +107,10 @@ const statusOptions: StatusOption[] = [
 ];
 
 function formatEventDateTime(
-  value: string | null | undefined,
+  value:
+    | string
+    | null
+    | undefined,
 ) {
   if (!value) {
     return "Schedule not available";
@@ -120,7 +118,11 @@ function formatEventDateTime(
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return "Schedule not available";
   }
 
@@ -146,6 +148,27 @@ function formatCapacity(
   return `${capacity.toLocaleString()} capacity`;
 }
 
+function normalizeVenueStatus(
+  value:
+    | string
+    | null
+    | undefined,
+) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function isVenueActive(
+  venue: MunicipalVenue,
+) {
+  return (
+    normalizeVenueStatus(
+      venue.status,
+    ) === "active"
+  );
+}
+
 export default function PrepareEventModal({
   selectedEvent,
   preparationStatus,
@@ -165,33 +188,77 @@ export default function PrepareEventModal({
   onClose,
   onSave,
 }: PrepareEventModalProps) {
-  const municipalStatus = String(
-    selectedEvent?.municipal_status ?? "",
-  )
-    .trim()
-    .toLowerCase();
+  const municipalStatus =
+    String(
+      selectedEvent
+        ?.municipal_status ??
+        "",
+    )
+      .trim()
+      .toLowerCase();
 
-  const provincialStatus = String(
-    selectedEvent?.event?.status ?? "",
-  )
-    .trim()
-    .toLowerCase();
+  const provincialStatus =
+    String(
+      selectedEvent
+        ?.event
+        ?.status ??
+        "",
+    )
+      .trim()
+      .toLowerCase();
 
+  /*
+   * EVENT LIFECYCLE
+   *
+   * Only upcoming events remain editable.
+   * Ongoing, completed, and cancelled events
+   * are view-only.
+   */
   const isCancelled =
-    municipalStatus === "cancelled" ||
-    provincialStatus === "cancelled";
+    municipalStatus ===
+      "cancelled" ||
+    provincialStatus ===
+      "cancelled";
+
+  const isOngoing =
+    provincialStatus ===
+    "ongoing";
+
+  const isCompleted =
+    provincialStatus ===
+    "completed";
+
+  const isLocked =
+    isCancelled ||
+    isOngoing ||
+    isCompleted;
 
   const controlsDisabled =
-    saving || isCancelled;
+    saving ||
+    isLocked;
 
   const isPrepared =
-    preparationStatus === "prepared";
+    preparationStatus ===
+    "prepared";
 
   const selectedVenue =
     venues.find(
       (venue) =>
-        venue.id === selectedVenueId,
+        venue.id ===
+        selectedVenueId,
     ) ?? null;
+
+  const selectedVenueIsInactive =
+    selectedVenue
+      ? !isVenueActive(
+          selectedVenue,
+        )
+      : false;
+
+  const activeVenueCount =
+    venues.filter(
+      isVenueActive,
+    ).length;
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -199,7 +266,8 @@ export default function PrepareEventModal({
     }
 
     const previousOverflow =
-      document.body.style.overflow;
+      document.body.style
+        .overflow;
 
     document.body.style.overflow =
       "hidden";
@@ -208,7 +276,8 @@ export default function PrepareEventModal({
       event: KeyboardEvent,
     ) {
       if (
-        event.key === "Escape" &&
+        event.key ===
+          "Escape" &&
         !saving
       ) {
         onClose();
@@ -248,15 +317,13 @@ export default function PrepareEventModal({
 
     onStatusChange(value);
 
-    /*
-     * Registration cannot remain open if the event
-     * is moved back from Prepared.
-     */
     if (
       value !== "prepared" &&
       registrationOpen
     ) {
-      onRegistrationChange(false);
+      onRegistrationChange(
+        false,
+      );
     }
   }
 
@@ -272,7 +339,9 @@ export default function PrepareEventModal({
       aria-modal="true"
       aria-labelledby="prepare-event-title"
       className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-sm"
-      onMouseDown={handleOverlayClick}
+      onMouseDown={
+        handleOverlayClick
+      }
     >
       <div className="flex min-h-full items-center justify-center py-4">
         <div
@@ -281,12 +350,16 @@ export default function PrepareEventModal({
             event.stopPropagation()
           }
         >
-          {/* Header */}
+          {/* HEADER */}
           <div
             className={`relative border-b px-5 py-5 sm:px-6 ${
               isCancelled
                 ? "border-red-200 bg-red-50"
-                : "border-slate-200 bg-white"
+                : isOngoing
+                  ? "border-amber-200 bg-amber-50"
+                  : isCompleted
+                    ? "border-slate-300 bg-slate-100"
+                    : "border-slate-200 bg-white"
             }`}
           >
             <div className="flex items-start gap-4 pr-10">
@@ -294,11 +367,17 @@ export default function PrepareEventModal({
                 className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
                   isCancelled
                     ? "bg-red-100 text-red-700"
-                    : "bg-slate-950 text-white"
+                    : isOngoing
+                      ? "bg-amber-100 text-amber-700"
+                      : isCompleted
+                        ? "bg-slate-200 text-slate-700"
+                        : "bg-slate-950 text-white"
                 }`}
               >
                 {isCancelled ? (
                   <Ban className="h-6 w-6" />
+                ) : isLocked ? (
+                  <LockKeyhole className="h-6 w-6" />
                 ) : (
                   <ClipboardList className="h-6 w-6" />
                 )}
@@ -309,7 +388,11 @@ export default function PrepareEventModal({
                   className={`text-xs font-bold uppercase tracking-[0.14em] ${
                     isCancelled
                       ? "text-red-500"
-                      : "text-slate-400"
+                      : isOngoing
+                        ? "text-amber-600"
+                        : isCompleted
+                          ? "text-slate-500"
+                          : "text-slate-400"
                   }`}
                 >
                   Municipal Event Assignment
@@ -320,24 +403,36 @@ export default function PrepareEventModal({
                   className={`mt-1 text-xl font-bold sm:text-2xl ${
                     isCancelled
                       ? "text-red-950"
-                      : "text-slate-950"
+                      : isOngoing
+                        ? "text-amber-950"
+                        : "text-slate-950"
                   }`}
                 >
                   {isCancelled
                     ? "Cancelled Event"
-                    : "Manage Event Preparation"}
+                    : isOngoing
+                      ? "Ongoing Event — View Only"
+                      : isCompleted
+                        ? "Completed Event — View Only"
+                        : "Manage Event Preparation"}
                 </h2>
 
                 <p
                   className={`mt-1 text-sm leading-6 ${
                     isCancelled
                       ? "text-red-700"
-                      : "text-slate-500"
+                      : isOngoing
+                        ? "text-amber-700"
+                        : "text-slate-500"
                   }`}
                 >
                   {isCancelled
-                    ? "This event is available for reference only. Preparation and registration controls are locked."
-                    : "Assign a local venue, update the preparation status, add instructions, and control participant registration."}
+                    ? "This event was cancelled. Existing municipal preparation information is retained for reference only."
+                    : isOngoing
+                      ? "This event is already ongoing. Municipal preparation details are now read-only."
+                      : isCompleted
+                        ? "This event has been completed. Municipal preparation details are retained for reference only."
+                        : "Assign a local venue, update the preparation status, add instructions, and control participant registration."}
                 </p>
               </div>
             </div>
@@ -350,7 +445,9 @@ export default function PrepareEventModal({
               className={`absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-50 ${
                 isCancelled
                   ? "text-red-500 hover:bg-red-100 hover:text-red-700"
-                  : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  : isOngoing
+                    ? "text-amber-600 hover:bg-amber-100 hover:text-amber-800"
+                    : "text-slate-400 hover:bg-slate-200 hover:text-slate-700"
               }`}
             >
               <X className="h-5 w-5" />
@@ -358,8 +455,7 @@ export default function PrepareEventModal({
           </div>
 
           <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-5 py-5 sm:px-6">
-
-            {/* Event information */}
+            {/* EVENT INFORMATION */}
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200">
@@ -372,16 +468,19 @@ export default function PrepareEventModal({
                   </p>
 
                   <p className="mt-1 break-words text-base font-bold text-slate-900">
-                    {selectedEvent.event
+                    {selectedEvent
+                      .event
                       ?.title ||
                       "Untitled Event"}
                   </p>
 
-                  {selectedEvent.event
+                  {selectedEvent
+                    .event
                     ?.description && (
                     <p className="mt-1 text-sm leading-6 text-slate-600">
                       {
-                        selectedEvent.event
+                        selectedEvent
+                          .event
                           .description
                       }
                     </p>
@@ -396,7 +495,8 @@ export default function PrepareEventModal({
                           Starts:
                         </span>{" "}
                         {formatEventDateTime(
-                          selectedEvent.event
+                          selectedEvent
+                            .event
                             ?.start_at,
                         )}
                       </p>
@@ -406,7 +506,8 @@ export default function PrepareEventModal({
                           Ends:
                         </span>{" "}
                         {formatEventDateTime(
-                          selectedEvent.event
+                          selectedEvent
+                            .event
                             ?.end_at,
                         )}
                       </p>
@@ -416,28 +517,64 @@ export default function PrepareEventModal({
               </div>
             </section>
 
-            {/* Cancellation warning */}
-            {isCancelled && (
-              <section className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+            {/* EVENT LIFECYCLE WARNING */}
+            {isLocked && (
+              <section
+                className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${
+                  isCancelled
+                    ? "border-red-200 bg-red-50"
+                    : isOngoing
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-slate-300 bg-slate-100"
+                }`}
+              >
+                <TriangleAlert
+                  className={`mt-0.5 h-5 w-5 shrink-0 ${
+                    isCancelled
+                      ? "text-red-700"
+                      : isOngoing
+                        ? "text-amber-700"
+                        : "text-slate-600"
+                  }`}
+                />
 
                 <div>
-                  <p className="text-sm font-bold text-red-900">
-                    Preparation and registration stopped
+                  <p
+                    className={`text-sm font-bold ${
+                      isCancelled
+                        ? "text-red-900"
+                        : isOngoing
+                          ? "text-amber-900"
+                          : "text-slate-900"
+                    }`}
+                  >
+                    {isCancelled
+                      ? "Event cancelled"
+                      : isOngoing
+                        ? "Event already ongoing"
+                        : "Event completed"}
                   </p>
 
-                  <p className="mt-1 text-sm leading-6 text-red-700">
-                    The provincial administrator
-                    cancelled this event. Existing
-                    preparation details are retained
-                    for reference and cannot be
-                    changed.
+                  <p
+                    className={`mt-1 text-sm leading-6 ${
+                      isCancelled
+                        ? "text-red-700"
+                        : isOngoing
+                          ? "text-amber-700"
+                          : "text-slate-600"
+                    }`}
+                  >
+                    {isCancelled
+                      ? "Municipal preparation and participant registration have been stopped. Existing preparation details are retained for reference."
+                      : isOngoing
+                        ? "The event has already started. Venue assignment, preparation status, local instructions, and registration controls can no longer be changed."
+                        : "The event has already ended. Existing municipal preparation details are retained for historical reference."}
                   </p>
                 </div>
               </section>
             )}
 
-            {/* Local venue */}
+            {/* LOCAL VENUE */}
             <section className="mt-5">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
@@ -450,9 +587,9 @@ export default function PrepareEventModal({
                   </h3>
 
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Assign a venue from your municipality.
-                    The system automatically prevents
-                    overlapping bookings.
+                    {isLocked
+                      ? "Review the venue previously assigned to this municipal event."
+                      : "Assign a venue from your municipality. The system automatically prevents overlapping bookings."}
                   </p>
                 </div>
               </div>
@@ -467,7 +604,9 @@ export default function PrepareEventModal({
 
                 <select
                   id="municipal-local-venue"
-                  value={selectedVenueId}
+                  value={
+                    selectedVenueId
+                  }
                   disabled={
                     controlsDisabled ||
                     venuesLoading
@@ -490,62 +629,126 @@ export default function PrepareEventModal({
                   </option>
 
                   {venues.map(
-                    (venue) => (
-                      <option
-                        key={venue.id}
-                        value={venue.id}
-                      >
-                        {venue.venue_name}
-                        {typeof venue.capacity ===
-                        "number"
-                          ? ` — Capacity: ${venue.capacity.toLocaleString()}`
-                          : ""}
-                      </option>
-                    ),
+                    (venue) => {
+                      const venueIsActive =
+                        isVenueActive(
+                          venue,
+                        );
+
+                      return (
+                        <option
+                          key={venue.id}
+                          value={venue.id}
+                          disabled={
+                            !venueIsActive
+                          }
+                        >
+                          {venue.venue_name}
+
+                          {!venueIsActive
+                            ? " (Inactive)"
+                            : ""}
+
+                          {typeof venue.capacity ===
+                          "number"
+                            ? ` — Capacity: ${venue.capacity.toLocaleString()}`
+                            : ""}
+                        </option>
+                      );
+                    },
                   )}
                 </select>
               </div>
 
+              {/* NO ACTIVE VENUES */}
               {!venuesLoading &&
-                venues.length === 0 &&
-                !isCancelled && (
+                activeVenueCount ===
+                  0 &&
+                !isLocked && (
                   <div className="mt-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                     <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
 
                     <div>
                       <p className="text-sm font-bold text-amber-900">
-                        No municipal venues available
+                        No active municipal
+                        venues available
                       </p>
 
                       <p className="mt-1 text-xs leading-5 text-amber-700">
-                        Add a venue in the Municipal
-                        Venues page before marking this
-                        event as Prepared.
+                        Add or activate a
+                        venue in the Municipal
+                        Venues page before
+                        marking this event as
+                        Prepared.
                       </p>
                     </div>
                   </div>
                 )}
 
+              {/* SELECTED VENUE INFO */}
               {selectedVenue && (
-                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                <div
+                  className={`mt-3 rounded-xl border p-4 ${
+                    selectedVenueIsInactive
+                      ? "border-red-200 bg-red-50"
+                      : "border-violet-200 bg-violet-50"
+                  }`}
+                >
                   <div className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" />
+                    {selectedVenueIsInactive ? (
+                      <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+                    ) : (
+                      <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" />
+                    )}
 
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-violet-950">
-                        {selectedVenue.venue_name}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p
+                          className={`text-sm font-bold ${
+                            selectedVenueIsInactive
+                              ? "text-red-950"
+                              : "text-violet-950"
+                          }`}
+                        >
+                          {
+                            selectedVenue
+                              .venue_name
+                          }
+                        </p>
 
-                      <p className="mt-1 text-xs text-violet-700">
+                        {selectedVenueIsInactive && (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-red-700">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        className={`mt-1 text-xs ${
+                          selectedVenueIsInactive
+                            ? "text-red-700"
+                            : "text-violet-700"
+                        }`}
+                      >
                         {formatCapacity(
-                          selectedVenue.capacity,
+                          selectedVenue
+                            .capacity,
                         )}
                       </p>
+
+                      {selectedVenueIsInactive && (
+                        <p className="mt-2 text-xs leading-5 text-red-700">
+                          {isLocked
+                            ? "This venue is currently inactive. The previous venue assignment is retained for reference."
+                            : "This venue can no longer be assigned. Please select an active venue before saving."}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
+              {/* VENUE ERROR */}
               {venueError && (
                 <div
                   role="alert"
@@ -561,12 +764,23 @@ export default function PrepareEventModal({
                           "venue schedule conflict",
                         )
                         ? "Venue Schedule Conflict"
-                        : "Venue Required"}
+                        : venueError
+                              .toLowerCase()
+                              .includes(
+                                "venue unavailable",
+                              ) ||
+                            venueError
+                              .toLowerCase()
+                              .includes(
+                                "inactive",
+                              )
+                          ? "Venue Unavailable"
+                          : "Venue Required"}
                     </p>
 
                     <p className="mt-1 text-sm leading-6 text-red-700">
                       {venueError.replace(
-                        /^Venue Schedule Conflict:\s*/i,
+                        /^(Venue Schedule Conflict|Venue Unavailable):\s*/i,
                         "",
                       )}
                     </p>
@@ -574,15 +788,14 @@ export default function PrepareEventModal({
                 </div>
               )}
 
-              {!isCancelled && (
-                <p className="mt-2 text-xs leading-5 text-slate-400">
-                  Venue selection is required before
-                  the event can be marked as Prepared.
-                </p>
-              )}
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {isLocked
+                  ? "The assigned venue is retained for reference and can no longer be changed."
+                  : "Venue selection is required before the event can be marked as Prepared. Inactive venues are shown for reference but cannot be selected."}
+              </p>
             </section>
 
-            {/* Preparation status */}
+            {/* PREPARATION STATUS */}
             <section className="mt-5">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
@@ -590,99 +803,98 @@ export default function PrepareEventModal({
                 </h3>
 
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Select the municipality&apos;s
-                  current preparation progress.
+                  {isLocked
+                    ? "Review the final recorded municipal preparation progress."
+                    : "Select the municipality's current preparation progress."}
                 </p>
               </div>
 
-              {isCancelled ? (
-                <div className="mt-3 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-700">
-                    <Ban className="h-5 w-5" />
-                  </div>
+              <div
+                role="radiogroup"
+                aria-label="Preparation status"
+                className="mt-3 grid gap-3 sm:grid-cols-3"
+              >
+                {statusOptions.map(
+                  (option) => {
+                    const Icon =
+                      option.icon;
 
-                  <div>
-                    <p className="text-sm font-bold text-red-800">
-                      Cancelled
-                    </p>
+                    const active =
+                      preparationStatus ===
+                      option.value;
 
-                    <p className="mt-0.5 text-xs text-red-600">
-                      Municipal preparation has
-                      been stopped.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  role="radiogroup"
-                  aria-label="Preparation status"
-                  className="mt-3 grid gap-3 sm:grid-cols-3"
-                >
-                  {statusOptions.map(
-                    (option) => {
-                      const Icon =
-                        option.icon;
-
-                      const active =
-                        preparationStatus ===
-                        option.value;
-
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          disabled={
-                            controlsDisabled
-                          }
-                          onClick={() =>
-                            handleStatusSelection(
-                              option.value,
-                            )
-                          }
-                          className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    return (
+                      <button
+                        key={
+                          option.value
+                        }
+                        type="button"
+                        role="radio"
+                        aria-checked={
+                          active
+                        }
+                        disabled={
+                          controlsDisabled
+                        }
+                        onClick={() =>
+                          handleStatusSelection(
+                            option.value,
+                          )
+                        }
+                        className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed ${
+                          active
+                            ? option.activeClass
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                        } ${
+                          isLocked
+                            ? "disabled:opacity-80"
+                            : "disabled:opacity-60"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg ${
                             active
-                              ? option.activeClass
-                              : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                              ? option.iconClass
+                              : "bg-slate-100 text-slate-500"
                           }`}
                         >
-                          <div
-                            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                              active
-                                ? option.iconClass
-                                : "bg-slate-100 text-slate-500"
+                          <Icon
+                            className={`h-4 w-4 ${
+                              option.value ===
+                                "preparing" &&
+                              active &&
+                              !isLocked
+                                ? "animate-spin"
+                                : ""
                             }`}
-                          >
-                            <Icon
-                              className={`h-4 w-4 ${
-                                option.value ===
-                                  "preparing" &&
-                                active
-                                  ? "animate-spin"
-                                  : ""
-                              }`}
-                            />
-                          </div>
+                          />
+                        </div>
 
-                          <p className="mt-3 text-sm font-bold text-slate-900">
-                            {option.label}
-                          </p>
+                        <p className="mt-3 text-sm font-bold text-slate-900">
+                          {option.label}
+                        </p>
 
-                          <p className="mt-1 text-xs leading-5 text-slate-500">
-                            {
-                              option.description
-                            }
-                          </p>
-                        </button>
-                      );
-                    },
-                  )}
-                </div>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          {
+                            option.description
+                          }
+                        </p>
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+
+              {isLocked && (
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  This preparation status is
+                  retained for reference and
+                  can no longer be changed.
+                </p>
               )}
             </section>
 
-            {/* Local instructions */}
+            {/* LOCAL INSTRUCTIONS */}
             <section className="mt-5">
               <label
                 htmlFor="municipal-local-instructions"
@@ -692,15 +904,19 @@ export default function PrepareEventModal({
               </label>
 
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                Add municipal reminders,
-                requirements, or arrival
-                instructions for participants.
+                {isLocked
+                  ? "Review the municipal instructions recorded before the event was locked."
+                  : "Add municipal reminders, requirements, or arrival instructions for participants."}
               </p>
 
               <textarea
                 id="municipal-local-instructions"
-                value={localInstructions}
-                disabled={controlsDisabled}
+                value={
+                  localInstructions
+                }
+                disabled={
+                  controlsDisabled
+                }
                 onChange={(event) =>
                   onInstructionsChange(
                     event.target.value,
@@ -708,12 +924,12 @@ export default function PrepareEventModal({
                 }
                 rows={5}
                 placeholder={
-                  isCancelled
-                    ? "Local instructions are locked because this event has been cancelled."
+                  isLocked
+                    ? "Local instructions are locked because this event is no longer available for preparation changes."
                     : "Example: Participants must arrive 30 minutes before the event and bring a valid ID."
                 }
                 className={`mt-3 w-full resize-none rounded-xl border px-4 py-3 text-sm leading-6 outline-none transition ${
-                  isCancelled
+                  isLocked
                     ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
                     : "border-slate-300 bg-white text-slate-700 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
                 }`}
@@ -724,32 +940,38 @@ export default function PrepareEventModal({
                   className={
                     isCancelled
                       ? "text-red-600"
-                      : "text-slate-400"
+                      : isLocked
+                        ? "text-slate-500"
+                        : "text-slate-400"
                   }
                 >
-                  {isCancelled
+                  {isLocked
                     ? "Instructions are retained for reference only."
                     : "Keep the instructions clear and specific."}
                 </span>
 
                 <span className="shrink-0 text-slate-400">
-                  {localInstructions.length}{" "}
+                  {
+                    localInstructions.length
+                  }{" "}
                   characters
                 </span>
               </div>
             </section>
 
-            {/* Registration control */}
+            {/* REGISTRATION CONTROL */}
             <section className="mt-5">
               <div
                 className={`rounded-xl border p-4 transition ${
                   isCancelled
                     ? "border-red-200 bg-red-50"
-                    : isPrepared
-                      ? registrationOpen
-                        ? "border-emerald-300 bg-emerald-50"
-                        : "border-slate-200 bg-white"
-                      : "border-slate-200 bg-slate-50"
+                    : isLocked
+                      ? "border-slate-300 bg-slate-100"
+                      : isPrepared
+                        ? registrationOpen
+                          ? "border-emerald-300 bg-emerald-50"
+                          : "border-slate-200 bg-white"
+                        : "border-slate-200 bg-slate-50"
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -757,13 +979,15 @@ export default function PrepareEventModal({
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                       isCancelled
                         ? "bg-red-100 text-red-700"
-                        : registrationOpen &&
-                            isPrepared
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-600"
+                        : isLocked
+                          ? "bg-slate-200 text-slate-700"
+                          : registrationOpen &&
+                              isPrepared
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-slate-100 text-slate-600"
                     }`}
                   >
-                    {isCancelled ||
+                    {isLocked ||
                     !registrationOpen ? (
                       <LockKeyhole className="h-5 w-5" />
                     ) : (
@@ -791,15 +1015,19 @@ export default function PrepareEventModal({
                     >
                       {isCancelled
                         ? "Registration is permanently closed for this cancelled event."
-                        : isPrepared
-                          ? "Allow participants from this municipality to register for the event."
-                          : "The event must be marked as Prepared before registration can be opened."}
+                        : isOngoing
+                          ? "Registration is closed because the event is already ongoing."
+                          : isCompleted
+                            ? "Registration is closed because the event has already been completed."
+                            : isPrepared
+                              ? "Allow participants from this municipality to register for the event."
+                              : "The event must be marked as Prepared before registration can be opened."}
                     </p>
                   </div>
 
                   <label
                     className={`relative inline-flex shrink-0 items-center ${
-                      isCancelled ||
+                      isLocked ||
                       saving ||
                       !isPrepared
                         ? "cursor-not-allowed opacity-60"
@@ -809,12 +1037,12 @@ export default function PrepareEventModal({
                     <input
                       type="checkbox"
                       checked={
-                        !isCancelled &&
+                        !isLocked &&
                         isPrepared &&
                         registrationOpen
                       }
                       disabled={
-                        isCancelled ||
+                        isLocked ||
                         saving ||
                         !isPrepared
                       }
@@ -834,7 +1062,7 @@ export default function PrepareEventModal({
             </section>
           </div>
 
-          {/* Footer actions */}
+          {/* FOOTER */}
           <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
             <button
               type="button"
@@ -842,24 +1070,32 @@ export default function PrepareEventModal({
               disabled={saving}
               className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isCancelled
+              {isLocked
                 ? "Close"
                 : "Cancel"}
             </button>
 
-            {!isCancelled && (
+            {!isLocked && (
               <button
                 type="button"
                 onClick={() =>
                   void onSave()
                 }
-                disabled={saving}
+                disabled={
+                  saving ||
+                  selectedVenueIsInactive
+                }
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? (
                   <>
                     <LoaderCircle className="h-4 w-4 animate-spin" />
                     Saving Preparation...
+                  </>
+                ) : selectedVenueIsInactive ? (
+                  <>
+                    <TriangleAlert className="h-4 w-4" />
+                    Choose an Active Venue
                   </>
                 ) : (
                   <>

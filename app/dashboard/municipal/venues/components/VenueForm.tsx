@@ -6,6 +6,7 @@ import type {
 
 import {
   Building2,
+  CheckCircle2,
   Loader2,
   PencilLine,
   Plus,
@@ -23,15 +24,19 @@ type VenueFormProps = {
   venueName: string;
   capacity: string;
   saving: boolean;
+
   onVenueNameChange: (
     value: string,
   ) => void;
+
   onCapacityChange: (
     value: string,
   ) => void;
+
   onSubmit: (
     event: FormEvent<HTMLFormElement>,
   ) => void;
+
   onCancelEdit: () => void;
 };
 
@@ -47,6 +52,20 @@ export default function VenueForm({
 }: VenueFormProps) {
   const isEditing =
     editingVenue !== null;
+
+  /*
+   * The select is intentionally
+   * uncontrolled.
+   *
+   * useMunicipalVenues reads its value
+   * using FormData during submit.
+   *
+   * Because of this, page.tsx does not
+   * need any new props.
+   */
+  const defaultStatus =
+    editingVenue?.status ??
+    "active";
 
   return (
     <section
@@ -105,7 +124,7 @@ export default function VenueForm({
 
             <p className="mt-1 text-sm leading-6 text-slate-500">
               {isEditing
-                ? `Update the name or capacity of ${editingVenue.venue_name}.`
+                ? `Update the name, capacity, or status of ${editingVenue.venue_name}.`
                 : "Create an approved municipal venue for future event assignments."}
             </p>
           </div>
@@ -114,7 +133,9 @@ export default function VenueForm({
         {isEditing && (
           <button
             type="button"
-            onClick={onCancelEdit}
+            onClick={
+              onCancelEdit
+            }
             disabled={saving}
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto"
           >
@@ -129,7 +150,8 @@ export default function VenueForm({
         aria-busy={saving}
         className="p-5 sm:p-6"
       >
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid gap-5 lg:grid-cols-3">
+          {/* VENUE NAME */}
           <div>
             <label
               htmlFor="venue-name"
@@ -144,10 +166,15 @@ export default function VenueForm({
               <input
                 id="venue-name"
                 type="text"
-                value={venueName}
-                onChange={(event) =>
+                value={
+                  venueName
+                }
+                onChange={(
+                  event,
+                ) =>
                   onVenueNameChange(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 disabled={saving}
@@ -158,11 +185,13 @@ export default function VenueForm({
             </div>
 
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Use the official or commonly
-              recognized venue name.
+              Use the official or
+              commonly recognized
+              venue name.
             </p>
           </div>
 
+          {/* CAPACITY */}
           <div>
             <label
               htmlFor="venue-capacity"
@@ -181,9 +210,12 @@ export default function VenueForm({
                 step="1"
                 inputMode="numeric"
                 value={capacity}
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   onCapacityChange(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 disabled={saving}
@@ -193,16 +225,70 @@ export default function VenueForm({
             </div>
 
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Enter the maximum number of
-              attendees allowed.
+              Enter the maximum
+              number of attendees
+              allowed.
+            </p>
+          </div>
+
+          {/* STATUS */}
+          <div>
+            <label
+              htmlFor="venue-status"
+              className="mb-2 block text-sm font-semibold text-slate-800"
+            >
+              Venue Status
+            </label>
+
+            <div className="relative">
+              <CheckCircle2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+              <select
+                key={
+                  editingVenue?.id ??
+                  "new-venue"
+                }
+                id="venue-status"
+                name="status"
+                defaultValue={
+                  defaultStatus
+                }
+                disabled={saving}
+                className="min-h-12 w-full appearance-none rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-10 text-sm font-medium text-slate-900 outline-none transition hover:border-slate-400 focus:border-slate-600 focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+              >
+                <option value="active">
+                  Active
+                </option>
+
+                <option value="inactive">
+                  Inactive
+                </option>
+              </select>
+
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                ▼
+              </span>
+            </div>
+
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Active venues can be
+              assigned to events.
+              Inactive venues remain
+              in records but cannot be
+              selected for event
+              preparation.
             </p>
           </div>
         </div>
 
         <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-slate-500">
-            Both fields are required. Capacity
-            must be greater than zero.
+            Venue name and capacity
+            are required. Set the
+            status to Inactive when
+            the venue should no longer
+            be available for event
+            assignments.
           </p>
 
           <button

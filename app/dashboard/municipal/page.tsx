@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import { useRouter } from "next/navigation";
+
 import {
   CircleAlert,
   PencilLine,
@@ -9,9 +16,12 @@ import {
 
 import MunicipalDashboardHeader from "./components/MunicipalDashboardHeader";
 import MunicipalDashboardSummary from "./components/MunicipalDashboardSummary";
-import PrepareEventModal from "./components/PrepareEventModal";
 import ReceivedEventsSection from "./components/ReceivedEventsSection";
 import useMunicipalDashboard from "./hooks/useMunicipalDashboard";
+
+import type {
+  ReceivedEvent,
+} from "./types/municipalDashboard";
 
 type NotificationTargetEvent = {
   id?: string | number | null;
@@ -29,12 +39,21 @@ type NotificationTargetEvent = {
   } | null;
 };
 
-type NotificationType = string | null;
+type NotificationType =
+  | string
+  | null;
 
 function normalizeId(
-  value: string | number | null | undefined,
+  value:
+    | string
+    | number
+    | null
+    | undefined,
 ) {
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return "";
   }
 
@@ -67,62 +86,83 @@ function getEventIds(
 }
 
 export default function MunicipalDashboardPage() {
-  /*
-   * Prevent the notification target from opening
-   * repeatedly during component re-renders.
-   */
-  const notificationTargetHandled = useRef(false);
+  const router = useRouter();
 
-  const [
-    highlightedEventId,
-    setHighlightedEventId,
-  ] = useState<string | null>(null);
+  /*
+   * Prevent the same notification-linked
+   * navigation from being processed repeatedly
+   * during re-renders.
+   */
+  const notificationTargetHandled =
+    useRef(false);
 
   const [
     notificationType,
     setNotificationType,
-  ] = useState<NotificationType>(null);
+  ] =
+    useState<NotificationType>(
+      null,
+    );
 
   const [
     notificationMessage,
     setNotificationMessage,
-  ] = useState<string | null>(null);
+  ] =
+    useState<string | null>(
+      null,
+    );
 
+  /*
+   * Dashboard now loads event information only.
+   *
+   * Preparation editing is intentionally NOT
+   * exposed here. The Event Preparation page
+   * is the only municipal preparation workspace.
+   */
   const {
     municipality,
     receivedEvents,
     summary,
     loading,
-
-    /*
-     * Municipal venue assignment data
-     */
     venues,
-    venuesLoading,
-    selectedVenueId,
-    venueError,
-
-    selectedEvent,
-    localInstructions,
-    registrationOpen,
-    savingPreparation,
-    preparationStatus,
-
-    setLocalInstructions,
-    setRegistrationOpen,
-
-    handleVenueChange,
-
-    openPrepareModal,
-    closePrepareModal,
-    handlePreparationStatusChange,
-    savePreparation,
   } = useMunicipalDashboard();
 
   /*
-   * OPEN EXACT RECEIVED EVENT FROM NOTIFICATION
+   * Navigate to the authoritative Event
+   * Preparation page for a specific municipal
+   * event assignment.
+   */
+  function openPreparationPage(
+    item: ReceivedEvent,
+  ) {
+    const assignmentId =
+      normalizeId(item.id);
+
+    if (!assignmentId) {
+      return;
+    }
+
+    router.push(
+      `/dashboard/municipal/preparations?assignmentId=${encodeURIComponent(
+        assignmentId,
+      )}`,
+    );
+  }
+
+  /*
+   * HANDLE NOTIFICATION-LINKED EVENTS
    *
-   * Supported URL:
+   * Previous behavior:
+   * - notification opened the preparation modal
+   *   directly on the Municipal Dashboard.
+   *
+   * New behavior:
+   * - find the exact municipal event assignment
+   * - redirect to the Event Preparation page
+   * - Event Preparation becomes the only page
+   *   that can manage preparation controls.
+   *
+   * Supported incoming URL:
    *
    * /dashboard/municipal
    * ?assignmentId=...
@@ -138,77 +178,93 @@ export default function MunicipalDashboardPage() {
     }
 
     const searchParameters =
-      new URLSearchParams(window.location.search);
+      new URLSearchParams(
+        window.location.search,
+      );
 
-    const assignmentId = normalizeId(
-      searchParameters.get("assignmentId"),
-    );
+    const assignmentId =
+      normalizeId(
+        searchParameters.get(
+          "assignmentId",
+        ),
+      );
 
-    const eventId = normalizeId(
-      searchParameters.get("eventId"),
-    );
+    const eventId =
+      normalizeId(
+        searchParameters.get(
+          "eventId",
+        ),
+      );
 
     const targetNotificationType =
-      searchParameters.get("notificationType");
+      searchParameters.get(
+        "notificationType",
+      );
 
     /*
-     * Normal dashboard visit:
-     * no notification-linked event in the URL.
+     * Normal dashboard visit.
      */
-    if (!assignmentId && !eventId) {
+    if (
+      !assignmentId &&
+      !eventId
+    ) {
       return;
     }
 
     /*
-     * First, search using assignmentId because this
-     * identifies the exact event_municipalities row.
+     * First try the exact
+     * event_municipalities assignment ID.
      */
-    let targetEvent = assignmentId
-      ? receivedEvents.find((receivedEvent) => {
-        const candidate =
-          receivedEvent as unknown as NotificationTargetEvent;
+    let targetEvent =
+      assignmentId
+        ? receivedEvents.find(
+            (
+              receivedEvent,
+            ) => {
+              const candidate =
+                receivedEvent as unknown as NotificationTargetEvent;
 
-        return getAssignmentIds(candidate).includes(
-          assignmentId,
-        );
-      })
-      : undefined;
+              return getAssignmentIds(
+                candidate,
+              ).includes(
+                assignmentId,
+              );
+            },
+          )
+        : undefined;
 
     /*
-     * Use the provincial event ID as fallback.
+     * Fall back to provincial event ID.
      */
-    if (!targetEvent && eventId) {
-      targetEvent = receivedEvents.find(
-        (receivedEvent) => {
-          const candidate =
-            receivedEvent as unknown as NotificationTargetEvent;
+    if (
+      !targetEvent &&
+      eventId
+    ) {
+      targetEvent =
+        receivedEvents.find(
+          (
+            receivedEvent,
+          ) => {
+            const candidate =
+              receivedEvent as unknown as NotificationTargetEvent;
 
-          return getEventIds(candidate).includes(eventId);
-        },
-      );
+            return getEventIds(
+              candidate,
+            ).includes(
+              eventId,
+            );
+          },
+        );
     }
 
-    /*
-     * Prevent the same notification target from
-     * being processed repeatedly.
-     */
-    notificationTargetHandled.current = true;
+    notificationTargetHandled.current =
+      true;
 
     /*
-     * Remove query parameters without triggering
-     * another Next.js navigation.
+     * Notification target could not be found.
      *
-     * Using router.replace here can cause the
-     * selected event modal to reset immediately.
-     */
-    window.history.replaceState(
-      {},
-      "",
-      "/dashboard/municipal",
-    );
-
-    /*
-     * Target event was not found in receivedEvents.
+     * Stay on the Dashboard and display a
+     * helpful notice.
      */
     if (!targetEvent) {
       console.warn(
@@ -219,6 +275,12 @@ export default function MunicipalDashboardPage() {
           notificationType:
             targetNotificationType,
         },
+      );
+
+      window.history.replaceState(
+        {},
+        "",
+        "/dashboard/municipal",
       );
 
       setNotificationType(
@@ -236,204 +298,186 @@ export default function MunicipalDashboardPage() {
       targetEvent as unknown as NotificationTargetEvent;
 
     const targetAssignmentId =
-      getAssignmentIds(candidate)[0] ||
-      assignmentId ||
-      eventId;
+      getAssignmentIds(
+        candidate,
+      )[0] ||
+      assignmentId;
 
-    /*
-     * Temporarily highlight the matching card.
-     */
-    setHighlightedEventId(
-      targetAssignmentId,
-    );
-
-    setNotificationType(
-      targetNotificationType,
-    );
-
-    /*
-     * Display the correct dashboard notice.
-     */
-    if (
-      targetNotificationType ===
-      "event_cancelled"
-    ) {
-      setNotificationMessage(
-        "This provincial event has been cancelled. Municipal preparation and participant registration have been stopped.",
+    if (!targetAssignmentId) {
+      window.history.replaceState(
+        {},
+        "",
+        "/dashboard/municipal",
       );
-    } else if (
-      targetNotificationType ===
-      "event_updated"
-    ) {
-      setNotificationMessage(
-        "This provincial event was recently updated. Review its latest schedule, memo, and event details.",
+
+      setNotificationType(
+        targetNotificationType,
       );
-    } else {
-      setNotificationMessage(null);
+
+      setNotificationMessage(
+        "The municipal event assignment linked to this notification could not be identified.",
+      );
+
+      return;
     }
 
     /*
-     * Open the exact received-event modal.
+     * Build the Event Preparation URL.
+     *
+     * notificationType is preserved so the
+     * Preparation page can optionally show
+     * notification-specific context.
      */
-    openPrepareModal(targetEvent);
+    const destinationParameters =
+      new URLSearchParams();
+
+    destinationParameters.set(
+      "assignmentId",
+      targetAssignmentId,
+    );
+
+    if (targetNotificationType) {
+      destinationParameters.set(
+        "notificationType",
+        targetNotificationType,
+      );
+    }
 
     /*
-     * Remove the card highlight after four seconds.
+     * Replace instead of push because the
+     * notification-linked Dashboard URL is only
+     * an intermediate route.
      */
-    const highlightTimer =
-      window.setTimeout(() => {
-        setHighlightedEventId(null);
-      }, 4000);
-
-    return () => {
-      window.clearTimeout(
-        highlightTimer,
-      );
-    };
+    router.replace(
+      `/dashboard/municipal/preparations?${destinationParameters.toString()}`,
+    );
   }, [
     loading,
     receivedEvents,
-    openPrepareModal,
+    router,
   ]);
 
-  const closeNotificationMessage = () => {
-    setNotificationMessage(null);
-    setNotificationType(null);
-  };
+  const closeNotificationMessage =
+    () => {
+      setNotificationMessage(null);
+      setNotificationType(null);
+    };
 
   const isCancellationNotice =
-    notificationType === "event_cancelled";
+    notificationType ===
+    "event_cancelled";
 
   const isUpdateNotice =
-    notificationType === "event_updated";
+    notificationType ===
+    "event_updated";
 
   return (
-    <>
-      <div className="space-y-5 sm:space-y-6">
-        <MunicipalDashboardHeader
-          municipality={municipality}
-        />
+    <div className="space-y-5 sm:space-y-6">
+      <MunicipalDashboardHeader
+        municipality={municipality}
+      />
 
-        {/* Notification-linked event message */}
-        {notificationMessage && (
-          <section
-            className={`relative overflow-hidden rounded-2xl border shadow-sm ${isCancellationNotice
-                ? "border-red-200 bg-red-50"
+      {/* Notification lookup message */}
+      {notificationMessage && (
+        <section
+          className={`relative overflow-hidden rounded-2xl border shadow-sm ${
+            isCancellationNotice
+              ? "border-red-200 bg-red-50"
+              : isUpdateNotice
+                ? "border-violet-200 bg-violet-50"
+                : "border-amber-200 bg-amber-50"
+          }`}
+        >
+          <div
+            className={`h-1 w-full ${
+              isCancellationNotice
+                ? "bg-red-500"
                 : isUpdateNotice
-                  ? "border-violet-200 bg-violet-50"
-                  : "border-amber-200 bg-amber-50"
-              }`}
-          >
+                  ? "bg-violet-500"
+                  : "bg-amber-500"
+            }`}
+          />
+
+          <div className="flex items-start gap-3 p-4 pr-12 sm:p-5 sm:pr-14">
             <div
-              className={`h-1 w-full ${isCancellationNotice
-                  ? "bg-red-500"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                isCancellationNotice
+                  ? "bg-red-100 text-red-700"
                   : isUpdateNotice
-                    ? "bg-violet-500"
-                    : "bg-amber-500"
-                }`}
-            />
-
-            <div className="flex items-start gap-3 p-4 pr-12 sm:p-5 sm:pr-14">
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isCancellationNotice
-                    ? "bg-red-100 text-red-700"
-                    : isUpdateNotice
-                      ? "bg-violet-100 text-violet-700"
-                      : "bg-amber-100 text-amber-700"
-                  }`}
-              >
-                {isUpdateNotice ? (
-                  <PencilLine className="h-5 w-5" />
-                ) : (
-                  <CircleAlert className="h-5 w-5" />
-                )}
-              </div>
-
-              <div className="min-w-0">
-                <h2
-                  className={`text-sm font-bold ${isCancellationNotice
-                      ? "text-red-900"
-                      : isUpdateNotice
-                        ? "text-violet-900"
-                        : "text-amber-900"
-                    }`}
-                >
-                  {isCancellationNotice
-                    ? "Event Cancelled"
-                    : isUpdateNotice
-                      ? "Event Updated"
-                      : "Event Notification"}
-                </h2>
-
-                <p
-                  className={`mt-1 text-sm leading-6 ${isCancellationNotice
-                      ? "text-red-700"
-                      : isUpdateNotice
-                        ? "text-violet-700"
-                        : "text-amber-700"
-                    }`}
-                >
-                  {notificationMessage}
-                </p>
-              </div>
+                    ? "bg-violet-100 text-violet-700"
+                    : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {isUpdateNotice ? (
+                <PencilLine className="h-5 w-5" />
+              ) : (
+                <CircleAlert className="h-5 w-5" />
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={closeNotificationMessage}
-              aria-label="Close notification message"
-              className={`absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg transition sm:right-4 sm:top-5 ${isCancellationNotice
-                  ? "text-red-500 hover:bg-red-100 hover:text-red-700"
-                  : isUpdateNotice
-                    ? "text-violet-500 hover:bg-violet-100 hover:text-violet-700"
-                    : "text-amber-500 hover:bg-amber-100 hover:text-amber-700"
+            <div className="min-w-0">
+              <h2
+                className={`text-sm font-bold ${
+                  isCancellationNotice
+                    ? "text-red-900"
+                    : isUpdateNotice
+                      ? "text-violet-900"
+                      : "text-amber-900"
                 }`}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </section>
-        )}
+              >
+                {isCancellationNotice
+                  ? "Event Cancelled"
+                  : isUpdateNotice
+                    ? "Event Updated"
+                    : "Event Notification"}
+              </h2>
 
-        <MunicipalDashboardSummary
-          summary={summary}
-        />
+              <p
+                className={`mt-1 text-sm leading-6 ${
+                  isCancellationNotice
+                    ? "text-red-700"
+                    : isUpdateNotice
+                      ? "text-violet-700"
+                      : "text-amber-700"
+                }`}
+              >
+                {notificationMessage}
+              </p>
+            </div>
+          </div>
 
-        <ReceivedEventsSection
-          events={receivedEvents}
-          venues={venues}
-          loading={loading}
-          highlightedEventId={highlightedEventId}
-          onPrepare={openPrepareModal}
-        />
-      </div>
+          <button
+            type="button"
+            onClick={
+              closeNotificationMessage
+            }
+            aria-label="Close notification message"
+            className={`absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg transition sm:right-4 sm:top-5 ${
+              isCancellationNotice
+                ? "text-red-500 hover:bg-red-100 hover:text-red-700"
+                : isUpdateNotice
+                  ? "text-violet-500 hover:bg-violet-100 hover:text-violet-700"
+                  : "text-amber-500 hover:bg-amber-100 hover:text-amber-700"
+            }`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </section>
+      )}
 
-      <PrepareEventModal
-        selectedEvent={selectedEvent}
-        preparationStatus={preparationStatus}
-        localInstructions={localInstructions}
-        registrationOpen={registrationOpen}
-        saving={savingPreparation}
-
-        venues={venues}
-        venuesLoading={venuesLoading}
-        selectedVenueId={selectedVenueId}
-        venueError={venueError}
-
-        onStatusChange={
-          handlePreparationStatusChange
-        }
-        onVenueChange={
-          handleVenueChange
-        }
-        onInstructionsChange={
-          setLocalInstructions
-        }
-        onRegistrationChange={
-          setRegistrationOpen
-        }
-        onClose={closePrepareModal}
-        onSave={savePreparation}
+      <MunicipalDashboardSummary
+        summary={summary}
       />
-    </>
+
+      <ReceivedEventsSection
+        events={receivedEvents}
+        venues={venues}
+        loading={loading}
+        highlightedEventId={null}
+        onPrepare={
+          openPreparationPage
+        }
+      />
+    </div>
   );
 }

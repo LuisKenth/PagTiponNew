@@ -1,8 +1,14 @@
-import type { PreparationStatus } from "../../types/municipalDashboard";
-
 export type StatusFilter =
   | "all"
-  | PreparationStatus
+  | "pending"
+  | "preparing"
+  | "prepared";
+
+export type EventStatusFilter =
+  | "all"
+  | "upcoming"
+  | "ongoing"
+  | "completed"
   | "cancelled";
 
 export type RegistrationFilter =

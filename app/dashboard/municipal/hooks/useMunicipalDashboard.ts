@@ -55,12 +55,9 @@ type VenueRow = {
   venue_name: string | null;
   municipality: string | null;
   capacity: number | null;
+  status: string | null;
 };
 
-/*
- * Convert database status/text into a
- * consistent lowercase string.
- */
 function normalizeStatus(
   value: string | null | undefined,
 ) {
@@ -69,10 +66,6 @@ function normalizeStatus(
     .toLowerCase();
 }
 
-/*
- * Normalize municipality values for
- * defensive comparison.
- */
 function normalizeMunicipality(
   value: string | null | undefined,
 ) {
@@ -81,40 +74,108 @@ function normalizeMunicipality(
     .toLowerCase();
 }
 
-/*
- * Checks both the municipal assignment status
- * and the parent provincial event status.
- */
-function isReceivedEventCancelled(
-  item: ReceivedEvent | null,
+function isVenueActiveStatus(
+  value: string | null | undefined,
 ) {
-  if (!item) {
-    return false;
-  }
-
-  const municipalStatus = normalizeStatus(
-    item.municipal_status,
-  );
-
-  const provincialStatus = normalizeStatus(
-    item.event?.status,
-  );
-
-  return (
-    municipalStatus === "cancelled" ||
-    provincialStatus === "cancelled"
-  );
+  return normalizeStatus(value) === "active";
 }
 
-/*
- * Detect the specific PostgreSQL error raised by
- * the venue conflict protection trigger.
- */
+type PreparationLockStatus =
+  | "ongoing"
+  | "completed"
+  | "cancelled";
+
+function getPreparationLockStatus(
+  item: ReceivedEvent | null,
+): PreparationLockStatus | null {
+  if (!item) {
+    return null;
+  }
+
+  const municipalStatus =
+    normalizeStatus(
+      item.municipal_status,
+    );
+
+  const provincialStatus =
+    normalizeStatus(
+      item.event?.status,
+    );
+
+  /*
+   * Cancellation takes priority because an
+   * assignment itself may also be cancelled.
+   */
+  if (
+    municipalStatus === "cancelled" ||
+    provincialStatus === "cancelled"
+  ) {
+    return "cancelled";
+  }
+
+  if (
+    provincialStatus === "completed"
+  ) {
+    return "completed";
+  }
+
+  if (
+    provincialStatus === "ongoing"
+  ) {
+    return "ongoing";
+  }
+
+  return null;
+}
+
+
+
+function getPreparationLockMessage(
+  status: PreparationLockStatus,
+) {
+  switch (status) {
+    case "ongoing":
+      return (
+        "This event is already ongoing. " +
+        "Municipal preparation and participant " +
+        "registration are now read-only."
+      );
+
+    case "completed":
+      return (
+        "This event has already been completed. " +
+        "Municipal preparation and participant " +
+        "registration can no longer be changed."
+      );
+
+    case "cancelled":
+      return (
+        "This event has been cancelled. " +
+        "Municipal preparation and participant " +
+        "registration can no longer be changed."
+      );
+  }
+}
+
 function isVenueScheduleConflictError(
   message: string | null | undefined,
 ) {
   return normalizeStatus(message).includes(
     "venue schedule conflict",
+  );
+}
+
+function isVenueUnavailableError(
+  message: string | null | undefined,
+) {
+  const normalized =
+    normalizeStatus(message);
+
+  return (
+    normalized.includes("venue unavailable") ||
+    normalized.includes(
+      "cannot be assigned to an event",
+    )
   );
 }
 
@@ -170,142 +231,173 @@ export default function useMunicipalDashboard() {
       "pending",
     );
 
-  /*
-   * CLOSE PREPARATION MODAL
-   */
   const closePrepareModal =
     useCallback(() => {
       setSelectedEvent(null);
-
-      setPreparationStatus(
-        "pending",
-      );
-
+      setPreparationStatus("pending");
       setSelectedVenueId("");
-
       setVenueError(null);
-
       setLocalInstructions("");
-
       setRegistrationOpen(false);
     }, []);
 
   /*
    * VENUE SELECTION
+   *
+   * First checks if the venue is active.
+   * Then keeps the existing venue schedule
+   * conflict checker.
    */
   const handleVenueChange =
-  useCallback(
-    async (venueId: string) => {
-      setVenueError(null);
+    useCallback(
+      async (venueId: string) => {
+        setVenueError(null);
 
-      if (!venueId) {
-        setSelectedVenueId("");
-        return;
-      }
+        const lockStatus =
+          getPreparationLockStatus(
+            selectedEvent,
+          );
 
-      /*
-       * Select it temporarily while checking.
-       */
-      setSelectedVenueId(
-        venueId,
-      );
-
-      if (
-        !selectedEvent ||
-        !selectedEvent.event?.start_at ||
-        !selectedEvent.event?.end_at
-      ) {
-        return;
-      }
-
-      try {
-        const {
-          data,
-          error,
-        } = await supabase.rpc(
-          "check_local_venue_schedule_conflict",
-          {
-            p_event_municipality_id:
-              selectedEvent.id,
-
-            p_event_id:
-              selectedEvent.event_id,
-
-            p_local_venue_id:
-              venueId,
-
-            p_start_at:
-              selectedEvent.event.start_at,
-
-            p_end_at:
-              selectedEvent.event.end_at,
-          },
-        );
-
-        if (error) {
-          console.error(
-            "Venue availability check error:",
-            error,
+        if (lockStatus) {
+          alert(
+            getPreparationLockMessage(
+              lockStatus,
+            ),
           );
 
           return;
         }
 
-        const result =
-          Array.isArray(data)
-            ? data[0]
-            : null;
+        if (!venueId) {
+          setSelectedVenueId("");
+          return;
+        }
 
-        if (
-          result?.has_conflict === true
-        ) {
-          const venue =
-            venues.find(
-              (item) =>
-                item.id === venueId,
-            );
+        const venue =
+          venues.find(
+            (item) =>
+              item.id === venueId,
+          ) ?? null;
 
-          const venueName =
-            venue?.venue_name ??
-            "This venue";
-
-          const conflictMessage =
-            `${venueName} is already assigned to another event during the selected schedule. Please select another venue.`;
-
-          /*
-           * Remove the conflicting selection.
-           */
+        if (!venue) {
           setSelectedVenueId("");
 
-          /*
-           * Keep an inline warning in the modal.
-           */
           setVenueError(
-            `Venue Schedule Conflict: ${conflictMessage}`,
+            "The selected venue could not be found. Please choose another venue.",
           );
 
-          /*
-           * Immediate notification.
-           */
+          return;
+        }
+
+        /*
+         * UI-level inactive venue protection.
+         */
+        if (
+          !isVenueActiveStatus(
+            venue.status,
+          )
+        ) {
+          const message =
+            `${venue.venue_name} is currently inactive and cannot be assigned to this event. Please select an active venue.`;
+
+          setSelectedVenueId("");
+
+          setVenueError(
+            `Venue Unavailable: ${message}`,
+          );
+
           alert(
-            `Venue Schedule Conflict\n\n${conflictMessage}`,
+            `Venue Unavailable\n\n${message}`,
+          );
+
+          return;
+        }
+
+        /*
+         * Temporarily select the venue before
+         * checking the schedule.
+         */
+        setSelectedVenueId(
+          venueId,
+        );
+
+        if (
+          !selectedEvent ||
+          !selectedEvent.event?.start_at ||
+          !selectedEvent.event?.end_at
+        ) {
+          return;
+        }
+
+        try {
+          const {
+            data,
+            error,
+          } = await supabase.rpc(
+            "check_local_venue_schedule_conflict",
+            {
+              p_event_municipality_id:
+                selectedEvent.id,
+
+              p_event_id:
+                selectedEvent.event_id,
+
+              p_local_venue_id:
+                venueId,
+
+              p_start_at:
+                selectedEvent.event.start_at,
+
+              p_end_at:
+                selectedEvent.event.end_at,
+            },
+          );
+
+          if (error) {
+            console.error(
+              "Venue availability check error:",
+              error,
+            );
+
+            return;
+          }
+
+          const result =
+            Array.isArray(data)
+              ? data[0]
+              : null;
+
+          if (
+            result?.has_conflict === true
+          ) {
+            const message =
+              `${venue.venue_name} is already assigned to another event during the selected schedule. Please select another venue.`;
+
+            setSelectedVenueId("");
+
+            setVenueError(
+              `Venue Schedule Conflict: ${message}`,
+            );
+
+            alert(
+              `Venue Schedule Conflict\n\n${message}`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Unexpected venue availability check error:",
+            error,
           );
         }
-      } catch (error) {
-        console.error(
-          "Unexpected venue availability check error:",
-          error,
-        );
-      }
-    },
-    [
-      selectedEvent,
-      venues,
-    ],
-  );
+      },
+      [
+        selectedEvent,
+        venues,
+      ],
+    );
 
   /*
-   * FETCH RECEIVED MUNICIPAL EVENTS
+   * FETCH MUNICIPAL DASHBOARD DATA
    */
   const fetchReceivedEvents =
     useCallback(async () => {
@@ -335,6 +427,9 @@ export default function useMunicipalDashboard() {
           return;
         }
 
+        /*
+         * Get municipal admin municipality.
+         */
         const {
           data: profile,
           error: profileError,
@@ -368,11 +463,12 @@ export default function useMunicipalDashboard() {
         );
 
         /*
-         * LOAD MUNICIPAL VENUES
+         * LOAD VENUES
          *
-         * Only venues belonging to the currently
-         * logged-in municipal administrator's
-         * municipality are displayed.
+         * status is now included.
+         * Both active and inactive venues are loaded
+         * so inactive venues can still be displayed
+         * in the dropdown as disabled options.
          */
         const {
           data: venueRowsData,
@@ -384,7 +480,8 @@ export default function useMunicipalDashboard() {
               id,
               venue_name,
               municipality,
-              capacity
+              capacity,
+              status
             `,
           )
           .ilike(
@@ -431,19 +528,19 @@ export default function useMunicipalDashboard() {
                 return [
                   {
                     id: venueId,
-
                     venue_name:
                       venueName,
-
                     municipality:
                       venue.municipality ??
                       municipalName,
-
                     capacity:
                       typeof venue.capacity ===
                         "number"
                         ? venue.capacity
                         : null,
+                    status:
+                      venue.status ??
+                      null,
                   },
                 ];
               },
@@ -455,7 +552,7 @@ export default function useMunicipalDashboard() {
         }
 
         /*
-         * GET MUNICIPAL EVENT ASSIGNMENTS
+         * LOAD MUNICIPAL EVENT ASSIGNMENTS
          */
         const {
           data: targetRowsData,
@@ -503,7 +600,6 @@ export default function useMunicipalDashboard() {
           targetRows.length === 0
         ) {
           setReceivedEvents([]);
-
           return;
         }
 
@@ -553,12 +649,12 @@ export default function useMunicipalDashboard() {
             []) as RegisteredRsvpRow[];
 
         const registeredCountByAssignment =
-          new Map<
-            string,
-            number
-          >();
+          new Map<string, number>();
 
-        for (const rsvpRow of registeredRsvpRows) {
+        for (
+          const rsvpRow of
+          registeredRsvpRows
+        ) {
           const assignmentId =
             String(
               rsvpRow.event_municipality_id ??
@@ -580,6 +676,9 @@ export default function useMunicipalDashboard() {
           );
         }
 
+        /*
+         * Get provincial event IDs.
+         */
         const eventIds =
           Array.from(
             new Set(
@@ -594,8 +693,7 @@ export default function useMunicipalDashboard() {
                   ): eventId is string =>
                     typeof eventId ===
                     "string" &&
-                    eventId
-                      .trim()
+                    eventId.trim()
                       .length > 0,
                 ),
             ),
@@ -605,15 +703,11 @@ export default function useMunicipalDashboard() {
           eventIds.length === 0
         ) {
           setReceivedEvents([]);
-
           return;
         }
 
         /*
-         * LOAD ALL NON-DRAFT EVENTS.
-         *
-         * Cancelled events remain visible for
-         * reference.
+         * LOAD NON-DRAFT PROVINCIAL EVENTS
          */
         const {
           data:
@@ -634,11 +728,20 @@ export default function useMunicipalDashboard() {
               created_at
             `,
           )
-          .in("id", eventIds)
-          .neq("status", "draft")
-          .order("start_at", {
-            ascending: false,
-          });
+          .in(
+            "id",
+            eventIds,
+          )
+          .neq(
+            "status",
+            "draft",
+          )
+          .order(
+            "start_at",
+            {
+              ascending: false,
+            },
+          );
 
         if (eventsError) {
           console.error(
@@ -655,15 +758,6 @@ export default function useMunicipalDashboard() {
           (visibleEventsData ??
             []) as EventRow[];
 
-        if (
-          visibleEvents.length ===
-          0
-        ) {
-          setReceivedEvents([]);
-
-          return;
-        }
-
         const eventsById =
           new Map<
             string,
@@ -671,43 +765,32 @@ export default function useMunicipalDashboard() {
           >(
             visibleEvents.map(
               (event) => [
-                String(
-                  event.id,
-                ),
-
+                String(event.id),
                 {
                   id: String(
                     event.id,
                   ),
-
                   title:
                     event.title ??
                     null,
-
                   description:
                     event.description ??
                     null,
-
                   start_at:
                     event.start_at ??
                     null,
-
                   end_at:
                     event.end_at ??
                     null,
-
                   memo_url:
                     event.memo_url ??
                     null,
-
                   memo_filename:
                     event.memo_filename ??
                     null,
-
                   status:
                     event.status ??
                     null,
-
                   created_at:
                     event.created_at ??
                     null,
@@ -716,6 +799,9 @@ export default function useMunicipalDashboard() {
             ),
           );
 
+        /*
+         * Combine assignment + event data.
+         */
         const mappedEvents =
           targetRows
             .flatMap<ReceivedEvent>(
@@ -730,17 +816,14 @@ export default function useMunicipalDashboard() {
                     eventId,
                   );
 
-                if (
-                  !matchedEvent
-                ) {
+                if (!matchedEvent) {
                   return [];
                 }
 
                 return [
                   {
-                    id: String(
-                      row.id,
-                    ),
+                    id:
+                      String(row.id),
 
                     event_id:
                       eventId,
@@ -778,8 +861,7 @@ export default function useMunicipalDashboard() {
                         String(
                           row.id,
                         ),
-                      ) ??
-                      0,
+                      ) ?? 0,
 
                     event:
                       matchedEvent,
@@ -789,24 +871,22 @@ export default function useMunicipalDashboard() {
             )
             .sort(
               (
-                firstItem,
-                secondItem,
+                first,
+                second,
               ) => {
                 const firstDate =
-                  firstItem
-                    .event
+                  first.event
                     ?.start_at
                     ? new Date(
-                      firstItem.event.start_at,
+                      first.event.start_at,
                     ).getTime()
                     : 0;
 
                 const secondDate =
-                  secondItem
-                    .event
+                  second.event
                     ?.start_at
                     ? new Date(
-                      secondItem.event.start_at,
+                      second.event.start_at,
                     ).getTime()
                     : 0;
 
@@ -841,43 +921,52 @@ export default function useMunicipalDashboard() {
   ]);
 
   /*
-   * OPEN PREPARATION / CANCELLATION MODAL
+   * OPEN PREPARE EVENT MODAL
    */
   const openPrepareModal =
     useCallback(
-      (item: ReceivedEvent) => {
+      (
+        item: ReceivedEvent,
+      ) => {
         const currentStatus =
           normalizePreparationStatus(
             item.municipal_status,
           );
 
-        const cancelled =
-          isReceivedEventCancelled(
+        const lockStatus =
+          getPreparationLockStatus(
             item,
           );
 
         setSelectedEvent(item);
 
+        /*
+         * Preserve the actual preparation status
+         * even when the event is already locked.
+         * Locked events will later be displayed
+         * as read-only in the modal.
+         */
         setPreparationStatus(
-          cancelled
-            ? "pending"
-            : currentStatus,
+          currentStatus,
         );
 
         setSelectedVenueId(
-          item.local_venue_id ??
-          "",
+          item.local_venue_id ?? "",
         );
 
         setVenueError(null);
 
         setLocalInstructions(
-          item.local_instructions ||
-          "",
+          item.local_instructions || "",
         );
 
+        /*
+         * Registration is considered open only
+         * while the event is still editable,
+         * prepared, and explicitly open.
+         */
         setRegistrationOpen(
-          !cancelled &&
+          lockStatus === null &&
           currentStatus ===
           "prepared" &&
           item.registration_open ===
@@ -886,7 +975,6 @@ export default function useMunicipalDashboard() {
       },
       [],
     );
-
   /*
    * PREPARATION STATUS CHANGE
    */
@@ -895,15 +983,13 @@ export default function useMunicipalDashboard() {
       (
         value: PreparationStatus,
       ) => {
-        if (
-          isReceivedEventCancelled(
+        const lockStatus =
+          getPreparationLockStatus(
             selectedEvent,
-          )
-        ) {
-          setRegistrationOpen(
-            false,
           );
 
+        if (lockStatus) {
+          setRegistrationOpen(false);
           return;
         }
 
@@ -912,26 +998,83 @@ export default function useMunicipalDashboard() {
         );
 
         if (
-          value !==
-          "prepared"
+          value !== "prepared"
         ) {
-          setRegistrationOpen(
-            false,
-          );
+          setRegistrationOpen(false);
         }
 
-        /*
-         * Changing the preparation state gives the
-         * user another chance to correct the venue.
-         */
         setVenueError(null);
       },
-      [selectedEvent],
+      [
+        selectedEvent,
+      ],
     );
-
   /*
    * SAVE MUNICIPAL PREPARATION
    */
+  /*
+   * LOCAL INSTRUCTIONS CHANGE
+   *
+   * Locked lifecycle states are read-only.
+   */
+  const handleLocalInstructionsChange =
+    useCallback(
+      (
+        value: string,
+      ) => {
+        const lockStatus =
+          getPreparationLockStatus(
+            selectedEvent,
+          );
+
+        if (lockStatus) {
+          return;
+        }
+
+        setLocalInstructions(
+          value,
+        );
+      },
+      [
+        selectedEvent,
+      ],
+    );
+
+  /*
+   * REGISTRATION CHANGE
+   *
+   * Registration can only be controlled while
+   * the event is editable and already prepared.
+   */
+  const handleRegistrationOpenChange =
+    useCallback(
+      (
+        value: boolean,
+      ) => {
+        const lockStatus =
+          getPreparationLockStatus(
+            selectedEvent,
+          );
+
+        if (
+          lockStatus ||
+          preparationStatus !==
+          "prepared"
+        ) {
+          setRegistrationOpen(false);
+          return;
+        }
+
+        setRegistrationOpen(
+          value,
+        );
+      },
+      [
+        preparationStatus,
+        selectedEvent,
+      ],
+    );
+
   const savePreparation =
     useCallback(async () => {
       if (
@@ -944,21 +1087,26 @@ export default function useMunicipalDashboard() {
       setVenueError(null);
 
       /*
-       * FIRST GUARD:
-       * Current UI event state.
-       */
-      if (
-        isReceivedEventCancelled(
+ * UI lifecycle guard.
+ *
+ * Only upcoming events may still have their
+ * municipal preparation changed.
+ */
+      const selectedEventLockStatus =
+        getPreparationLockStatus(
           selectedEvent,
-        )
-      ) {
-        alert(
-          "This event has been cancelled. Municipal preparation and registration can no longer be changed.",
         );
 
-        setRegistrationOpen(
-          false,
+      if (
+        selectedEventLockStatus
+      ) {
+        alert(
+          getPreparationLockMessage(
+            selectedEventLockStatus,
+          ),
         );
+
+        setRegistrationOpen(false);
 
         return;
       }
@@ -979,8 +1127,7 @@ export default function useMunicipalDashboard() {
       }
 
       /*
-       * A prepared event must already have its
-       * municipal venue assigned.
+       * Prepared requires venue.
        */
       if (
         preparationStatus ===
@@ -995,8 +1142,7 @@ export default function useMunicipalDashboard() {
       }
 
       /*
-       * A prepared event should always have a
-       * valid provincial schedule.
+       * Prepared requires schedule.
        */
       if (
         preparationStatus ===
@@ -1036,8 +1182,8 @@ export default function useMunicipalDashboard() {
         }
 
         /*
-         * SECOND GUARD:
-         * Re-read the municipal assignment.
+         * Re-read assignment to protect
+         * against stale UI data.
          */
         const {
           data:
@@ -1096,7 +1242,7 @@ export default function useMunicipalDashboard() {
           latestAssignmentData as LatestAssignmentRow;
 
         /*
-         * Re-read the parent provincial event.
+         * Re-read provincial event.
          */
         const {
           data:
@@ -1149,6 +1295,14 @@ export default function useMunicipalDashboard() {
         const latestEvent =
           latestEventData as LatestEventStatusRow;
 
+        /*
+  * Latest lifecycle guard.
+  *
+  * Re-check the database immediately before
+  * saving so stale browser data cannot modify
+  * an event that already started, completed,
+  * or was cancelled.
+  */
         const latestMunicipalStatus =
           normalizeStatus(
             latestAssignment.municipal_status,
@@ -1159,22 +1313,40 @@ export default function useMunicipalDashboard() {
             latestEvent.status,
           );
 
-        /*
-         * LATEST DATABASE CANCELLATION GUARD
-         */
+        let latestLockStatus:
+          | PreparationLockStatus
+          | null = null;
+
         if (
           latestMunicipalStatus ===
           "cancelled" ||
           latestProvincialStatus ===
           "cancelled"
         ) {
+          latestLockStatus =
+            "cancelled";
+        } else if (
+          latestProvincialStatus ===
+          "completed"
+        ) {
+          latestLockStatus =
+            "completed";
+        } else if (
+          latestProvincialStatus ===
+          "ongoing"
+        ) {
+          latestLockStatus =
+            "ongoing";
+        }
+
+        if (latestLockStatus) {
           alert(
-            "This event was cancelled by the provincial administrator. Preparation and participant registration are now locked.",
+            getPreparationLockMessage(
+              latestLockStatus,
+            ),
           );
 
-          setRegistrationOpen(
-            false,
-          );
+          setRegistrationOpen(false);
 
           closePrepareModal();
 
@@ -1184,11 +1356,10 @@ export default function useMunicipalDashboard() {
         }
 
         /*
-         * VENUE OWNERSHIP GUARD
+         * VENUE OWNERSHIP + LATEST STATUS GUARD
          *
-         * Do not trust the selected venue ID from
-         * the browser alone. Re-read it and ensure
-         * that it belongs to this municipality.
+         * This re-reads the venue immediately
+         * before saving.
          */
         if (
           selectedVenueId
@@ -1205,7 +1376,8 @@ export default function useMunicipalDashboard() {
                 id,
                 venue_name,
                 municipality,
-                capacity
+                capacity,
+                status
               `,
             )
             .eq(
@@ -1242,6 +1414,10 @@ export default function useMunicipalDashboard() {
           const selectedVenue =
             selectedVenueData as VenueRow;
 
+          /*
+           * Venue must belong to logged-in
+           * municipal admin municipality.
+           */
           if (
             normalizeMunicipality(
               selectedVenue.municipality,
@@ -1253,6 +1429,38 @@ export default function useMunicipalDashboard() {
             setVenueError(
               "The selected venue does not belong to your municipality.",
             );
+
+            return;
+          }
+
+          /*
+           * Latest inactive venue protection.
+           */
+          if (
+            !isVenueActiveStatus(
+              selectedVenue.status,
+            )
+          ) {
+            const venueName =
+              selectedVenue
+                .venue_name ??
+              "The selected venue";
+
+            const message =
+              `${venueName} is currently inactive and cannot be assigned to this event. Please select an active venue.`;
+
+            setVenueError(
+              `Venue Unavailable: ${message}`,
+            );
+
+            alert(
+              `Venue Unavailable\n\n${message}`,
+            );
+
+            /*
+             * Reload venue statuses.
+             */
+            await fetchReceivedEvents();
 
             return;
           }
@@ -1271,11 +1479,13 @@ export default function useMunicipalDashboard() {
               : "pending";
 
         /*
-         * THIRD GUARD:
+         * SAVE
          *
-         * The database venue-conflict trigger
-         * executes during this UPDATE whenever
-         * local_venue_id is changed.
+         * Existing DB venue schedule-conflict
+         * trigger remains the final protection.
+         *
+         * New inactive venue DB trigger is also
+         * the final authority.
          */
         const {
           data: updatedRows,
@@ -1291,10 +1501,6 @@ export default function useMunicipalDashboard() {
             preparation_status:
               databasePreparationStatus,
 
-            /*
-             * Objective #2:
-             * Local municipal venue assignment.
-             */
             local_venue_id:
               selectedVenueId ||
               null,
@@ -1330,17 +1536,44 @@ export default function useMunicipalDashboard() {
 
         if (updateError) {
           /*
-           * Venue conflict is an expected validation result.
-           * Show an immediate alert so the municipal admin
-           * notices it right away, while keeping the inline
-           * modal error for reference.
+           * Inactive venue DB trigger error.
+           */
+          if (
+            isVenueUnavailableError(
+              updateError.message,
+            )
+          ) {
+            const message =
+              "The selected venue is currently inactive and cannot be assigned to this event. Please select an active venue.";
+
+            console.warn(
+              "Inactive venue assignment prevented:",
+              updateError.message,
+            );
+
+            setVenueError(
+              `Venue Unavailable: ${message}`,
+            );
+
+            alert(
+              `Venue Unavailable\n\n${message}`,
+            );
+
+            await fetchReceivedEvents();
+
+            return;
+          }
+
+          /*
+           * Existing schedule-conflict
+           * database protection.
            */
           if (
             isVenueScheduleConflictError(
               updateError.message,
             )
           ) {
-            const conflictMessage =
+            const message =
               "This venue is already assigned to another event during the selected schedule. Please select another venue or use a non-overlapping schedule.";
 
             console.warn(
@@ -1349,19 +1582,16 @@ export default function useMunicipalDashboard() {
             );
 
             setVenueError(
-              `Venue Schedule Conflict: ${conflictMessage}`,
+              `Venue Schedule Conflict: ${message}`,
             );
 
             alert(
-              `Venue Schedule Conflict\n\n${conflictMessage}`,
+              `Venue Schedule Conflict\n\n${message}`,
             );
 
             return;
           }
 
-          /*
-           * Unexpected database errors remain real errors.
-           */
           console.error(
             "Preparation update error:",
             updateError,
@@ -1374,14 +1604,9 @@ export default function useMunicipalDashboard() {
           return;
         }
 
-        /*
-         * No row was updated because the assignment
-         * was cancelled or locked before save.
-         */
         if (
           !updatedRows ||
-          updatedRows.length ===
-          0
+          updatedRows.length === 0
         ) {
           alert(
             "The event could not be updated because it has already been cancelled or locked.",
@@ -1435,16 +1660,16 @@ export default function useMunicipalDashboard() {
       selectedVenueId,
     ]);
 
-  /*
-   * MUNICIPAL DASHBOARD SUMMARY
-   */
-  const summary = useMemo(
-    () =>
-      getMunicipalDashboardSummary(
+  const summary =
+    useMemo(
+      () =>
+        getMunicipalDashboardSummary(
+          receivedEvents,
+        ),
+      [
         receivedEvents,
-      ),
-    [receivedEvents],
-  );
+      ],
+    );
 
   return {
     municipality,
@@ -1453,9 +1678,6 @@ export default function useMunicipalDashboard() {
     summary,
     loading,
 
-    /*
-     * Municipal venue data.
-     */
     venues,
     venuesLoading,
     selectedVenueId,
@@ -1467,8 +1689,11 @@ export default function useMunicipalDashboard() {
     savingPreparation,
     preparationStatus,
 
-    setLocalInstructions,
-    setRegistrationOpen,
+    setLocalInstructions:
+      handleLocalInstructionsChange,
+
+    setRegistrationOpen:
+      handleRegistrationOpenChange,
 
     handleVenueChange,
 

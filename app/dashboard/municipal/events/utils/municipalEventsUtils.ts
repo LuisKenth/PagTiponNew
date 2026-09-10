@@ -1,6 +1,11 @@
 import type { ReceivedEvent } from "../../types/municipalDashboard";
 
+import {
+  normalizePreparationStatus,
+} from "../../utils/municipalDashboardUtils";
+
 import type {
+  EventStatusFilter,
   RegistrationFilter,
   SortOption,
   StatusFilter,
@@ -33,11 +38,39 @@ export function isCancelledEvent(
   );
 }
 
+/*
+ * REGISTRATION AVAILABILITY
+ *
+ * Registration is considered open only when:
+ *
+ * 1. The event is not cancelled.
+ * 2. The provincial event is still upcoming.
+ * 3. Municipal preparation is already Prepared.
+ * 4. registration_open is explicitly true.
+ *
+ * Ongoing, completed, cancelled, unknown,
+ * and non-prepared events are treated as closed.
+ */
 export function isRegistrationOpen(
   item: ReceivedEvent,
 ) {
+  if (isCancelledEvent(item)) {
+    return false;
+  }
+
+  const provincialStatus =
+    normalizeValue(
+      item.event?.status,
+    );
+
+  const preparationStatus =
+    normalizePreparationStatus(
+      item.municipal_status,
+    );
+
   return (
-    !isCancelledEvent(item) &&
+    provincialStatus === "upcoming" &&
+    preparationStatus === "prepared" &&
     item.registration_open === true
   );
 }
@@ -61,6 +94,7 @@ type FilterAndSortEventsOptions = {
   events: ReceivedEvent[];
   searchTerm: string;
   statusFilter: StatusFilter;
+  eventStatusFilter: EventStatusFilter;
   registrationFilter: RegistrationFilter;
   sortOption: SortOption;
 };
@@ -69,6 +103,7 @@ export function filterAndSortEvents({
   events,
   searchTerm,
   statusFilter,
+  eventStatusFilter,
   registrationFilter,
   sortOption,
 }: FilterAndSortEventsOptions) {
@@ -77,11 +112,20 @@ export function filterAndSortEvents({
 
   const matchingEvents =
     events.filter((item) => {
-      const cancelled =
-        isCancelledEvent(item);
-
       const registrationIsOpen =
         isRegistrationOpen(item);
+
+      const preparationStatus =
+        normalizeValue(
+          normalizePreparationStatus(
+            item.municipal_status,
+          ),
+        );
+
+      const eventStatus =
+        normalizeValue(
+          item.event?.status,
+        );
 
       const searchableText = [
         item.event?.title,
@@ -89,6 +133,8 @@ export function filterAndSortEvents({
         item.event?.memo_filename,
         item.local_instructions,
         item.municipality,
+        preparationStatus,
+        eventStatus,
       ]
         .map(normalizeValue)
         .join(" ");
@@ -99,16 +145,17 @@ export function filterAndSortEvents({
           normalizedSearch,
         );
 
-      const matchesStatus =
+      const matchesPreparationStatus =
         statusFilter === "all"
           ? true
-          : statusFilter ===
-              "cancelled"
-            ? cancelled
-            : !cancelled &&
-              normalizeValue(
-                item.municipal_status,
-              ) === statusFilter;
+          : preparationStatus ===
+            statusFilter;
+
+      const matchesEventStatus =
+        eventStatusFilter === "all"
+          ? true
+          : eventStatus ===
+            eventStatusFilter;
 
       const matchesRegistration =
         registrationFilter === "all"
@@ -120,7 +167,8 @@ export function filterAndSortEvents({
 
       return (
         matchesSearch &&
-        matchesStatus &&
+        matchesPreparationStatus &&
+        matchesEventStatus &&
         matchesRegistration
       );
     });

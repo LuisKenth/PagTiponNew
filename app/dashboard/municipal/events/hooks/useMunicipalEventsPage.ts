@@ -9,6 +9,7 @@ import {
 import type { ReceivedEvent } from "../../types/municipalDashboard";
 
 import type {
+  EventStatusFilter,
   RegistrationFilter,
   SortOption,
   StatusFilter,
@@ -30,6 +31,12 @@ export default function useMunicipalEventsPage(
     statusFilter,
     setStatusFilter,
   ] = useState<StatusFilter>("all");
+
+  const [
+    eventStatusFilter,
+    setEventStatusFilter,
+  ] =
+    useState<EventStatusFilter>("all");
 
   const [
     registrationFilter,
@@ -54,15 +61,17 @@ export default function useMunicipalEventsPage(
         events: receivedEvents,
         searchTerm,
         statusFilter,
+        eventStatusFilter,
         registrationFilter,
         sortOption,
       }),
     [
       receivedEvents,
-      registrationFilter,
       searchTerm,
-      sortOption,
       statusFilter,
+      eventStatusFilter,
+      registrationFilter,
+      sortOption,
     ],
   );
 
@@ -103,6 +112,7 @@ export default function useMunicipalEventsPage(
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
     statusFilter !== "all" ||
+    eventStatusFilter !== "all" ||
     registrationFilter !== "all";
 
   useEffect(() => {
@@ -110,6 +120,7 @@ export default function useMunicipalEventsPage(
   }, [
     searchTerm,
     statusFilter,
+    eventStatusFilter,
     registrationFilter,
     sortOption,
     pageSize,
@@ -124,6 +135,7 @@ export default function useMunicipalEventsPage(
   function clearFilters() {
     setSearchTerm("");
     setStatusFilter("all");
+    setEventStatusFilter("all");
     setRegistrationFilter("all");
     setCurrentPage(1);
   }
@@ -153,6 +165,7 @@ export default function useMunicipalEventsPage(
   return {
     searchTerm,
     statusFilter,
+    eventStatusFilter,
     registrationFilter,
     sortOption,
     currentPage,
@@ -163,10 +176,13 @@ export default function useMunicipalEventsPage(
     firstVisibleItem,
     lastVisibleItem,
     hasActiveFilters,
+
     setSearchTerm,
     setStatusFilter,
+    setEventStatusFilter,
     setRegistrationFilter,
     setSortOption,
+
     clearFilters,
     changePageSize,
     goToPreviousPage,

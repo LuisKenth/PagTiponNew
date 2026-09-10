@@ -107,6 +107,7 @@ export default function MunicipalEventsList({
                 item={item}
                 venues={venues}
                 onPrepare={onPrepare}
+                showActions={false}
               />
             ))}
           </div>
