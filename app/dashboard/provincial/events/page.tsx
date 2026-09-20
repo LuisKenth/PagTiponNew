@@ -758,9 +758,59 @@ export default function ProvincialEventsPage() {
           )
       );
 
-      alert(
-        `"${eventName}" was cancelled successfully.`
-      );
+      try {
+        const {
+          data: emailResult,
+
+          error: emailError,
+        } = await supabase.functions.invoke(
+          "send-event-email",
+          {
+            body: {
+              eventId:
+                event.id,
+              notificationType:
+                "event_cancelled",
+            },
+          }
+        );
+
+        if (emailError) {
+          throw emailError;
+        }
+
+        if (
+          emailResult?.tracking !==
+          true
+        ) {
+          throw new Error(
+            "Email delivery tracking is unavailable."
+          );
+        }
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "pagtipon:event-email-tracking",
+            {
+              detail: {
+                eventId:
+                  event.id,
+                notificationType:
+                  "event_cancelled",
+              },
+            }
+          )
+        );
+      } catch (emailError) {
+        console.error(
+          "Cancellation email error:",
+          emailError
+        );
+
+        alert(
+          `"${eventName}" was cancelled successfully.\n\nThe municipal email delivery status could not be tracked. Check the email delivery logs.`
+        );
+      }
     } catch (error) {
       console.error(
         "Cancel event error:",

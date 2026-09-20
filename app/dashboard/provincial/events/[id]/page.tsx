@@ -6,10 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
 
-import {
-  getAutomaticEventStatus,
-  getStatusClass,
-} from "../utils";
+import { getAutomaticEventStatus, getStatusClass } from "../utils";
+
+import CertificateSignatoriesCard from "./components/CertificateSignatoriesCard";
 
 import EventMemosSection, {
   type EventMemo,
@@ -56,9 +55,7 @@ function formatDate(value?: string | null) {
   });
 }
 
-function getPreparationClass(
-  status?: string | null
-) {
+function getPreparationClass(status?: string | null) {
   if (status === "ready") {
     return "bg-green-50 text-green-700";
   }
@@ -70,9 +67,7 @@ function getPreparationClass(
   return "bg-amber-50 text-amber-700";
 }
 
-function getMemoStatusClass(
-  status?: string | null
-) {
+function getMemoStatusClass(status?: string | null) {
   if (status === "acknowledged") {
     return "bg-green-50 text-green-700";
   }
@@ -84,18 +79,14 @@ function getMemoStatusClass(
   return "bg-slate-100 text-slate-600";
 }
 
-function formatStatusLabel(
-  status?: string | null
-) {
+function formatStatusLabel(status?: string | null) {
   if (!status) {
     return "Pending";
   }
 
   return status
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase()
-    );
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export default function ProvincialEventDetailsPage() {
@@ -104,39 +95,21 @@ export default function ProvincialEventDetailsPage() {
 
   const eventId = params.id as string;
 
-  const [event, setEvent] =
-    useState<EventItem | null>(null);
+  const [event, setEvent] = useState<EventItem | null>(null);
 
-  const [
-    municipalities,
-    setMunicipalities,
-  ] = useState<EventMunicipality[]>([]);
+  const [municipalities, setMunicipalities] = useState<EventMunicipality[]>([]);
 
-  const [memos, setMemos] =
-    useState<EventMemo[]>([]);
+  const [memos, setMemos] = useState<EventMemo[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [
-    currentTime,
-    setCurrentTime,
-  ] = useState(() => Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
-  const [
-    publishing,
-    setPublishing,
-  ] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
-  const [
-    cancelling,
-    setCancelling,
-  ] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  const [
-    deleting,
-    setDeleting,
-  ] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   /*
    * FETCH EVENT DETAILS
@@ -147,20 +120,14 @@ export default function ProvincialEventDetailsPage() {
     /*
      * EVENT
      */
-    const {
-      data: eventData,
-      error: eventError,
-    } = await supabase
+    const { data: eventData, error: eventError } = await supabase
       .from("events")
       .select("*")
       .eq("id", eventId)
       .single();
 
     if (eventError) {
-      console.error(
-        "Event details error:",
-        eventError.message
-      );
+      console.error("Event details error:", eventError.message);
 
       setEvent(null);
       setMunicipalities([]);
@@ -172,93 +139,60 @@ export default function ProvincialEventDetailsPage() {
 
     const now = Date.now();
 
-    const automaticStatus =
-      getAutomaticEventStatus(
-        eventData,
-        now
-      );
+    const automaticStatus = getAutomaticEventStatus(eventData, now);
 
     /*
      * Synchronize automatic status
      * with the database.
      */
     if (
-      automaticStatus !==
-        eventData.status &&
+      automaticStatus !== eventData.status &&
       automaticStatus !== "draft" &&
       automaticStatus !== "cancelled"
     ) {
-      const {
-        error: statusError,
-      } = await supabase
+      const { error: statusError } = await supabase
         .from("events")
         .update({
-          status:
-            automaticStatus,
+          status: automaticStatus,
         })
-        .eq(
-          "id",
-          eventId
-        );
+        .eq("id", eventId);
 
       if (statusError) {
-        console.error(
-          "Status synchronization error:",
-          statusError.message
-        );
+        console.error("Status synchronization error:", statusError.message);
       }
     }
 
     setEvent({
       ...(eventData as EventItem),
-      status:
-        automaticStatus,
+      status: automaticStatus,
     });
 
     /*
      * MUNICIPALITIES
      */
-    const {
-      data: municipalityData,
-      error: municipalityError,
-    } = await supabase
-      .from(
-        "event_municipalities"
-      )
+    const { data: municipalityData, error: municipalityError } = await supabase
+      .from("event_municipalities")
       .select("*")
-      .eq(
-        "event_id",
-        eventId
-      )
-      .order(
-        "municipality",
-        {
-          ascending: true,
-        }
-      );
+      .eq("event_id", eventId)
+      .order("municipality", {
+        ascending: true,
+      });
 
     if (municipalityError) {
-      console.error(
-        "Municipality details error:",
-        municipalityError.message
-      );
+      console.error("Municipality details error:", municipalityError.message);
 
       setMunicipalities([]);
     } else {
-      setMunicipalities(
-        municipalityData || []
-      );
+      setMunicipalities(municipalityData || []);
     }
 
     /*
      * OFFICIAL MEMOS
      */
-    const {
-      data: memoData,
-      error: memoError,
-    } = await supabase
+    const { data: memoData, error: memoError } = await supabase
       .from("event_memos")
-      .select(`
+      .select(
+        `
         id,
         event_id,
         file_name,
@@ -267,29 +201,19 @@ export default function ProvincialEventDetailsPage() {
         file_size,
         file_type,
         created_at
-      `)
-      .eq(
-        "event_id",
-        eventId
+      `,
       )
-      .order(
-        "created_at",
-        {
-          ascending: true,
-        }
-      );
+      .eq("event_id", eventId)
+      .order("created_at", {
+        ascending: true,
+      });
 
     if (memoError) {
-      console.error(
-        "Event memos error:",
-        memoError.message
-      );
+      console.error("Event memos error:", memoError.message);
 
       setMemos([]);
     } else {
-      setMemos(
-        (memoData || []) as EventMemo[]
-      );
+      setMemos((memoData || []) as EventMemo[]);
     }
 
     setCurrentTime(now);
@@ -307,17 +231,12 @@ export default function ProvincialEventDetailsPage() {
    * EVERY 30 SECONDS
    */
   useEffect(() => {
-    const timer =
-      window.setInterval(() => {
-        setCurrentTime(
-          Date.now()
-        );
-      }, 30_000);
+    const timer = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 30_000);
 
     return () => {
-      window.clearInterval(
-        timer
-      );
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -329,115 +248,68 @@ export default function ProvincialEventDetailsPage() {
       return;
     }
 
-    const automaticStatus =
-      getAutomaticEventStatus(
-        event,
-        Date.now()
-      );
+    const automaticStatus = getAutomaticEventStatus(event, Date.now());
 
-    if (
-      automaticStatus !== "draft"
-    ) {
-      alert(
-        "Only draft events can be published."
-      );
+    if (automaticStatus !== "draft") {
+      alert("Only draft events can be published.");
 
       return;
     }
 
     if (!event.title?.trim()) {
-      alert(
-        "Please add an event title before publishing."
-      );
+      alert("Please add an event title before publishing.");
 
       return;
     }
 
-    if (
-      !event.description?.trim()
-    ) {
-      alert(
-        "Please add an event description before publishing."
-      );
+    if (!event.description?.trim()) {
+      alert("Please add an event description before publishing.");
 
       return;
     }
 
-    if (
-      !event.start_at ||
-      !event.end_at
-    ) {
-      alert(
-        "Please set the event schedule before publishing."
-      );
+    if (!event.start_at || !event.end_at) {
+      alert("Please set the event schedule before publishing.");
 
       return;
     }
 
-    const startTime =
-      new Date(
-        event.start_at
-      ).getTime();
+    const startTime = new Date(event.start_at).getTime();
 
-    const endTime =
-      new Date(
-        event.end_at
-      ).getTime();
+    const endTime = new Date(event.end_at).getTime();
 
-    if (
-      Number.isNaN(startTime) ||
-      Number.isNaN(endTime)
-    ) {
-      alert(
-        "The event schedule is invalid."
-      );
+    if (Number.isNaN(startTime) || Number.isNaN(endTime)) {
+      alert("The event schedule is invalid.");
 
       return;
     }
 
-    if (
-      endTime <= startTime
-    ) {
-      alert(
-        "End date and time must be after start date and time."
-      );
+    if (endTime <= startTime) {
+      alert("End date and time must be after start date and time.");
 
       return;
     }
 
-    if (
-      municipalities.length ===
-      0
-    ) {
-      alert(
-        "Please assign at least one municipality before publishing."
-      );
+    if (municipalities.length === 0) {
+      alert("Please assign at least one municipality before publishing.");
 
       return;
     }
 
     const hasMemo =
-      memos.length > 0 ||
-      Boolean(
-        event.memo_url ||
-          event.memo_filename
-      );
+      memos.length > 0 || Boolean(event.memo_url || event.memo_filename);
 
     if (!hasMemo) {
-      alert(
-        "Please upload an official memo before publishing."
-      );
+      alert("Please upload an official memo before publishing.");
 
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Publish "${
-          event.title ||
-          "Untitled Event"
-        }"?\n\nThe event will become available to its assigned municipalities.`
-      );
+    const confirmed = window.confirm(
+      `Publish "${
+        event.title || "Untitled Event"
+      }"?\n\nThe event will become available to its assigned municipalities.`,
+    );
 
     if (!confirmed) {
       return;
@@ -446,67 +318,45 @@ export default function ProvincialEventDetailsPage() {
     try {
       setPublishing(true);
 
-      const publishedStatus =
-        getAutomaticEventStatus(
-          {
-            ...event,
-            status:
-              "published",
-          },
-          Date.now()
-        );
+      const publishedStatus = getAutomaticEventStatus(
+        {
+          ...event,
+          status: "published",
+        },
+        Date.now(),
+      );
 
-      const {
-        error: publishError,
-      } = await supabase
+      const { error: publishError } = await supabase
         .from("events")
         .update({
-          status:
-            publishedStatus,
-          updated_at:
-            new Date().toISOString(),
+          status: publishedStatus,
+          updated_at: new Date().toISOString(),
         })
-        .eq(
-          "id",
-          event.id
-        );
+        .eq("id", event.id);
 
       if (publishError) {
         throw publishError;
       }
 
-      setEvent(
-        (currentEvent) =>
-          currentEvent
-            ? {
-                ...currentEvent,
-                status:
-                  publishedStatus,
-              }
-            : currentEvent
+      setEvent((currentEvent) =>
+        currentEvent
+          ? {
+              ...currentEvent,
+              status: publishedStatus,
+            }
+          : currentEvent,
       );
 
-      setCurrentTime(
-        Date.now()
-      );
+      setCurrentTime(Date.now());
 
-      alert(
-        `"${event.title}" was published successfully.`
-      );
+      alert(`"${event.title}" was published successfully.`);
     } catch (error) {
-      console.error(
-        "Publish event error:",
-        error
-      );
+      console.error("Publish event error:", error);
 
       const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to publish the event.";
+        error instanceof Error ? error.message : "Unable to publish the event.";
 
-      alert(
-        `Failed to publish event.\n\n${message}`
-      );
+      alert(`Failed to publish event.\n\n${message}`);
     } finally {
       setPublishing(false);
     }
@@ -524,57 +374,37 @@ export default function ProvincialEventDetailsPage() {
      * Re-read latest schedule/status
      * before cancelling.
      */
-    const {
-      data: latestEvent,
-      error: latestError,
-    } = await supabase
+    const { data: latestEvent, error: latestError } = await supabase
       .from("events")
-      .select(
-        "id, status, start_at, end_at"
-      )
-      .eq(
-        "id",
-        event.id
-      )
+      .select("id, status, start_at, end_at")
+      .eq("id", event.id)
       .single();
 
     if (latestError) {
-      alert(
-        "Unable to verify the current event status."
-      );
+      alert("Unable to verify the current event status.");
 
       return;
     }
 
-    const latestStatus =
-      getAutomaticEventStatus(
-        latestEvent,
-        Date.now()
-      );
+    const latestStatus = getAutomaticEventStatus(latestEvent, Date.now());
 
     /*
      * Only upcoming events may
      * be cancelled.
      */
-    if (
-      latestStatus !== "upcoming"
-    ) {
-      alert(
-        "Only upcoming events can be cancelled."
-      );
+    if (latestStatus !== "upcoming") {
+      alert("Only upcoming events can be cancelled.");
 
       await fetchEventDetails();
 
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Cancel "${
-          event.title ||
-          "Untitled Event"
-        }"?\n\nThe event will remain in PagTipon as a historical record.`
-      );
+    const confirmed = window.confirm(
+      `Cancel "${
+        event.title || "Untitled Event"
+      }"?\n\nThe event will remain in PagTipon as a historical record.`,
+    );
 
     if (!confirmed) {
       return;
@@ -583,53 +413,71 @@ export default function ProvincialEventDetailsPage() {
     try {
       setCancelling(true);
 
-      const {
-        error: cancelError,
-      } = await supabase
+      const { error: cancelError } = await supabase
         .from("events")
         .update({
-          status:
-            "cancelled",
-          updated_at:
-            new Date().toISOString(),
+          status: "cancelled",
+          updated_at: new Date().toISOString(),
         })
-        .eq(
-          "id",
-          event.id
-        );
+        .eq("id", event.id);
 
       if (cancelError) {
         throw cancelError;
       }
 
-      setEvent(
-        (currentEvent) =>
-          currentEvent
-            ? {
-                ...currentEvent,
-                status:
-                  "cancelled",
-              }
-            : currentEvent
+      setEvent((currentEvent) =>
+        currentEvent
+          ? {
+              ...currentEvent,
+              status: "cancelled",
+            }
+          : currentEvent,
       );
 
-      alert(
-        `"${event.title}" was cancelled successfully.`
-      );
+      try {
+        const {
+          data: emailResult,
+          error: emailError,
+        } = await supabase.functions.invoke(
+          "send-event-email",
+          {
+            body: {
+              eventId: event.id,
+              notificationType: "event_cancelled",
+            },
+          },
+        );
+
+        if (emailError) {
+          throw emailError;
+        }
+
+        if (emailResult?.tracking !== true) {
+          throw new Error("Email delivery tracking is unavailable.");
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("pagtipon:event-email-tracking", {
+            detail: {
+              eventId: event.id,
+              notificationType: "event_cancelled",
+            },
+          }),
+        );
+      } catch (emailError) {
+        console.error("Cancellation email error:", emailError);
+
+        alert(
+          `"${event.title}" was cancelled successfully.\n\nThe municipal email delivery status could not be tracked. Check the email delivery logs.`,
+        );
+      }
     } catch (error) {
-      console.error(
-        "Cancel event error:",
-        error
-      );
+      console.error("Cancel event error:", error);
 
       const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to cancel the event.";
+        error instanceof Error ? error.message : "Unable to cancel the event.";
 
-      alert(
-        `Failed to cancel event.\n\n${message}`
-      );
+      alert(`Failed to cancel event.\n\n${message}`);
     } finally {
       setCancelling(false);
     }
@@ -643,51 +491,31 @@ export default function ProvincialEventDetailsPage() {
       return;
     }
 
-    const {
-      data: latestEvent,
-      error: latestError,
-    } = await supabase
+    const { data: latestEvent, error: latestError } = await supabase
       .from("events")
-      .select(
-        "id, status, start_at, end_at"
-      )
-      .eq(
-        "id",
-        event.id
-      )
+      .select("id, status, start_at, end_at")
+      .eq("id", event.id)
       .single();
 
     if (latestError) {
-      alert(
-        "Unable to verify the current event status."
-      );
+      alert("Unable to verify the current event status.");
 
       return;
     }
 
-    const latestStatus =
-      getAutomaticEventStatus(
-        latestEvent,
-        Date.now()
-      );
+    const latestStatus = getAutomaticEventStatus(latestEvent, Date.now());
 
-    if (
-      latestStatus !== "draft"
-    ) {
-      alert(
-        "Only draft events can be permanently deleted."
-      );
+    if (latestStatus !== "draft") {
+      alert("Only draft events can be permanently deleted.");
 
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Delete "${
-          event.title ||
-          "Untitled Event"
-        }"?\n\nThis action cannot be undone.`
-      );
+    const confirmed = window.confirm(
+      `Delete "${
+        event.title || "Untitled Event"
+      }"?\n\nThis action cannot be undone.`,
+    );
 
     if (!confirmed) {
       return;
@@ -699,37 +527,22 @@ export default function ProvincialEventDetailsPage() {
       /*
        * Remove municipality assignments.
        */
-      const {
-        error:
-          municipalityDeleteError,
-      } = await supabase
-        .from(
-          "event_municipalities"
-        )
+      const { error: municipalityDeleteError } = await supabase
+        .from("event_municipalities")
         .delete()
-        .eq(
-          "event_id",
-          event.id
-        );
+        .eq("event_id", event.id);
 
-      if (
-        municipalityDeleteError
-      ) {
+      if (municipalityDeleteError) {
         throw municipalityDeleteError;
       }
 
       /*
        * Remove event memo records.
        */
-      const {
-        error: memoDeleteError,
-      } = await supabase
+      const { error: memoDeleteError } = await supabase
         .from("event_memos")
         .delete()
-        .eq(
-          "event_id",
-          event.id
-        );
+        .eq("event_id", event.id);
 
       if (memoDeleteError) {
         throw memoDeleteError;
@@ -738,43 +551,27 @@ export default function ProvincialEventDetailsPage() {
       /*
        * Remove actual event.
        */
-      const {
-        error: eventDeleteError,
-      } = await supabase
+      const { error: eventDeleteError } = await supabase
         .from("events")
         .delete()
-        .eq(
-          "id",
-          event.id
-        );
+        .eq("id", event.id);
 
       if (eventDeleteError) {
         throw eventDeleteError;
       }
 
-      alert(
-        `"${event.title}" was deleted successfully.`
-      );
+      alert(`"${event.title}" was deleted successfully.`);
 
-      router.replace(
-        "/dashboard/provincial/events"
-      );
+      router.replace("/dashboard/provincial/events");
 
       router.refresh();
     } catch (error) {
-      console.error(
-        "Delete event error:",
-        error
-      );
+      console.error("Delete event error:", error);
 
       const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to delete the event.";
+        error instanceof Error ? error.message : "Unable to delete the event.";
 
-      alert(
-        `Failed to delete event.\n\n${message}`
-      );
+      alert(`Failed to delete event.\n\n${message}`);
     } finally {
       setDeleting(false);
     }
@@ -818,9 +615,7 @@ export default function ProvincialEventDetailsPage() {
           </h1>
 
           <p className="mt-1 text-sm text-slate-500">
-            The selected provincial
-            event does not exist or
-            cannot be loaded.
+            The selected provincial event does not exist or cannot be loaded.
           </p>
         </div>
       </div>
@@ -830,70 +625,42 @@ export default function ProvincialEventDetailsPage() {
   /*
    * CALCULATED STATUS
    */
-  const automaticStatus =
-    getAutomaticEventStatus(
-      event,
-      currentTime
-    );
+  const automaticStatus = getAutomaticEventStatus(event, currentTime);
 
-  const isDraft =
-    automaticStatus === "draft";
+  const isDraft = automaticStatus === "draft";
 
-  const isUpcoming =
-    automaticStatus === "upcoming";
+  const isUpcoming = automaticStatus === "upcoming";
 
-  const isOngoing =
-    automaticStatus === "ongoing";
+  const isOngoing = automaticStatus === "ongoing";
 
-  const isCompleted =
-    automaticStatus === "completed";
+  const isCompleted = automaticStatus === "completed";
 
-  const isCancelled =
-    automaticStatus === "cancelled";
+  const isCancelled = automaticStatus === "cancelled";
 
-  const canEdit =
-    isDraft || isUpcoming;
+  const canEdit = isDraft || isUpcoming;
 
   /*
    * PREPARATION COUNTS
    */
-  const readyCount =
-    municipalities.filter(
-      (item) =>
-        item.preparation_status ===
-        "ready"
-    ).length;
+  const readyCount = municipalities.filter(
+    (item) => item.preparation_status === "ready",
+  ).length;
 
-  const inProgressCount =
-    municipalities.filter(
-      (item) =>
-        item.preparation_status ===
-        "in_progress"
-    ).length;
+  const inProgressCount = municipalities.filter(
+    (item) => item.preparation_status === "in_progress",
+  ).length;
 
-  const pendingCount =
-    municipalities.filter(
-      (item) =>
-        !item.preparation_status ||
-        item.preparation_status ===
-          "pending"
-    ).length;
+  const pendingCount = municipalities.filter(
+    (item) => !item.preparation_status || item.preparation_status === "pending",
+  ).length;
 
   const preparationPercentage =
     municipalities.length === 0
       ? 0
-      : Math.round(
-          (readyCount /
-            municipalities.length) *
-            100
-        );
+      : Math.round((readyCount / municipalities.length) * 100);
 
   const hasMemo =
-    memos.length > 0 ||
-    Boolean(
-      event.memo_url ||
-        event.memo_filename
-    );
+    memos.length > 0 || Boolean(event.memo_url || event.memo_filename);
 
   return (
     <div className="space-y-6">
@@ -911,13 +678,12 @@ export default function ProvincialEventDetailsPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {event.title ||
-                "Untitled Event"}
+              {event.title || "Untitled Event"}
             </h1>
 
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(
-                automaticStatus
+                automaticStatus,
               )}`}
             >
               {automaticStatus}
@@ -925,10 +691,8 @@ export default function ProvincialEventDetailsPage() {
           </div>
 
           <p className="mt-2 text-sm text-slate-500">
-            Provincial event overview,
-            official memos, and
-            municipality preparation
-            monitoring.
+            Provincial event overview, official memos, and municipality
+            preparation monitoring.
           </p>
         </div>
 
@@ -948,17 +712,11 @@ export default function ProvincialEventDetailsPage() {
           {isDraft && (
             <button
               type="button"
-              disabled={
-                publishing
-              }
-              onClick={
-                handlePublish
-              }
+              disabled={publishing}
+              onClick={handlePublish}
               className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {publishing
-                ? "Publishing..."
-                : "Publish Event"}
+              {publishing ? "Publishing..." : "Publish Event"}
             </button>
           )}
 
@@ -966,17 +724,11 @@ export default function ProvincialEventDetailsPage() {
           {isUpcoming && (
             <button
               type="button"
-              disabled={
-                cancelling
-              }
-              onClick={
-                handleCancel
-              }
+              disabled={cancelling}
+              onClick={handleCancel}
               className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {cancelling
-                ? "Cancelling..."
-                : "Cancel Event"}
+              {cancelling ? "Cancelling..." : "Cancel Event"}
             </button>
           )}
 
@@ -984,17 +736,11 @@ export default function ProvincialEventDetailsPage() {
           {isDraft && (
             <button
               type="button"
-              disabled={
-                deleting
-              }
-              onClick={
-                handleDelete
-              }
+              disabled={deleting}
+              onClick={handleDelete}
               className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {deleting
-                ? "Deleting..."
-                : "Delete Draft"}
+              {deleting ? "Deleting..." : "Delete Draft"}
             </button>
           )}
         </div>
@@ -1005,13 +751,10 @@ export default function ProvincialEventDetailsPage() {
           ========================= */}
       {isDraft && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
-          <p className="text-sm font-semibold text-amber-800">
-            Draft Event
-          </p>
+          <p className="text-sm font-semibold text-amber-800">Draft Event</p>
 
           <p className="mt-1 text-sm text-amber-700">
-            This event has not yet been
-            published to its assigned
+            This event has not yet been published to its assigned
             municipalities.
           </p>
         </div>
@@ -1019,14 +762,11 @@ export default function ProvincialEventDetailsPage() {
 
       {isUpcoming && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4">
-          <p className="text-sm font-semibold text-blue-800">
-            Upcoming Event
-          </p>
+          <p className="text-sm font-semibold text-blue-800">Upcoming Event</p>
 
           <p className="mt-1 text-sm text-blue-700">
-            This event may still be
-            edited or cancelled before
-            its scheduled start time.
+            This event may still be edited or cancelled before its scheduled
+            start time.
           </p>
         </div>
       )}
@@ -1038,10 +778,8 @@ export default function ProvincialEventDetailsPage() {
           </p>
 
           <p className="mt-1 text-sm text-green-700">
-            Editing and cancellation are
-            locked while this event is
-            ongoing to protect attendance
-            and event records.
+            Editing and cancellation are locked while this event is ongoing to
+            protect attendance and event records.
           </p>
         </div>
       )}
@@ -1053,24 +791,19 @@ export default function ProvincialEventDetailsPage() {
           </p>
 
           <p className="mt-1 text-sm text-slate-600">
-            This event is preserved as a
-            historical record and can no
-            longer be edited or
-            cancelled.
+            This event is preserved as a historical record and can no longer be
+            edited or cancelled.
           </p>
         </div>
       )}
 
       {isCancelled && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-          <p className="text-sm font-semibold text-red-800">
-            Event Cancelled
-          </p>
+          <p className="text-sm font-semibold text-red-800">Event Cancelled</p>
 
           <p className="mt-1 text-sm text-red-700">
-            This event remains available
-            for historical reference but
-            can no longer be modified.
+            This event remains available for historical reference but can no
+            longer be modified.
           </p>
         </div>
       )}
@@ -1089,14 +822,13 @@ export default function ProvincialEventDetailsPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  General event details
-                  and schedule.
+                  General event details and schedule.
                 </p>
               </div>
 
               <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(
-                  automaticStatus
+                  automaticStatus,
                 )}`}
               >
                 {automaticStatus}
@@ -1111,8 +843,7 @@ export default function ProvincialEventDetailsPage() {
                 </p>
 
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                  {event.description ||
-                    "No description provided."}
+                  {event.description || "No description provided."}
                 </p>
               </div>
 
@@ -1124,9 +855,7 @@ export default function ProvincialEventDetailsPage() {
                   </p>
 
                   <p className="mt-2 text-sm font-semibold text-slate-900">
-                    {formatDate(
-                      event.start_at
-                    )}
+                    {formatDate(event.start_at)}
                   </p>
                 </div>
 
@@ -1136,14 +865,15 @@ export default function ProvincialEventDetailsPage() {
                   </p>
 
                   <p className="mt-2 text-sm font-semibold text-slate-900">
-                    {formatDate(
-                      event.end_at
-                    )}
+                    {formatDate(event.end_at)}
                   </p>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* CERTIFICATE SIGNATORIES */}
+          <CertificateSignatoriesCard eventId={event.id} />
 
           {/* OFFICIAL MEMOS */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1154,9 +884,7 @@ export default function ProvincialEventDetailsPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Official documents
-                  attached to this
-                  provincial event.
+                  Official documents attached to this provincial event.
                 </p>
               </div>
 
@@ -1167,21 +895,15 @@ export default function ProvincialEventDetailsPage() {
                     : "bg-slate-100 text-slate-500"
                 }`}
               >
-                {hasMemo
-                  ? "Memo Available"
-                  : "No Memo"}
+                {hasMemo ? "Memo Available" : "No Memo"}
               </span>
             </div>
 
             <EventMemosSection
               eventId={event.id}
               memos={memos}
-              legacyMemoUrl={
-                event.memo_url
-              }
-              legacyMemoFilename={
-                event.memo_filename
-              }
+              legacyMemoUrl={event.memo_url}
+              legacyMemoFilename={event.memo_filename}
             />
           </div>
 
@@ -1198,9 +920,7 @@ export default function ProvincialEventDetailsPage() {
                 </p>
 
                 <p className="mt-2 text-sm font-medium text-slate-800">
-                  {formatDate(
-                    event.created_at
-                  )}
+                  {formatDate(event.created_at)}
                 </p>
               </div>
 
@@ -1210,9 +930,7 @@ export default function ProvincialEventDetailsPage() {
                 </p>
 
                 <p className="mt-2 text-sm font-medium text-slate-800">
-                  {formatDate(
-                    event.updated_at
-                  )}
+                  {formatDate(event.updated_at)}
                 </p>
               </div>
             </div>
@@ -1229,8 +947,7 @@ export default function ProvincialEventDetailsPage() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Overall municipality
-              preparation progress.
+              Overall municipality preparation progress.
             </p>
 
             {/* PROGRESS */}
@@ -1241,10 +958,7 @@ export default function ProvincialEventDetailsPage() {
                 </p>
 
                 <p className="text-sm font-bold text-slate-900">
-                  {
-                    preparationPercentage
-                  }
-                  %
+                  {preparationPercentage}%
                 </p>
               </div>
 
@@ -1258,11 +972,7 @@ export default function ProvincialEventDetailsPage() {
               </div>
 
               <p className="mt-2 text-xs text-slate-500">
-                {readyCount} of{" "}
-                {
-                  municipalities.length
-                }{" "}
-                municipalities ready
+                {readyCount} of {municipalities.length} municipalities ready
               </p>
             </div>
 
@@ -1274,9 +984,7 @@ export default function ProvincialEventDetailsPage() {
                 </p>
 
                 <p className="mt-1 text-2xl font-bold text-slate-900">
-                  {
-                    municipalities.length
-                  }
+                  {municipalities.length}
                 </p>
               </div>
 
@@ -1296,9 +1004,7 @@ export default function ProvincialEventDetailsPage() {
                 </p>
 
                 <p className="mt-1 text-2xl font-bold text-blue-700">
-                  {
-                    inProgressCount
-                  }
+                  {inProgressCount}
                 </p>
               </div>
 
@@ -1326,25 +1032,19 @@ export default function ProvincialEventDetailsPage() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Track preparation and memo
-            status for each assigned
-            municipality.
+            Track preparation and memo status for each assigned municipality.
           </p>
         </div>
 
-        {municipalities.length ===
-        0 ? (
+        {municipalities.length === 0 ? (
           <div className="p-6">
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
               <p className="text-sm font-medium text-slate-700">
-                No municipalities
-                assigned
+                No municipalities assigned
               </p>
 
               <p className="mt-1 text-sm text-slate-500">
-                Assign municipalities
-                before publishing this
-                event.
+                Assign municipalities before publishing this event.
               </p>
             </div>
           </div>
@@ -1352,43 +1052,34 @@ export default function ProvincialEventDetailsPage() {
           <>
             {/* MOBILE */}
             <div className="space-y-3 p-4 md:hidden">
-              {municipalities.map(
-                (item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-xl border border-slate-200 p-4"
-                  >
-                    <p className="font-semibold text-slate-900">
-                      {
-                        item.municipality
-                      }
-                    </p>
+              {municipalities.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
+                  <p className="font-semibold text-slate-900">
+                    {item.municipality}
+                  </p>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${getPreparationClass(
-                          item.preparation_status
-                        )}`}
-                      >
-                        {formatStatusLabel(
-                          item.preparation_status
-                        )}
-                      </span>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${getPreparationClass(
+                        item.preparation_status,
+                      )}`}
+                    >
+                      {formatStatusLabel(item.preparation_status)}
+                    </span>
 
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${getMemoStatusClass(
-                          item.memo_status
-                        )}`}
-                      >
-                        Memo:{" "}
-                        {formatStatusLabel(
-                          item.memo_status
-                        )}
-                      </span>
-                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${getMemoStatusClass(
+                        item.memo_status,
+                      )}`}
+                    >
+                      Memo: {formatStatusLabel(item.memo_status)}
+                    </span>
                   </div>
-                )
-              )}
+                </div>
+              ))}
             </div>
 
             {/* DESKTOP */}
@@ -1396,59 +1087,45 @@ export default function ProvincialEventDetailsPage() {
               <table className="w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                    <th className="py-3 pr-4 font-semibold">
-                      Municipality
-                    </th>
+                    <th className="py-3 pr-4 font-semibold">Municipality</th>
 
-                    <th className="py-3 pr-4 font-semibold">
-                      Preparation
-                    </th>
+                    <th className="py-3 pr-4 font-semibold">Preparation</th>
 
-                    <th className="py-3 pr-4 font-semibold">
-                      Memo Status
-                    </th>
+                    <th className="py-3 pr-4 font-semibold">Memo Status</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {municipalities.map(
-                    (item) => (
-                      <tr
-                        key={item.id}
-                        className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
-                      >
-                        <td className="py-4 pr-4 font-semibold text-slate-900">
-                          {
-                            item.municipality
-                          }
-                        </td>
+                  {municipalities.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
+                    >
+                      <td className="py-4 pr-4 font-semibold text-slate-900">
+                        {item.municipality}
+                      </td>
 
-                        <td className="py-4 pr-4">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${getPreparationClass(
-                              item.preparation_status
-                            )}`}
-                          >
-                            {formatStatusLabel(
-                              item.preparation_status
-                            )}
-                          </span>
-                        </td>
+                      <td className="py-4 pr-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${getPreparationClass(
+                            item.preparation_status,
+                          )}`}
+                        >
+                          {formatStatusLabel(item.preparation_status)}
+                        </span>
+                      </td>
 
-                        <td className="py-4 pr-4">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${getMemoStatusClass(
-                              item.memo_status
-                            )}`}
-                          >
-                            {formatStatusLabel(
-                              item.memo_status
-                            )}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  )}
+                      <td className="py-4 pr-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${getMemoStatusClass(
+                            item.memo_status,
+                          )}`}
+                        >
+                          {formatStatusLabel(item.memo_status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

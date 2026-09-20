@@ -1,4 +1,5 @@
 import ProvincialSidebar from "./components/ProvincialSidebar";
+import ProvincialEmailStatusToast from "./components/ProvincialEmailStatusToast";
 
 export default function ProvincialDashboardLayout({
   children,
@@ -7,6 +8,8 @@ export default function ProvincialDashboardLayout({
 }) {
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <ProvincialEmailStatusToast />
+
       <ProvincialSidebar />
 
       <div className="min-w-0">
