@@ -1,37 +1,18 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  ClipboardList,
-  RefreshCw,
-  TriangleAlert,
-  X,
-} from "lucide-react";
+import { ClipboardList, RefreshCw, TriangleAlert, X } from "lucide-react";
 
 import PrepareEventModal from "../components/PrepareEventModal";
 import ReceivedEventsSection from "../components/ReceivedEventsSection";
 import useMunicipalDashboard from "../hooks/useMunicipalDashboard";
+import MunicipalDeliveryToast from "../components/MunicipalDeliveryToast";
 
-import type {
-  ReceivedEvent,
-} from "../types/municipalDashboard";
+import type { ReceivedEvent } from "../types/municipalDashboard";
 
-function normalizeId(
-  value:
-    | string
-    | number
-    | null
-    | undefined,
-) {
-  if (
-    value === null ||
-    value === undefined
-  ) {
+function normalizeId(value: string | number | null | undefined) {
+  if (value === null || value === undefined) {
     return "";
   }
 
@@ -43,34 +24,21 @@ export default function MunicipalPreparationsPage() {
    * Prevent a query-linked event from opening
    * repeatedly during normal re-renders.
    */
-  const targetEventHandled =
-    useRef(false);
+  const targetEventHandled = useRef(false);
 
-  const [
-    highlightedEventId,
-    setHighlightedEventId,
-  ] =
-    useState<string | null>(
-      null,
-    );
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(
+    null,
+  );
 
-  const [
-    targetError,
-    setTargetError,
-  ] =
-    useState<string | null>(
-      null,
-    );
+  const [targetError, setTargetError] = useState<string | null>(null);
 
-  const [
-    refreshing,
-    setRefreshing,
-  ] =
-    useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const {
     receivedEvents,
     loading,
+    deliveryToast,
+    dismissDeliveryToast,
 
     /*
      * Municipal venue assignment
@@ -118,76 +86,40 @@ export default function MunicipalPreparationsPage() {
    * event_municipalities record.
    */
   useEffect(() => {
-    if (
-      loading ||
-      targetEventHandled.current
-    ) {
+    if (loading || targetEventHandled.current) {
       return;
     }
 
-    const searchParameters =
-      new URLSearchParams(
-        window.location.search,
-      );
+    const searchParameters = new URLSearchParams(window.location.search);
 
-    const assignmentId =
-      normalizeId(
-        searchParameters.get(
-          "assignmentId",
-        ),
-      );
+    const assignmentId = normalizeId(searchParameters.get("assignmentId"));
 
-    const eventId =
-      normalizeId(
-        searchParameters.get(
-          "eventId",
-        ),
-      );
+    const eventId = normalizeId(searchParameters.get("eventId"));
 
     /*
      * Normal direct visit to the Preparation
      * page. Nothing needs to be opened.
      */
-    if (
-      !assignmentId &&
-      !eventId
-    ) {
+    if (!assignmentId && !eventId) {
       return;
     }
 
     /*
      * First use the exact municipal assignment.
      */
-    let targetEvent =
-      assignmentId
-        ? receivedEvents.find(
-            (item) =>
-              normalizeId(
-                item.id,
-              ) ===
-              assignmentId,
-          )
-        : undefined;
+    let targetEvent = assignmentId
+      ? receivedEvents.find((item) => normalizeId(item.id) === assignmentId)
+      : undefined;
 
     /*
      * Provincial event ID fallback.
      */
-    if (
-      !targetEvent &&
-      eventId
-    ) {
-      targetEvent =
-        receivedEvents.find(
-          (item) =>
-            normalizeId(
-              item.event_id,
-            ) ===
-              eventId ||
-            normalizeId(
-              item.event?.id,
-            ) ===
-              eventId,
-        );
+    if (!targetEvent && eventId) {
+      targetEvent = receivedEvents.find(
+        (item) =>
+          normalizeId(item.event_id) === eventId ||
+          normalizeId(item.event?.id) === eventId,
+      );
     }
 
     /*
@@ -203,20 +135,13 @@ export default function MunicipalPreparationsPage() {
       return;
     }
 
-    targetEventHandled.current =
-      true;
+    targetEventHandled.current = true;
 
     setTargetError(null);
 
-    const targetAssignmentId =
-      normalizeId(
-        targetEvent.id,
-      );
+    const targetAssignmentId = normalizeId(targetEvent.id);
 
-    setHighlightedEventId(
-      targetAssignmentId ||
-        null,
-    );
+    setHighlightedEventId(targetAssignmentId || null);
 
     /*
      * Open the authoritative preparation modal.
@@ -225,39 +150,24 @@ export default function MunicipalPreparationsPage() {
      * and modal determine whether the event is
      * editable or view-only.
      */
-    openPrepareModal(
-      targetEvent,
-    );
+    openPrepareModal(targetEvent);
 
     /*
      * Clean the URL after the correct assignment
      * has been resolved. Closing the modal will
      * therefore not immediately reopen it.
      */
-    window.history.replaceState(
-      {},
-      "",
-      "/dashboard/municipal/preparations",
-    );
-  }, [
-    loading,
-    receivedEvents,
-    openPrepareModal,
-  ]);
+    window.history.replaceState({}, "", "/dashboard/municipal/preparations");
+  }, [loading, receivedEvents, openPrepareModal]);
 
   /*
    * Open an event selected directly from this
    * page.
    */
-  function handleOpenPreparation(
-    item: ReceivedEvent,
-  ) {
+  function handleOpenPreparation(item: ReceivedEvent) {
     setTargetError(null);
 
-    setHighlightedEventId(
-      normalizeId(item.id) ||
-        null,
-    );
+    setHighlightedEventId(normalizeId(item.id) || null);
 
     openPrepareModal(item);
   }
@@ -269,19 +179,14 @@ export default function MunicipalPreparationsPage() {
   function handleClosePreparation() {
     closePrepareModal();
 
-    setHighlightedEventId(
-      null,
-    );
+    setHighlightedEventId(null);
   }
 
   /*
    * Refresh without reloading the entire page.
    */
   async function handleRefresh() {
-    if (
-      loading ||
-      refreshing
-    ) {
+    if (loading || refreshing) {
       return;
     }
 
@@ -302,14 +207,9 @@ export default function MunicipalPreparationsPage() {
   function dismissTargetError() {
     setTargetError(null);
 
-    targetEventHandled.current =
-      true;
+    targetEventHandled.current = true;
 
-    window.history.replaceState(
-      {},
-      "",
-      "/dashboard/municipal/preparations",
-    );
+    window.history.replaceState({}, "", "/dashboard/municipal/preparations");
   }
 
   return (
@@ -335,43 +235,31 @@ export default function MunicipalPreparationsPage() {
                 </h1>
 
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Manage municipal event preparation,
-                  assign local venues, provide participant
-                  instructions, and control registration
+                  Manage municipal event preparation, assign local venues,
+                  provide participant instructions, and control registration
                   before provincial events begin.
                 </p>
 
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
-                  Ongoing, completed, and cancelled events
-                  remain available for reference but can no
-                  longer be modified.
+                  Ongoing, completed, and cancelled events remain available for
+                  reference but can no longer be modified.
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() =>
-                void handleRefresh()
-              }
-              disabled={
-                loading ||
-                refreshing
-              }
+              onClick={() => void handleRefresh()}
+              disabled={loading || refreshing}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw
                 className={`h-4 w-4 ${
-                  loading ||
-                  refreshing
-                    ? "animate-spin"
-                    : ""
+                  loading || refreshing ? "animate-spin" : ""
                 }`}
               />
 
-              {refreshing
-                ? "Refreshing..."
-                : "Refresh"}
+              {refreshing ? "Refreshing..." : "Refresh"}
             </button>
           </div>
         </section>
@@ -397,23 +285,15 @@ export default function MunicipalPreparationsPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    void handleRefresh()
-                  }
-                  disabled={
-                    loading ||
-                    refreshing
-                  }
+                  onClick={() => void handleRefresh()}
+                  disabled={loading || refreshing}
                   className="mt-3 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw
                     className={`h-3.5 w-3.5 ${
-                      refreshing
-                        ? "animate-spin"
-                        : ""
+                      refreshing ? "animate-spin" : ""
                     }`}
                   />
-
                   Try Again
                 </button>
               </div>
@@ -421,9 +301,7 @@ export default function MunicipalPreparationsPage() {
 
             <button
               type="button"
-              onClick={
-                dismissTargetError
-              }
+              onClick={dismissTargetError}
               aria-label="Close event lookup warning"
               className="absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-amber-600 transition hover:bg-amber-100 hover:text-amber-800 sm:right-4 sm:top-5"
             >
@@ -460,8 +338,8 @@ export default function MunicipalPreparationsPage() {
             </p>
 
             <p className="mt-1 text-sm leading-6 text-emerald-800">
-              Municipal requirements have been completed
-              and the event is ready locally.
+              Municipal requirements have been completed and the event is ready
+              locally.
             </p>
           </div>
         </section>
@@ -471,65 +349,35 @@ export default function MunicipalPreparationsPage() {
           events={receivedEvents}
           venues={venues}
           loading={loading}
-          highlightedEventId={
-            highlightedEventId
-          }
-          onPrepare={
-            handleOpenPreparation
-          }
+          highlightedEventId={highlightedEventId}
+          onPrepare={handleOpenPreparation}
         />
       </div>
 
       {/* AUTHORITATIVE PREPARATION MODAL */}
       <PrepareEventModal
-        selectedEvent={
-          selectedEvent
-        }
-        preparationStatus={
-          preparationStatus
-        }
-        localInstructions={
-          localInstructions
-        }
-        registrationOpen={
-          registrationOpen
-        }
-        saving={
-          savingPreparation
-        }
-
+        selectedEvent={selectedEvent}
+        preparationStatus={preparationStatus}
+        localInstructions={localInstructions}
+        registrationOpen={registrationOpen}
+        saving={savingPreparation}
         /*
          * Municipal venue assignment
          */
         venues={venues}
-        venuesLoading={
-          venuesLoading
-        }
-        selectedVenueId={
-          selectedVenueId
-        }
-        venueError={
-          venueError
-        }
-
-        onStatusChange={
-          handlePreparationStatusChange
-        }
-        onVenueChange={
-          handleVenueChange
-        }
-        onInstructionsChange={
-          setLocalInstructions
-        }
-        onRegistrationChange={
-          setRegistrationOpen
-        }
-        onClose={
-          handleClosePreparation
-        }
-        onSave={
-          savePreparation
-        }
+        venuesLoading={venuesLoading}
+        selectedVenueId={selectedVenueId}
+        venueError={venueError}
+        onStatusChange={handlePreparationStatusChange}
+        onVenueChange={handleVenueChange}
+        onInstructionsChange={setLocalInstructions}
+        onRegistrationChange={setRegistrationOpen}
+        onClose={handleClosePreparation}
+        onSave={savePreparation}
+      />
+      <MunicipalDeliveryToast
+        toast={deliveryToast}
+        onClose={dismissDeliveryToast}
       />
     </>
   );

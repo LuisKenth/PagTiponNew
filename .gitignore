@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local editor settings
+.vscode/
+
+# Supabase CLI temporary files
+supabase/.temp/
+
+# Local environment secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

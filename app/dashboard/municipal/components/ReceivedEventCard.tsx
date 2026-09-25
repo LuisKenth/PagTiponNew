@@ -5,6 +5,7 @@ import {
   Ban,
   CalendarClock,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   ExternalLink,
   FileText,
@@ -145,6 +146,14 @@ export default function ReceivedEventCard({
 
   const registeredParticipants =
     item.registered_participants ?? 0;
+
+  /*
+   * Local instructions preview.
+   */
+  const localInstructions =
+    String(
+      item.local_instructions ?? "",
+    ).trim();
 
   /*
    * Match the venue assigned to this specific
@@ -502,6 +511,65 @@ export default function ReceivedEventCard({
               </div>
             </div>
 
+            {/* LOCAL INSTRUCTIONS */}
+            <div
+              className={`mt-4 rounded-xl border p-4 ${
+                isCancelled
+                  ? "border-red-200 bg-red-50/50"
+                  : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                    isCancelled
+                      ? "bg-red-100 text-red-700"
+                      : localInstructions
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  <ClipboardList className="h-4 w-4" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-[11px] font-bold uppercase tracking-wide ${
+                      isCancelled
+                        ? "text-red-500"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    Local Instructions
+                  </p>
+
+                  {localInstructions ? (
+                    <p
+                      className={`mt-1 whitespace-pre-wrap break-words text-sm leading-6 ${
+                        isCancelled
+                          ? "text-red-800"
+                          : "text-slate-700"
+                      }`}
+                    >
+                      {localInstructions}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm italic leading-6 text-slate-400">
+                      No local instructions provided.
+                    </p>
+                  )}
+
+                  {isPreparationLocked &&
+                    localInstructions && (
+                      <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+                        <LockKeyhole className="h-3.5 w-3.5" />
+                        Retained for reference
+                      </p>
+                    )}
+                </div>
+              </div>
+            </div>
+
             {/* Registered participants */}
             <Link
               href={`/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
@@ -574,9 +642,7 @@ export default function ReceivedEventCard({
               className={`flex flex-col rounded-xl border p-4 ${
                 isCancelled
                   ? "border-red-200 bg-red-50/50"
-                  : isPreparationLocked
-                    ? "border-slate-200 bg-slate-50"
-                    : "border-slate-200 bg-slate-50"
+                  : "border-slate-200 bg-slate-50"
               }`}
             >
               <div className="flex items-center gap-2">

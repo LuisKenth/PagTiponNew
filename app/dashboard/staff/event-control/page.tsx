@@ -4,10 +4,14 @@ import EventAttendanceControl from "../components/EventAttendanceControl";
 import { useStaffAttendanceContext } from "../context/StaffAttendanceContext";
 
 export default function StaffEventControlPage() {
-  const dashboard = useStaffAttendanceContext();
+  const dashboard =
+    useStaffAttendanceContext();
 
-  const blockedMessage =
-    dashboard.getAttendanceBlockedMessage();
+  const checkInBlockedMessage =
+    dashboard.getCheckInBlockedMessage();
+
+  const checkOutBlockedMessage =
+    dashboard.getCheckOutBlockedMessage();
 
   return (
     <div className="space-y-6">
@@ -21,28 +25,94 @@ export default function StaffEventControlPage() {
         </h1>
 
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          Select an assigned event, review its schedule, and manage the
-          staff-controlled attendance check-in session.
+          Select an assigned event and manage the
+          staff-controlled Check-In and Check-Out
+          sessions for participant Time In and Time Out.
         </p>
       </header>
 
       <EventAttendanceControl
-        assignments={dashboard.eventAssignments}
-        selectedId={dashboard.selectedEventMunicipalityId}
-        selectedAssignment={dashboard.selectedAssignment}
-        loading={dashboard.loading}
-        controlLoading={dashboard.controlLoading}
-        earliestOpeningTime={dashboard.earliestOpeningTime}
-        isCheckInOpen={dashboard.isCheckInOpen}
-        wasCheckInOpened={dashboard.wasCheckInOpened}
-        wasCheckInClosed={dashboard.wasCheckInClosed}
-        canOpenCheckIn={dashboard.canOpenCheckIn}
-        canUseAttendanceTools={dashboard.canUseAttendanceTools}
-        blockedMessage={blockedMessage}
-        onSelect={dashboard.selectEvent}
-        onOpen={dashboard.openCheckIn}
-        onClose={dashboard.closeCheckIn}
-        onRefresh={dashboard.refreshSelectedEvent}
+        assignments={
+          dashboard.eventAssignments
+        }
+        selectedId={
+          dashboard.selectedEventMunicipalityId
+        }
+        selectedAssignment={
+          dashboard.selectedAssignment
+        }
+        loading={
+          dashboard.loading
+        }
+
+        /*
+         * Check-In
+         */
+        controlLoading={
+          dashboard.controlLoading
+        }
+        isCheckInOpen={
+          dashboard.isCheckInOpen
+        }
+        wasCheckInOpened={
+          dashboard.wasCheckInOpened
+        }
+        wasCheckInClosed={
+          dashboard.wasCheckInClosed
+        }
+        canOpenCheckIn={
+          dashboard.canOpenCheckIn
+        }
+        checkInBlockedMessage={
+          checkInBlockedMessage
+        }
+
+        /*
+         * Check-Out
+         */
+        checkOutControlLoading={
+          dashboard.checkOutControlLoading
+        }
+        isCheckOutOpen={
+          dashboard.isCheckOutOpen
+        }
+        wasCheckOutOpened={
+          dashboard.wasCheckOutOpened
+        }
+        wasCheckOutClosed={
+          dashboard.wasCheckOutClosed
+        }
+        canOpenCheckOut={
+          dashboard.canOpenCheckOut
+        }
+        canCloseCheckOut={
+          dashboard.canCloseCheckOut
+        }
+        checkOutBlockedMessage={
+          checkOutBlockedMessage
+        }
+
+        /*
+         * Actions
+         */
+        onSelect={
+          dashboard.selectEvent
+        }
+        onOpenCheckIn={
+          dashboard.openCheckIn
+        }
+        onCloseCheckIn={
+          dashboard.closeCheckIn
+        }
+        onOpenCheckOut={
+          dashboard.openCheckOut
+        }
+        onCloseCheckOut={
+          dashboard.closeCheckOut
+        }
+        onRefresh={
+          dashboard.refreshSelectedEvent
+        }
       />
     </div>
   );

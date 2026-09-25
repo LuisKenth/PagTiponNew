@@ -22,6 +22,12 @@ import { supabase } from "@/lib/supabase";
 
 import QRCodeBox from "../components/QRCodeBox";
 
+/*
+ * =========================================================
+ * TYPES
+ * =========================================================
+ */
+
 type RSVPRow = {
     id: string;
     event_municipality_id: string;
@@ -41,8 +47,12 @@ type EventAssignmentRow = {
     registration_open: boolean | null;
     local_venue_id: string | null;
     local_instructions: string | null;
+
     check_in_opened_at: string | null;
     check_in_closed_at: string | null;
+
+    check_out_opened_at: string | null;
+    check_out_closed_at: string | null;
 };
 
 type VenueRow = {
@@ -60,11 +70,22 @@ type EventRow = {
     status: string | null;
 };
 
+type AttendanceRow = {
+    id: string;
+    rsvp_id: string;
+    status: string | null;
+    method: string | null;
+
+    checked_in_at: string | null;
+    checked_out_at: string | null;
+};
+
 type AttendancePass = {
     rsvp: RSVPRow;
     assignment: EventAssignmentRow;
     event: EventRow;
     venue: VenueRow | null;
+    attendance: AttendanceRow | null;
 };
 
 type FetchMode =
@@ -72,13 +93,21 @@ type FetchMode =
     | "refresh"
     | "silent";
 
-type CheckInState =
-    | "not_open_yet"
-    | "waiting_for_staff"
-    | "open"
-    | "closed";
+type AttendancePassState =
+    | "waiting_for_check_in"
+    | "check_in_open"
+    | "check_in_closed"
+    | "waiting_for_check_out"
+    | "check_out_open"
+    | "check_out_closed";
 
-const ATTENDANCE_PASS_EVENT_STATUSES = [
+/*
+ * =========================================================
+ * CONSTANTS
+ * =========================================================
+ */
+
+const ACTIVE_EVENT_STATUSES = [
     "published",
     "upcoming",
     "ongoing",
@@ -86,7 +115,11 @@ const ATTENDANCE_PASS_EVENT_STATUSES = [
 
 const PASSES_PER_PAGE = 5;
 
-const CHECK_IN_EARLY_MINUTES = 30;
+/*
+ * =========================================================
+ * HELPERS
+ * =========================================================
+ */
 
 function normalizeStatus(
     value: string | null | undefined,
@@ -101,9 +134,13 @@ function formatDateTime(
         return "Not set";
     }
 
-    return new Date(
-        dateValue,
-    ).toLocaleString("en-PH", {
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+        return "Invalid date";
+    }
+
+    return date.toLocaleString("en-PH", {
         dateStyle: "medium",
         timeStyle: "short",
     });
@@ -127,6 +164,14 @@ function getStatusLabel(
         return "Scheduled";
     }
 
+    if (normalizedStatus === "completed") {
+        return "Completed";
+    }
+
+    if (normalizedStatus === "cancelled") {
+        return "Cancelled";
+    }
+
     return status || "Event";
 }
 
@@ -147,112 +192,186 @@ function getStatusClasses(
         return "bg-blue-100 text-blue-700";
     }
 
+    if (normalizedStatus === "completed") {
+        return "bg-slate-100 text-slate-700";
+    }
+
+    if (normalizedStatus === "cancelled") {
+        return "bg-red-100 text-red-700";
+    }
+
     return "bg-slate-100 text-slate-700";
 }
 
-function getCheckInState(
+/*
+ * Keep the pass visible when:
+ *
+ * 1. Event is still scheduled/upcoming/ongoing.
+ *
+ * OR
+ *
+ * 2. Event is completed, participant already has a
+ *    successful Check-In, but still has no Check-Out.
+ *
+ * Once Check-Out is completed, the completed event pass
+ * no longer needs to remain active.
+ */
+function shouldKeepAttendancePass(
     pass: AttendancePass,
-    now: number,
-): CheckInState {
-    const startAt =
-        pass.event.start_at
-            ? new Date(
-                  pass.event.start_at,
-              ).getTime()
-            : null;
-
-    const endAt =
-        pass.event.end_at
-            ? new Date(
-                  pass.event.end_at,
-              ).getTime()
-            : null;
-
-    const openedAt =
-        pass.assignment.check_in_opened_at;
-
-    const closedAt =
-        pass.assignment.check_in_closed_at;
-
-    if (closedAt) {
-        return "closed";
-    }
+) {
+    const eventStatus =
+        normalizeStatus(
+            pass.event.status,
+        );
 
     if (
-        endAt !== null &&
-        now > endAt
+        ACTIVE_EVENT_STATUSES.includes(
+            eventStatus,
+        )
     ) {
-        return "closed";
+        return true;
     }
 
-    if (openedAt) {
-        return "open";
+    if (eventStatus === "completed") {
+        const hasCheckedIn =
+            Boolean(
+                pass.attendance
+                    ?.checked_in_at,
+            );
+
+        const hasCheckedOut =
+            Boolean(
+                pass.attendance
+                    ?.checked_out_at,
+            );
+
+        return (
+            hasCheckedIn &&
+            !hasCheckedOut
+        );
     }
 
-    if (startAt !== null) {
-        const earliestOpening =
-            startAt -
-            CHECK_IN_EARLY_MINUTES *
-                60 *
-                1000;
+    return false;
+}
 
-        if (now < earliestOpening) {
-            return "not_open_yet";
+/*
+ * Determine which attendance operation is currently
+ * relevant to the participant.
+ *
+ * We intentionally do NOT use the old 30-minute rule.
+ * Event Staff controls when Check-In is opened.
+ */
+function getAttendancePassState(
+    pass: AttendancePass,
+): AttendancePassState {
+    const hasCheckedIn =
+        Boolean(
+            pass.attendance?.checked_in_at,
+        );
+
+    const hasCheckedOut =
+        Boolean(
+            pass.attendance?.checked_out_at,
+        );
+
+    const checkInOpen =
+        Boolean(
+            pass.assignment
+                .check_in_opened_at,
+        ) &&
+        !pass.assignment
+            .check_in_closed_at;
+
+    const checkOutOpen =
+        Boolean(
+            pass.assignment
+                .check_out_opened_at,
+        ) &&
+        !pass.assignment
+            .check_out_closed_at;
+
+    /*
+     * Successful Check-In already exists.
+     * Participant is now waiting for Check-Out.
+     */
+    if (
+        hasCheckedIn &&
+        !hasCheckedOut
+    ) {
+        if (checkOutOpen) {
+            return "check_out_open";
         }
+
+        if (
+            pass.assignment
+                .check_out_closed_at
+        ) {
+            return "check_out_closed";
+        }
+
+        return "waiting_for_check_out";
     }
 
-    return "waiting_for_staff";
+    /*
+     * Participant has not checked in yet.
+     */
+    if (checkInOpen) {
+        return "check_in_open";
+    }
+
+    if (
+        pass.assignment
+            .check_in_closed_at
+    ) {
+        return "check_in_closed";
+    }
+
+    return "waiting_for_check_in";
 }
 
-function getCheckInLabel(
-    state: CheckInState,
+function getAttendanceStateLabel(
+    state: AttendancePassState,
 ) {
-    if (state === "open") {
-        return "Check-in Open";
+    if (
+        state ===
+        "waiting_for_check_in"
+    ) {
+        return "Waiting for Check-In";
+    }
+
+    if (state === "check_in_open") {
+        return "Check-In Open";
     }
 
     if (
-        state === "not_open_yet"
+        state === "check_in_closed"
     ) {
-        return "Check-in Not Open Yet";
+        return "Check-In Closed";
     }
 
     if (
-        state === "waiting_for_staff"
+        state ===
+        "waiting_for_check_out"
     ) {
-        return "Waiting for Staff";
+        return "Check-Out Required";
     }
 
-    return "Check-in Closed";
+    if (
+        state === "check_out_open"
+    ) {
+        return "Check-Out Open";
+    }
+
+    return "Check-Out Closed";
 }
 
-function getCheckInBadgeClasses(
-    state: CheckInState,
+function getAttendanceStateClasses(
+    state: AttendancePassState,
 ) {
-    if (state === "open") {
-        return "bg-green-100 text-green-700";
-    }
-
-    if (
-        state === "waiting_for_staff"
-    ) {
-        return "bg-amber-100 text-amber-700";
-    }
-
-    if (
-        state === "not_open_yet"
-    ) {
-        return "bg-blue-100 text-blue-700";
-    }
-
-    return "bg-slate-100 text-slate-600";
-}
-
-function getCheckInPanelClasses(
-    state: CheckInState,
-) {
-    if (state === "open") {
+    if (state === "check_in_open") {
         return {
+            badge:
+                "bg-green-100 text-green-700",
             container:
                 "border-green-200 bg-green-50",
             title:
@@ -264,9 +383,29 @@ function getCheckInPanelClasses(
     }
 
     if (
-        state === "waiting_for_staff"
+        state ===
+        "check_out_open"
     ) {
         return {
+            badge:
+                "bg-blue-100 text-blue-700",
+            container:
+                "border-blue-200 bg-blue-50",
+            title:
+                "text-blue-800",
+            description:
+                "text-blue-700",
+            dot: "bg-blue-500",
+        };
+    }
+
+    if (
+        state ===
+        "waiting_for_check_out"
+    ) {
+        return {
+            badge:
+                "bg-amber-100 text-amber-700",
             container:
                 "border-amber-200 bg-amber-50",
             title:
@@ -278,20 +417,42 @@ function getCheckInPanelClasses(
     }
 
     if (
-        state === "not_open_yet"
+        state ===
+        "waiting_for_check_in"
     ) {
         return {
+            badge:
+                "bg-amber-100 text-amber-700",
             container:
-                "border-blue-200 bg-blue-50",
+                "border-amber-200 bg-amber-50",
             title:
-                "text-blue-800",
+                "text-amber-800",
             description:
-                "text-blue-700",
-            dot: "bg-blue-500",
+                "text-amber-700",
+            dot: "bg-amber-500",
+        };
+    }
+
+    if (
+        state ===
+        "check_out_closed"
+    ) {
+        return {
+            badge:
+                "bg-amber-100 text-amber-700",
+            container:
+                "border-amber-200 bg-amber-50",
+            title:
+                "text-amber-800",
+            description:
+                "text-amber-700",
+            dot: "bg-amber-500",
         };
     }
 
     return {
+        badge:
+            "bg-slate-100 text-slate-600",
         container:
             "border-slate-200 bg-slate-50",
         title:
@@ -302,49 +463,86 @@ function getCheckInPanelClasses(
     };
 }
 
-function getCheckInDescription(
-    state: CheckInState,
+function hasEventEnded(
     pass: AttendancePass,
+    currentTime: number,
 ) {
-    if (state === "open") {
-        return "Check-in is currently open. Present your QR code or manual attendance code to event staff.";
+    if (!pass.event.end_at) {
+        return false;
     }
 
-    if (
-        state === "not_open_yet"
-    ) {
-        if (!pass.event.start_at) {
-            return "Check-in has not opened yet.";
-        }
+    const endAt =
+        new Date(
+            pass.event.end_at,
+        ).getTime();
 
-        const earliestOpening =
-            new Date(
-                new Date(
-                    pass.event.start_at,
-                ).getTime() -
-                    CHECK_IN_EARLY_MINUTES *
-                        60 *
-                        1000,
-            );
+    if (Number.isNaN(endAt)) {
+        return false;
+    }
 
-        return `Check-in can begin as early as ${earliestOpening.toLocaleString(
-            "en-PH",
-            {
-                dateStyle: "medium",
-                timeStyle: "short",
-            },
-        )}.`;
+    return currentTime >= endAt;
+}
+
+function getAttendanceStateDescription(
+    state: AttendancePassState,
+    pass: AttendancePass,
+    currentTime: number,
+) {
+    if (state === "check_in_open") {
+        return "Check-In is currently open. Present your QR code or manual attendance code to Event Staff to record your Time In.";
     }
 
     if (
         state ===
-        "waiting_for_staff"
+        "waiting_for_check_in"
     ) {
-        return "The check-in period is available, but event staff has not opened check-in yet.";
+        return "Event Staff has not opened Check-In yet. Keep this attendance pass ready.";
     }
 
-    return "Check-in for this event is already closed.";
+    if (
+        state === "check_in_closed"
+    ) {
+        return "Check-In is currently closed. Contact Event Staff if you believe your attendance has not been recorded correctly.";
+    }
+
+    if (
+        state ===
+        "check_out_open"
+    ) {
+        return "Check-Out is open. Present the same QR code or manual attendance code to Event Staff to record your Time Out.";
+    }
+
+    if (
+        state ===
+        "check_out_closed"
+    ) {
+        return "Your Check-In is recorded, but Check-Out is currently closed. Event Staff may reopen Check-Out so your Time Out can still be recorded.";
+    }
+
+    if (
+        state ===
+        "waiting_for_check_out"
+    ) {
+        if (
+            hasEventEnded(
+                pass,
+                currentTime,
+            )
+        ) {
+            return "Your Check-In is recorded and the event has ended. Keep this pass available and wait for Event Staff to open Check-Out.";
+        }
+
+        return "Your Check-In is recorded. Keep this attendance pass because you will use the same QR code or manual attendance code again during Check-Out.";
+    }
+
+    return "";
 }
+
+/*
+ * =========================================================
+ * PAGE
+ * =========================================================
+ */
 
 export default function ParticipantAttendancePassPage() {
     const [
@@ -360,8 +558,10 @@ export default function ParticipantAttendancePassPage() {
     const [loading, setLoading] =
         useState(true);
 
-    const [refreshing, setRefreshing] =
-        useState(false);
+    const [
+        refreshing,
+        setRefreshing,
+    ] = useState(false);
 
     const [
         errorMessage,
@@ -377,6 +577,12 @@ export default function ParticipantAttendancePassPage() {
         currentTime,
         setCurrentTime,
     ] = useState(() => Date.now());
+
+    /*
+     * =====================================================
+     * FETCH ATTENDANCE PASSES
+     * =====================================================
+     */
 
     const fetchAttendancePasses =
         useCallback(
@@ -404,8 +610,11 @@ export default function ParticipantAttendancePassPage() {
 
                 try {
                     const {
-                        data: { session },
-                        error: sessionError,
+                        data: {
+                            session,
+                        },
+                        error:
+                            sessionError,
                     } =
                         await supabase.auth.getSession();
 
@@ -422,6 +631,9 @@ export default function ParticipantAttendancePassPage() {
                     const user =
                         session.user;
 
+                    /*
+                     * Load participant registrations.
+                     */
                     const {
                         data: rsvpRows,
                         error: rsvpError,
@@ -484,6 +696,15 @@ export default function ParticipantAttendancePassPage() {
                                 rsvp.event_municipality_id,
                         );
 
+                    const rsvpIds =
+                        registrations.map(
+                            (rsvp) =>
+                                rsvp.id,
+                        );
+
+                    /*
+                     * Load municipality assignments.
+                     */
                     const {
                         data:
                             assignmentRows,
@@ -503,7 +724,9 @@ export default function ParticipantAttendancePassPage() {
                                 local_venue_id,
                                 local_instructions,
                                 check_in_opened_at,
-                                check_in_closed_at
+                                check_in_closed_at,
+                                check_out_opened_at,
+                                check_out_closed_at
                             `,
                         )
                         .in(
@@ -537,9 +760,46 @@ export default function ParticipantAttendancePassPage() {
                     }
 
                     /*
+                     * Load participant attendance records.
+                     *
+                     * This is important because completed events
+                     * must remain visible until Check-Out is
+                     * successfully recorded.
+                     */
+                    const {
+                        data:
+                            attendanceRows,
+                        error:
+                            attendanceError,
+                    } = await supabase
+                        .from("attendance")
+                        .select(
+                            `
+                                id,
+                                rsvp_id,
+                                status,
+                                method,
+                                checked_in_at,
+                                checked_out_at
+                            `,
+                        )
+                        .in(
+                            "rsvp_id",
+                            rsvpIds,
+                        );
+
+                    if (
+                        attendanceError
+                    ) {
+                        throw attendanceError;
+                    }
+
+                    const attendanceRecords =
+                        (attendanceRows ||
+                            []) as AttendanceRow[];
+
+                    /*
                      * Load assigned municipal venues.
-                     * Venue errors are non-fatal so the
-                     * attendance pass can still display.
                      */
                     const venueIds =
                         Array.from(
@@ -604,6 +864,9 @@ export default function ParticipantAttendancePassPage() {
                         }
                     }
 
+                    /*
+                     * Load events.
+                     */
                     const eventIds =
                         Array.from(
                             new Set(
@@ -617,8 +880,10 @@ export default function ParticipantAttendancePassPage() {
                         );
 
                     const {
-                        data: eventRows,
-                        error: eventsError,
+                        data:
+                            eventRows,
+                        error:
+                            eventsError,
                     } = await supabase
                         .from("events")
                         .select(
@@ -646,6 +911,10 @@ export default function ParticipantAttendancePassPage() {
                         (eventRows ||
                             []) as EventRow[];
 
+                    /*
+                     * Combine registration, event,
+                     * assignment, venue, and attendance.
+                     */
                     const mappedPasses =
                         registrations
                             .map(
@@ -682,9 +951,7 @@ export default function ParticipantAttendancePassPage() {
                                                 ),
                                         );
 
-                                    if (
-                                        !event
-                                    ) {
+                                    if (!event) {
                                         return null;
                                     }
 
@@ -704,11 +971,26 @@ export default function ParticipantAttendancePassPage() {
                                               null
                                             : null;
 
+                                    const attendance =
+                                        attendanceRecords.find(
+                                            (
+                                                item,
+                                            ) =>
+                                                String(
+                                                    item.rsvp_id,
+                                                ) ===
+                                                String(
+                                                    rsvp.id,
+                                                ),
+                                        ) ||
+                                        null;
+
                                     return {
                                         rsvp,
                                         assignment,
                                         event,
                                         venue,
+                                        attendance,
                                     };
                                 },
                             )
@@ -717,13 +999,21 @@ export default function ParticipantAttendancePassPage() {
                                     item,
                                 ): item is AttendancePass =>
                                     item !==
-                                        null &&
-                                    ATTENDANCE_PASS_EVENT_STATUSES.includes(
-                                        normalizeStatus(
-                                            item
-                                                .event
-                                                .status,
-                                        ),
+                                    null,
+                            )
+                            /*
+                             * IMPORTANT:
+                             *
+                             * Completed events are retained when
+                             * participant has Time In but still
+                             * needs Time Out.
+                             */
+                            .filter(
+                                (
+                                    item,
+                                ) =>
+                                    shouldKeepAttendancePass(
+                                        item,
                                     ),
                             )
                             .sort(
@@ -810,7 +1100,8 @@ export default function ParticipantAttendancePassPage() {
                     }
                 } finally {
                     if (
-                        mode === "initial"
+                        mode ===
+                        "initial"
                     ) {
                         setLoading(
                             false,
@@ -818,7 +1109,8 @@ export default function ParticipantAttendancePassPage() {
                     }
 
                     if (
-                        mode === "refresh"
+                        mode ===
+                        "refresh"
                     ) {
                         setRefreshing(
                             false,
@@ -829,6 +1121,10 @@ export default function ParticipantAttendancePassPage() {
             [],
         );
 
+    /*
+     * Refresh on load, focus, visibility change,
+     * and every 30 seconds while page is visible.
+     */
     useEffect(() => {
         void fetchAttendancePasses(
             "initial",
@@ -895,6 +1191,12 @@ export default function ParticipantAttendancePassPage() {
         };
     }, [fetchAttendancePasses]);
 
+    /*
+     * =====================================================
+     * PAGINATION
+     * =====================================================
+     */
+
     const totalPages =
         Math.max(
             1,
@@ -949,13 +1251,18 @@ export default function ParticipantAttendancePassPage() {
             attendancePasses.length,
         );
 
+    /*
+     * =====================================================
+     * ACTIONS
+     * =====================================================
+     */
+
     const togglePass = (
         rsvpId: string,
     ) => {
         setExpandedRsvpId(
             (current) =>
-                current ===
-                rsvpId
+                current === rsvpId
                     ? ""
                     : rsvpId,
         );
@@ -1006,6 +1313,12 @@ export default function ParticipantAttendancePassPage() {
             }
         };
 
+    /*
+     * =====================================================
+     * RENDER
+     * =====================================================
+     */
+
     return (
         <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-7xl space-y-6">
@@ -1015,7 +1328,7 @@ export default function ParticipantAttendancePassPage() {
                         <div>
                             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
                                 Participant
-                                Check-in
+                                Attendance
                             </p>
 
                             <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
@@ -1027,8 +1340,9 @@ export default function ParticipantAttendancePassPage() {
                                 code or manual
                                 attendance code
                                 assigned to your
-                                event
-                                registration.
+                                event registration
+                                for Check-In and
+                                Check-Out.
                             </p>
                         </div>
 
@@ -1118,12 +1432,15 @@ export default function ParticipantAttendancePassPage() {
                         </h2>
 
                         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                            You currently
-                            have no active
-                            event pass. Browse
-                            available events
-                            to register for an
-                            upcoming event.
+                            You currently have
+                            no event that
+                            requires an active
+                            Attendance Pass.
+                            Completed Check-In
+                            and Check-Out
+                            records can be
+                            reviewed in your
+                            Attendance History.
                         </p>
 
                         <Link
@@ -1145,12 +1462,12 @@ export default function ParticipantAttendancePassPage() {
                                 </h2>
 
                                 <p className="mt-1 text-sm text-slate-500">
-                                    Select View
-                                    Pass to display
-                                    your QR code
-                                    and manual
-                                    attendance
-                                    code.
+                                    Keep your
+                                    Attendance Pass
+                                    available until
+                                    both Check-In
+                                    and Check-Out
+                                    are complete.
                                 </p>
                             </div>
 
@@ -1178,15 +1495,21 @@ export default function ParticipantAttendancePassPage() {
                                             .rsvp
                                             .id;
 
-                                    const checkInState =
-                                        getCheckInState(
+                                    const attendanceState =
+                                        getAttendancePassState(
                                             item,
-                                            currentTime,
                                         );
 
-                                    const checkInPanelClasses =
-                                        getCheckInPanelClasses(
-                                            checkInState,
+                                    const stateStyles =
+                                        getAttendanceStateClasses(
+                                            attendanceState,
+                                        );
+
+                                    const hasCheckedIn =
+                                        Boolean(
+                                            item
+                                                .attendance
+                                                ?.checked_in_at,
                                         );
 
                                     return (
@@ -1296,14 +1619,12 @@ export default function ParticipantAttendancePassPage() {
                                                     </div>
 
                                                     {/* ACTION */}
-                                                    <div className="flex shrink-0 flex-col gap-3 xl:w-[210px]">
+                                                    <div className="flex shrink-0 flex-col gap-3 xl:w-[220px]">
                                                         <span
-                                                            className={`inline-flex justify-center rounded-full px-3 py-1.5 text-xs font-semibold ${getCheckInBadgeClasses(
-                                                                checkInState,
-                                                            )}`}
+                                                            className={`inline-flex justify-center rounded-full px-3 py-1.5 text-xs font-semibold ${stateStyles.badge}`}
                                                         >
-                                                            {getCheckInLabel(
-                                                                checkInState,
+                                                            {getAttendanceStateLabel(
+                                                                attendanceState,
                                                             )}
                                                         </span>
 
@@ -1410,49 +1731,70 @@ export default function ParticipantAttendancePassPage() {
                                                         </div>
                                                     </div>
 
-                                                    {/* CHECK-IN STATUS */}
+                                                    {/* ATTENDANCE STATUS */}
                                                     <div
-                                                        className={`mt-4 rounded-xl border p-4 ${checkInPanelClasses.container}`}
+                                                        className={`mt-4 rounded-xl border p-4 ${stateStyles.container}`}
                                                     >
                                                         <div className="flex items-start gap-3">
                                                             <span
-                                                                className={`mt-1.5 size-2.5 shrink-0 rounded-full ${checkInPanelClasses.dot}`}
+                                                                className={`mt-1.5 size-2.5 shrink-0 rounded-full ${stateStyles.dot}`}
                                                             />
 
-                                                            <div>
+                                                            <div className="min-w-0">
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <Clock3
-                                                                        className={`size-4 ${checkInPanelClasses.title}`}
+                                                                        className={`size-4 ${stateStyles.title}`}
                                                                         aria-hidden="true"
                                                                     />
 
                                                                     <p
-                                                                        className={`text-sm font-semibold ${checkInPanelClasses.title}`}
+                                                                        className={`text-sm font-semibold ${stateStyles.title}`}
                                                                     >
-                                                                        {getCheckInLabel(
-                                                                            checkInState,
+                                                                        {getAttendanceStateLabel(
+                                                                            attendanceState,
                                                                         )}
                                                                     </p>
                                                                 </div>
 
                                                                 <p
-                                                                    className={`mt-1 text-sm leading-6 ${checkInPanelClasses.description}`}
+                                                                    className={`mt-1 text-sm leading-6 ${stateStyles.description}`}
                                                                 >
-                                                                    {getCheckInDescription(
-                                                                        checkInState,
+                                                                    {getAttendanceStateDescription(
+                                                                        attendanceState,
                                                                         item,
+                                                                        currentTime,
                                                                     )}
                                                                 </p>
 
-                                                                {checkInState ===
-                                                                    "open" &&
+                                                                {hasCheckedIn &&
+                                                                    item
+                                                                        .attendance
+                                                                        ?.checked_in_at && (
+                                                                        <p
+                                                                            className={`mt-2 text-xs ${stateStyles.description}`}
+                                                                        >
+                                                                            Time
+                                                                            In:{" "}
+                                                                            <span className="font-semibold">
+                                                                                {formatDateTime(
+                                                                                    item
+                                                                                        .attendance
+                                                                                        .checked_in_at,
+                                                                                )}
+                                                                            </span>
+                                                                        </p>
+                                                                    )}
+
+                                                                {attendanceState ===
+                                                                    "check_in_open" &&
                                                                     item
                                                                         .assignment
                                                                         .check_in_opened_at && (
                                                                         <p
-                                                                            className={`mt-1 text-xs ${checkInPanelClasses.description}`}
+                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
                                                                         >
-                                                                            Opened{" "}
+                                                                            Check-In
+                                                                            opened{" "}
                                                                             {formatDateTime(
                                                                                 item
                                                                                     .assignment
@@ -1461,19 +1803,38 @@ export default function ParticipantAttendancePassPage() {
                                                                         </p>
                                                                     )}
 
-                                                                {checkInState ===
-                                                                    "closed" &&
+                                                                {attendanceState ===
+                                                                    "check_out_open" &&
                                                                     item
                                                                         .assignment
-                                                                        .check_in_closed_at && (
+                                                                        .check_out_opened_at && (
                                                                         <p
-                                                                            className={`mt-1 text-xs ${checkInPanelClasses.description}`}
+                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
                                                                         >
-                                                                            Closed{" "}
+                                                                            Check-Out
+                                                                            opened{" "}
                                                                             {formatDateTime(
                                                                                 item
                                                                                     .assignment
-                                                                                    .check_in_closed_at,
+                                                                                    .check_out_opened_at,
+                                                                            )}
+                                                                        </p>
+                                                                    )}
+
+                                                                {attendanceState ===
+                                                                    "check_out_closed" &&
+                                                                    item
+                                                                        .assignment
+                                                                        .check_out_closed_at && (
+                                                                        <p
+                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
+                                                                        >
+                                                                            Check-Out
+                                                                            closed{" "}
+                                                                            {formatDateTime(
+                                                                                item
+                                                                                    .assignment
+                                                                                    .check_out_closed_at,
                                                                             )}
                                                                         </p>
                                                                     )}
@@ -1499,9 +1860,11 @@ export default function ParticipantAttendancePassPage() {
                                                                 either
                                                                 code to
                                                                 authorized
-                                                                event staff
-                                                                during
-                                                                check-in.
+                                                                Event Staff
+                                                                for
+                                                                Check-In
+                                                                or
+                                                                Check-Out.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1539,8 +1902,10 @@ export default function ParticipantAttendancePassPage() {
                                                                         manual
                                                                         attendance
                                                                         code
-                                                                        during
-                                                                        check-in.
+                                                                        for
+                                                                        Check-In
+                                                                        or
+                                                                        Check-Out.
                                                                     </p>
                                                                 </div>
                                                             )}
@@ -1561,10 +1926,14 @@ export default function ParticipantAttendancePassPage() {
                                                                         this
                                                                         code
                                                                         to
-                                                                        event
-                                                                        staff
+                                                                        Event
+                                                                        Staff
+                                                                        for
+                                                                        Check-In
+                                                                        or
+                                                                        Check-Out
                                                                         when
-                                                                        your
+                                                                        the
                                                                         QR
                                                                         code
                                                                         cannot
@@ -1630,8 +1999,8 @@ export default function ParticipantAttendancePassPage() {
 
                                                             <p className="mt-4 text-xs leading-5 text-blue-700">
                                                                 Keep your
-                                                                attendance
-                                                                pass
+                                                                Attendance
+                                                                Pass
                                                                 private.
                                                                 It is
                                                                 assigned

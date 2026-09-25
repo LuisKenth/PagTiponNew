@@ -1,321 +1,291 @@
 "use client";
 
 import {
-    CheckCircle2,
-    Clock3,
-    History,
-    MapPin,
-    QrCode,
-    RefreshCw,
-    ScanLine,
-    UserCheck,
-    UserX,
+  CheckCircle2,
+  Clock3,
+  History,
+  MapPin,
+  QrCode,
+  RefreshCw,
+  ScanLine,
+  UserCheck,
+  UserX,
 } from "lucide-react";
-import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
 type AttendanceRow = {
-    id: string;
-    rsvp_id: string | null;
-    event_municipality_id: string;
-    user_id: string;
-    status: string;
-    method: string | null;
-    checked_in_at: string | null;
-    checked_in_by: string | null;
-    created_at: string;
-    updated_at: string;
+  id: string;
+  rsvp_id: string | null;
+  event_municipality_id: string;
+  user_id: string;
+  status: string;
+  method: string | null;
+  checked_in_at: string | null;
+  checked_in_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type EventAssignmentRow = {
-    id: string;
-    event_id: string;
-    municipality: string;
-    local_venue_id: string | null;
-    local_instructions: string | null;
+  id: string;
+  event_id: string;
+  municipality: string;
+  local_venue_id: string | null;
+  local_instructions: string | null;
 };
 
 type VenueRow = {
-    id: string;
-    venue_name: string;
-    municipality: string;
+  id: string;
+  venue_name: string;
+  municipality: string;
 };
 
 type EventRow = {
-    id: string;
-    title: string;
-    description: string | null;
-    start_at: string | null;
-    end_at: string | null;
-    status: string | null;
+  id: string;
+  title: string;
+  description: string | null;
+  start_at: string | null;
+  end_at: string | null;
+  status: string | null;
 };
 
 type AttendanceHistoryItem = {
-    attendance: AttendanceRow;
-    assignment: EventAssignmentRow;
-    event: EventRow;
-    venue: VenueRow | null;
+  attendance: AttendanceRow;
+  assignment: EventAssignmentRow;
+  event: EventRow;
+  venue: VenueRow | null;
 };
 
-type AttendanceFilter =
-    | "all"
-    | "present"
-    | "absent"
-    | "pending";
+type AttendanceFilter = "all" | "present" | "absent" | "pending";
 
-type FetchMode =
-    | "initial"
-    | "refresh"
-    | "silent";
+type FetchMode = "initial" | "refresh" | "silent";
 
 const RECORDS_PER_PAGE = 5;
 
-function normalizeStatus(
-    value: string | null | undefined,
-) {
-    return value?.trim().toLowerCase() ?? "";
+function normalizeStatus(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
-function formatDateTime(
-    value: string | null,
-) {
-    if (!value) {
-        return "Not recorded";
-    }
+function getEffectiveEventStatus(event: EventRow, now: number) {
+  const storedStatus = normalizeStatus(event.status);
 
-    return new Date(value).toLocaleString(
-        "en-PH",
-        {
-            dateStyle: "medium",
-            timeStyle: "short",
-        },
-    );
+  /*
+   * Cancelled always stays cancelled.
+   */
+  if (storedStatus === "cancelled") {
+    return "cancelled";
+  }
+
+  const startTime = event.start_at
+    ? new Date(event.start_at).getTime()
+    : Number.NaN;
+
+  const endTime = event.end_at ? new Date(event.end_at).getTime() : Number.NaN;
+
+  /*
+   * If the schedule is unavailable/invalid,
+   * fall back to the database status.
+   */
+  if (Number.isNaN(startTime) || Number.isNaN(endTime)) {
+    return storedStatus;
+  }
+
+  /*
+   * Completed takes priority once
+   * the scheduled end time is reached.
+   */
+  if (now >= endTime) {
+    return "completed";
+  }
+
+  /*
+   * Between start and end = ongoing.
+   */
+  if (now >= startTime) {
+    return "ongoing";
+  }
+
+  /*
+   * Before start = upcoming.
+   */
+  return "upcoming";
 }
 
-function getAttendanceStatusLabel(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
-
-    if (normalizedStatus === "present") {
-        return "Present";
-    }
-
-    if (normalizedStatus === "absent") {
-        return "Absent";
-    }
-
-    if (normalizedStatus === "pending") {
-        return "Pending";
-    }
-
-    return status || "Unknown";
-}
-
-function getAttendanceStatusClasses(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
-
-    if (normalizedStatus === "present") {
-        return "bg-green-100 text-green-700";
-    }
-
-    if (normalizedStatus === "absent") {
-        return "bg-red-100 text-red-700";
-    }
-
-    if (normalizedStatus === "pending") {
-        return "bg-amber-100 text-amber-700";
-    }
-
-    return "bg-slate-100 text-slate-600";
-}
-
-function getEventStatusLabel(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
-
-    if (normalizedStatus === "published") {
-        return "Scheduled";
-    }
-
-    if (normalizedStatus === "upcoming") {
-        return "Upcoming";
-    }
-
-    if (normalizedStatus === "ongoing") {
-        return "Ongoing";
-    }
-
-    if (normalizedStatus === "completed") {
-        return "Completed";
-    }
-
-    if (normalizedStatus === "cancelled") {
-        return "Cancelled";
-    }
-
-    return status || "Unknown";
-}
-
-function getEventStatusClasses(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
-
-    if (normalizedStatus === "ongoing") {
-        return "bg-green-100 text-green-700";
-    }
-
-    if (
-        normalizedStatus === "published" ||
-        normalizedStatus === "upcoming"
-    ) {
-        return "bg-blue-100 text-blue-700";
-    }
-
-    if (normalizedStatus === "completed") {
-        return "bg-slate-100 text-slate-700";
-    }
-
-    if (normalizedStatus === "cancelled") {
-        return "bg-red-100 text-red-700";
-    }
-
-    return "bg-slate-100 text-slate-600";
-}
-
-function getCheckInMethodLabel(
-    method: string | null,
-) {
-    const normalizedMethod =
-        normalizeStatus(method);
-
-    if (normalizedMethod === "qr") {
-        return "QR Scanner";
-    }
-
-    if (normalizedMethod === "manual") {
-        return "Manual Code";
-    }
-
+function formatDateTime(value: string | null) {
+  if (!value) {
     return "Not recorded";
+  }
+
+  return new Date(value).toLocaleString("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
-function getCheckInMethodIcon(
-    method: string | null,
-) {
-    const normalizedMethod =
-        normalizeStatus(method);
+function getAttendanceStatusLabel(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
 
-    if (normalizedMethod === "qr") {
-        return QrCode;
-    }
+  if (normalizedStatus === "present") {
+    return "Present";
+  }
 
-    if (normalizedMethod === "manual") {
-        return ScanLine;
-    }
+  if (normalizedStatus === "absent") {
+    return "Absent";
+  }
 
-    return Clock3;
+  if (normalizedStatus === "pending") {
+    return "Pending";
+  }
+
+  return status || "Unknown";
+}
+
+function getAttendanceStatusClasses(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
+
+  if (normalizedStatus === "present") {
+    return "bg-green-100 text-green-700";
+  }
+
+  if (normalizedStatus === "absent") {
+    return "bg-red-100 text-red-700";
+  }
+
+  if (normalizedStatus === "pending") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-600";
+}
+
+function getEventStatusLabel(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
+
+  if (normalizedStatus === "published") {
+    return "Scheduled";
+  }
+
+  if (normalizedStatus === "upcoming") {
+    return "Upcoming";
+  }
+
+  if (normalizedStatus === "ongoing") {
+    return "Ongoing";
+  }
+
+  if (normalizedStatus === "completed") {
+    return "Completed";
+  }
+
+  if (normalizedStatus === "cancelled") {
+    return "Cancelled";
+  }
+
+  return status || "Unknown";
+}
+
+function getEventStatusClasses(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
+
+  if (normalizedStatus === "ongoing") {
+    return "bg-green-100 text-green-700";
+  }
+
+  if (normalizedStatus === "published" || normalizedStatus === "upcoming") {
+    return "bg-blue-100 text-blue-700";
+  }
+
+  if (normalizedStatus === "completed") {
+    return "bg-slate-100 text-slate-700";
+  }
+
+  if (normalizedStatus === "cancelled") {
+    return "bg-red-100 text-red-700";
+  }
+
+  return "bg-slate-100 text-slate-600";
+}
+
+function getCheckInMethodLabel(method: string | null) {
+  const normalizedMethod = normalizeStatus(method);
+
+  if (normalizedMethod === "qr") {
+    return "QR Scanner";
+  }
+
+  if (normalizedMethod === "manual") {
+    return "Manual Code";
+  }
+
+  return "Not recorded";
+}
+
+function getCheckInMethodIcon(method: string | null) {
+  const normalizedMethod = normalizeStatus(method);
+
+  if (normalizedMethod === "qr") {
+    return QrCode;
+  }
+
+  if (normalizedMethod === "manual") {
+    return ScanLine;
+  }
+
+  return Clock3;
 }
 
 export default function ParticipantAttendanceHistoryPage() {
-    const [
-        attendanceHistory,
-        setAttendanceHistory,
-    ] = useState<AttendanceHistoryItem[]>([]);
+  const [attendanceHistory, setAttendanceHistory] = useState<
+    AttendanceHistoryItem[]
+  >([]);
 
-    const [loading, setLoading] =
-        useState(true);
+  const [loading, setLoading] = useState(true);
 
-    const [refreshing, setRefreshing] =
-        useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
-    const [
-        errorMessage,
-        setErrorMessage,
-    ] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
-    const [
-        activeFilter,
-        setActiveFilter,
-    ] =
-        useState<AttendanceFilter>(
-            "all",
-        );
+  const [errorMessage, setErrorMessage] = useState("");
 
-    const [
-        currentPage,
-        setCurrentPage,
-    ] = useState(1);
+  const [activeFilter, setActiveFilter] = useState<AttendanceFilter>("all");
 
-    const fetchAttendanceHistory =
-        useCallback(
-            async (
-                mode: FetchMode =
-                    "initial",
-            ) => {
-                if (
-                    mode === "initial"
-                ) {
-                    setLoading(true);
-                }
+  const [currentPage, setCurrentPage] = useState(1);
 
-                if (
-                    mode === "refresh"
-                ) {
-                    setRefreshing(true);
-                }
+  const fetchAttendanceHistory = useCallback(
+    async (mode: FetchMode = "initial") => {
+      if (mode === "initial") {
+        setLoading(true);
+      }
 
-                if (
-                    mode !== "silent"
-                ) {
-                    setErrorMessage("");
-                }
+      if (mode === "refresh") {
+        setRefreshing(true);
+      }
 
-                try {
-                    const {
-                        data: { session },
-                        error: sessionError,
-                    } =
-                        await supabase.auth.getSession();
+      if (mode !== "silent") {
+        setErrorMessage("");
+      }
 
-                    if (
-                        sessionError ||
-                        !session?.user
-                    ) {
-                        throw new Error(
-                            sessionError?.message ||
-                                "Your login session is unavailable. Please log in again.",
-                        );
-                    }
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-                    const user =
-                        session.user;
+        if (sessionError || !session?.user) {
+          throw new Error(
+            sessionError?.message ||
+              "Your login session is unavailable. Please log in again.",
+          );
+        }
 
-                    const {
-                        data:
-                            attendanceRows,
-                        error:
-                            attendanceError,
-                    } = await supabase
-                        .from(
-                            "attendance",
-                        )
-                        .select(
-                            `
+        const user = session.user;
+
+        const { data: attendanceRows, error: attendanceError } = await supabase
+          .from("attendance")
+          .select(
+            `
                                 id,
                                 rsvp_id,
                                 event_municipality_id,
@@ -327,188 +297,101 @@ export default function ParticipantAttendanceHistoryPage() {
                                 created_at,
                                 updated_at
                             `,
-                        )
-                        .eq(
-                            "user_id",
-                            user.id,
-                        )
-                        .order(
-                            "created_at",
-                            {
-                                ascending:
-                                    false,
-                            },
-                        );
+          )
+          .eq("user_id", user.id)
+          .order("created_at", {
+            ascending: false,
+          });
 
-                    if (
-                        attendanceError
-                    ) {
-                        throw attendanceError;
-                    }
+        if (attendanceError) {
+          throw attendanceError;
+        }
 
-                    const attendanceRecords =
-                        (attendanceRows ||
-                            []) as AttendanceRow[];
+        const attendanceRecords = (attendanceRows || []) as AttendanceRow[];
 
-                    if (
-                        attendanceRecords.length ===
-                        0
-                    ) {
-                        setAttendanceHistory(
-                            [],
-                        );
+        if (attendanceRecords.length === 0) {
+          setAttendanceHistory([]);
 
-                        return;
-                    }
+          return;
+        }
 
-                    const assignmentIds =
-                        Array.from(
-                            new Set(
-                                attendanceRecords.map(
-                                    (
-                                        record,
-                                    ) =>
-                                        record.event_municipality_id,
-                                ),
-                            ),
-                        );
+        const assignmentIds = Array.from(
+          new Set(
+            attendanceRecords.map((record) => record.event_municipality_id),
+          ),
+        );
 
-                    const {
-                        data:
-                            assignmentRows,
-                        error:
-                            assignmentError,
-                    } = await supabase
-                        .from(
-                            "event_municipalities",
-                        )
-                        .select(
-                            `
+        const { data: assignmentRows, error: assignmentError } = await supabase
+          .from("event_municipalities")
+          .select(
+            `
                                 id,
                                 event_id,
                                 municipality,
                                 local_venue_id,
                                 local_instructions
                             `,
-                        )
-                        .in(
-                            "id",
-                            assignmentIds,
-                        );
+          )
+          .in("id", assignmentIds);
 
-                    if (
-                        assignmentError
-                    ) {
-                        throw assignmentError;
-                    }
+        if (assignmentError) {
+          throw assignmentError;
+        }
 
-                    const assignments =
-                        (assignmentRows ||
-                            []) as EventAssignmentRow[];
+        const assignments = (assignmentRows || []) as EventAssignmentRow[];
 
-                    if (
-                        assignments.length ===
-                        0
-                    ) {
-                        setAttendanceHistory(
-                            [],
-                        );
+        if (assignments.length === 0) {
+          setAttendanceHistory([]);
 
-                        return;
-                    }
+          return;
+        }
 
-                    /*
-                     * Venue lookup is non-fatal.
-                     * Attendance history must still
-                     * display even if a venue cannot
-                     * be retrieved.
-                     */
-                    const venueIds =
-                        Array.from(
-                            new Set(
-                                assignments
-                                    .map(
-                                        (
-                                            assignment,
-                                        ) =>
-                                            assignment.local_venue_id,
-                                    )
-                                    .filter(
-                                        (
-                                            venueId,
-                                        ): venueId is string =>
-                                            Boolean(
-                                                venueId,
-                                            ),
-                                    ),
-                            ),
-                        );
+        /*
+         * Venue lookup is non-fatal.
+         * Attendance history must still
+         * display even if a venue cannot
+         * be retrieved.
+         */
+        const venueIds = Array.from(
+          new Set(
+            assignments
+              .map((assignment) => assignment.local_venue_id)
+              .filter((venueId): venueId is string => Boolean(venueId)),
+          ),
+        );
 
-                    let venues: VenueRow[] =
-                        [];
+        let venues: VenueRow[] = [];
 
-                    if (
-                        venueIds.length >
-                        0
-                    ) {
-                        const {
-                            data:
-                                venueRows,
-                            error:
-                                venueError,
-                        } = await supabase
-                            .from(
-                                "venues",
-                            )
-                            .select(
-                                `
+        if (venueIds.length > 0) {
+          const { data: venueRows, error: venueError } = await supabase
+            .from("venues")
+            .select(
+              `
                                     id,
                                     venue_name,
                                     municipality
                                 `,
-                            )
-                            .in(
-                                "id",
-                                venueIds,
-                            );
+            )
+            .in("id", venueIds);
 
-                        if (
-                            venueError
-                        ) {
-                            console.warn(
-                                "Unable to load attendance history venues:",
-                                venueError.message,
-                            );
-                        } else {
-                            venues =
-                                (venueRows ||
-                                    []) as VenueRow[];
-                        }
-                    }
+          if (venueError) {
+            console.warn(
+              "Unable to load attendance history venues:",
+              venueError.message,
+            );
+          } else {
+            venues = (venueRows || []) as VenueRow[];
+          }
+        }
 
-                    const eventIds =
-                        Array.from(
-                            new Set(
-                                assignments.map(
-                                    (
-                                        assignment,
-                                    ) =>
-                                        assignment.event_id,
-                                ),
-                            ),
-                        );
+        const eventIds = Array.from(
+          new Set(assignments.map((assignment) => assignment.event_id)),
+        );
 
-                    const {
-                        data:
-                            eventRows,
-                        error:
-                            eventError,
-                    } = await supabase
-                        .from(
-                            "events",
-                        )
-                        .select(
-                            `
+        const { data: eventRows, error: eventError } = await supabase
+          .from("events")
+          .select(
+            `
                                 id,
                                 title,
                                 description,
@@ -516,1085 +399,707 @@ export default function ParticipantAttendanceHistoryPage() {
                                 end_at,
                                 status
                             `,
-                        )
-                        .in(
-                            "id",
-                            eventIds,
-                        );
+          )
+          .in("id", eventIds);
 
-                    if (
-                        eventError
-                    ) {
-                        throw eventError;
-                    }
+        if (eventError) {
+          throw eventError;
+        }
 
-                    const events =
-                        (eventRows ||
-                            []) as EventRow[];
+        const events = (eventRows || []) as EventRow[];
 
-                    const mappedHistory =
-                        attendanceRecords
-                            .map(
-                                (
-                                    attendance,
-                                ) => {
-                                    const assignment =
-                                        assignments.find(
-                                            (
-                                                item,
-                                            ) =>
-                                                String(
-                                                    item.id,
-                                                ) ===
-                                                String(
-                                                    attendance.event_municipality_id,
-                                                ),
-                                        );
-
-                                    if (
-                                        !assignment
-                                    ) {
-                                        return null;
-                                    }
-
-                                    const event =
-                                        events.find(
-                                            (
-                                                item,
-                                            ) =>
-                                                String(
-                                                    item.id,
-                                                ) ===
-                                                String(
-                                                    assignment.event_id,
-                                                ),
-                                        );
-
-                                    if (
-                                        !event
-                                    ) {
-                                        return null;
-                                    }
-
-                                    const venue =
-                                        assignment.local_venue_id
-                                            ? venues.find(
-                                                  (
-                                                      item,
-                                                  ) =>
-                                                      String(
-                                                          item.id,
-                                                      ) ===
-                                                      String(
-                                                          assignment.local_venue_id,
-                                                      ),
-                                              ) ||
-                                              null
-                                            : null;
-
-                                    return {
-                                        attendance,
-                                        assignment,
-                                        event,
-                                        venue,
-                                    };
-                                },
-                            )
-                            .filter(
-                                (
-                                    item,
-                                ): item is AttendanceHistoryItem =>
-                                    item !==
-                                    null,
-                            )
-                            .sort(
-                                (
-                                    first,
-                                    second,
-                                ) => {
-                                    const firstDate =
-                                        first
-                                            .event
-                                            .start_at
-                                            ? new Date(
-                                                  first.event.start_at,
-                                              ).getTime()
-                                            : new Date(
-                                                  first.attendance.created_at,
-                                              ).getTime();
-
-                                    const secondDate =
-                                        second
-                                            .event
-                                            .start_at
-                                            ? new Date(
-                                                  second.event.start_at,
-                                              ).getTime()
-                                            : new Date(
-                                                  second.attendance.created_at,
-                                              ).getTime();
-
-                                    return (
-                                        secondDate -
-                                        firstDate
-                                    );
-                                },
-                            );
-
-                    setAttendanceHistory(
-                        mappedHistory,
-                    );
-                } catch (error) {
-                    console.error(
-                        "Participant attendance history fetch error:",
-                        error,
-                    );
-
-                    if (
-                        mode !== "silent"
-                    ) {
-                        setAttendanceHistory(
-                            [],
-                        );
-
-                        setErrorMessage(
-                            error instanceof
-                                Error
-                                ? error.message
-                                : "Unable to load attendance history.",
-                        );
-                    }
-                } finally {
-                    if (
-                        mode === "initial"
-                    ) {
-                        setLoading(
-                            false,
-                        );
-                    }
-
-                    if (
-                        mode === "refresh"
-                    ) {
-                        setRefreshing(
-                            false,
-                        );
-                    }
-                }
-            },
-            [],
-        );
-
-    useEffect(() => {
-        void fetchAttendanceHistory(
-            "initial",
-        );
-
-        const refreshSilently =
-            () => {
-                void fetchAttendanceHistory(
-                    "silent",
-                );
-            };
-
-        const handleVisibilityChange =
-            () => {
-                if (
-                    document.visibilityState ===
-                    "visible"
-                ) {
-                    refreshSilently();
-                }
-            };
-
-        const intervalId =
-            window.setInterval(
-                () => {
-                    if (
-                        document.visibilityState ===
-                        "visible"
-                    ) {
-                        refreshSilently();
-                    }
-                },
-                30000,
+        const mappedHistory = attendanceRecords
+          .map((attendance) => {
+            const assignment = assignments.find(
+              (item) =>
+                String(item.id) === String(attendance.event_municipality_id),
             );
 
-        window.addEventListener(
-            "focus",
-            refreshSilently,
-        );
-
-        document.addEventListener(
-            "visibilitychange",
-            handleVisibilityChange,
-        );
-
-        return () => {
-            window.clearInterval(
-                intervalId,
-            );
-
-            window.removeEventListener(
-                "focus",
-                refreshSilently,
-            );
-
-            document.removeEventListener(
-                "visibilitychange",
-                handleVisibilityChange,
-            );
-        };
-    }, [fetchAttendanceHistory]);
-
-    const attendanceCounts =
-        useMemo(() => {
-            return {
-                total:
-                    attendanceHistory.length,
-
-                present:
-                    attendanceHistory.filter(
-                        (item) =>
-                            normalizeStatus(
-                                item
-                                    .attendance
-                                    .status,
-                            ) ===
-                            "present",
-                    ).length,
-
-                absent:
-                    attendanceHistory.filter(
-                        (item) =>
-                            normalizeStatus(
-                                item
-                                    .attendance
-                                    .status,
-                            ) ===
-                            "absent",
-                    ).length,
-
-                pending:
-                    attendanceHistory.filter(
-                        (item) =>
-                            normalizeStatus(
-                                item
-                                    .attendance
-                                    .status,
-                            ) ===
-                            "pending",
-                    ).length,
-            };
-        }, [attendanceHistory]);
-
-    const filteredAttendanceHistory =
-        useMemo(() => {
-            if (
-                activeFilter ===
-                "all"
-            ) {
-                return attendanceHistory;
+            if (!assignment) {
+              return null;
             }
 
-            return attendanceHistory.filter(
-                (item) =>
-                    normalizeStatus(
-                        item.attendance
-                            .status,
-                    ) ===
-                    activeFilter,
+            const event = events.find(
+              (item) => String(item.id) === String(assignment.event_id),
             );
-        }, [
-            activeFilter,
-            attendanceHistory,
-        ]);
 
-    const totalPages = Math.max(
-        1,
-        Math.ceil(
-            filteredAttendanceHistory.length /
-                RECORDS_PER_PAGE,
-        ),
-    );
+            if (!event) {
+              return null;
+            }
 
-    const paginatedAttendanceHistory =
-        useMemo(() => {
-            const startIndex =
-                (currentPage - 1) *
-                RECORDS_PER_PAGE;
+            const venue = assignment.local_venue_id
+              ? venues.find(
+                  (item) =>
+                    String(item.id) === String(assignment.local_venue_id),
+                ) || null
+              : null;
 
-            return filteredAttendanceHistory.slice(
-                startIndex,
-                startIndex +
-                    RECORDS_PER_PAGE,
-            );
-        }, [
-            currentPage,
-            filteredAttendanceHistory,
-        ]);
+            return {
+              attendance,
+              assignment,
+              event,
+              venue,
+            };
+          })
+          .filter((item): item is AttendanceHistoryItem => item !== null)
+          .sort((first, second) => {
+            const firstDate = first.event.start_at
+              ? new Date(first.event.start_at).getTime()
+              : new Date(first.attendance.created_at).getTime();
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [activeFilter]);
+            const secondDate = second.event.start_at
+              ? new Date(second.event.start_at).getTime()
+              : new Date(second.attendance.created_at).getTime();
 
-    useEffect(() => {
-        if (
-            currentPage >
-            totalPages
-        ) {
-            setCurrentPage(
-                totalPages,
-            );
+            return secondDate - firstDate;
+          });
+
+        setAttendanceHistory(mappedHistory);
+      } catch (error) {
+        console.error("Participant attendance history fetch error:", error);
+
+        if (mode !== "silent") {
+          setAttendanceHistory([]);
+
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load attendance history.",
+          );
         }
-    }, [
-        currentPage,
-        totalPages,
-    ]);
+      } finally {
+        if (mode === "initial") {
+          setLoading(false);
+        }
 
-    const firstVisibleRecord =
-        filteredAttendanceHistory.length ===
-        0
-            ? 0
-            : (currentPage - 1) *
-                  RECORDS_PER_PAGE +
-              1;
+        if (mode === "refresh") {
+          setRefreshing(false);
+        }
+      }
+    },
+    [],
+  );
 
-    const lastVisibleRecord =
-        Math.min(
-            currentPage *
-                RECORDS_PER_PAGE,
-            filteredAttendanceHistory.length,
-        );
+  useEffect(() => {
+    void fetchAttendanceHistory("initial");
 
-    const changePage = (
-        page: number,
-    ) => {
-        setCurrentPage(
-            Math.max(
-                1,
-                Math.min(
-                    totalPages,
-                    page,
-                ),
-            ),
-        );
+    const refreshSilently = () => {
+      void fetchAttendanceHistory("silent");
     };
 
-    const filters: {
-        value: AttendanceFilter;
-        label: string;
-        count: number;
-    }[] = [
-        {
-            value: "all",
-            label: "All",
-            count:
-                attendanceCounts.total,
-        },
-        {
-            value: "present",
-            label: "Present",
-            count:
-                attendanceCounts.present,
-        },
-        {
-            value: "absent",
-            label: "Absent",
-            count:
-                attendanceCounts.absent,
-        },
-        {
-            value: "pending",
-            label: "Pending",
-            count:
-                attendanceCounts.pending,
-        },
-    ];
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshSilently();
+      }
+    };
 
-    return (
-        <main className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl space-y-6">
-                {/* HEADER */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                Participant Records
-                            </p>
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refreshSilently();
+      }
+    }, 30000);
 
-                            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
-                                Attendance History
-                            </h1>
+    window.addEventListener("focus", refreshSilently);
 
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                Review your
-                                attendance results,
-                                check-in methods,
-                                and recorded
-                                check-in times.
-                            </p>
-                        </div>
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-                        <button
-                            type="button"
-                            onClick={() =>
-                                void fetchAttendanceHistory(
-                                    "refresh",
-                                )
-                            }
-                            disabled={
-                                refreshing
-                            }
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            <RefreshCw
-                                className={`size-4 ${
-                                    refreshing
-                                        ? "animate-spin"
-                                        : ""
-                                }`}
-                                aria-hidden="true"
-                            />
+    return () => {
+      window.clearInterval(intervalId);
 
-                            {refreshing
-                                ? "Refreshing..."
-                                : "Refresh"}
-                        </button>
-                    </div>
-                </section>
+      window.removeEventListener("focus", refreshSilently);
 
-                {/* SUMMARY */}
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Total Records
-                                </p>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchAttendanceHistory]);
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        attendanceCounts.total
-                                    }
-                                </p>
-                            </div>
+  /*
+   * LIVE EVENT STATUS CLOCK
+   *
+   * Updates the displayed event status every second
+   * without making a Supabase request.
+   */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                                <History
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Present
-                                </p>
+  const attendanceCounts = useMemo(() => {
+    return {
+      total: attendanceHistory.length,
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        attendanceCounts.present
-                                    }
-                                </p>
-                            </div>
+      present: attendanceHistory.filter(
+        (item) => normalizeStatus(item.attendance.status) === "present",
+      ).length,
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-green-50 text-green-700">
-                                <UserCheck
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
+      absent: attendanceHistory.filter(
+        (item) => normalizeStatus(item.attendance.status) === "absent",
+      ).length,
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Absent
-                                </p>
+      pending: attendanceHistory.filter(
+        (item) => normalizeStatus(item.attendance.status) === "pending",
+      ).length,
+    };
+  }, [attendanceHistory]);
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        attendanceCounts.absent
-                                    }
-                                </p>
-                            </div>
+  const filteredAttendanceHistory = useMemo(() => {
+    if (activeFilter === "all") {
+      return attendanceHistory;
+    }
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-red-50 text-red-700">
-                                <UserX
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
+    return attendanceHistory.filter(
+      (item) => normalizeStatus(item.attendance.status) === activeFilter,
+    );
+  }, [activeFilter, attendanceHistory]);
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Pending
-                                </p>
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAttendanceHistory.length / RECORDS_PER_PAGE),
+  );
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        attendanceCounts.pending
-                                    }
-                                </p>
-                            </div>
+  const paginatedAttendanceHistory = useMemo(() => {
+    const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
-                                <Clock3
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </section>
+    return filteredAttendanceHistory.slice(
+      startIndex,
+      startIndex + RECORDS_PER_PAGE,
+    );
+  }, [currentPage, filteredAttendanceHistory]);
 
-                {/* RECORDS */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <h2 className="text-xl font-semibold text-slate-950">
-                                Attendance Records
-                            </h2>
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
 
-                            <p className="mt-1 text-sm text-slate-500">
-                                View your event
-                                attendance status,
-                                venue, and check-in
-                                information.
-                            </p>
-                        </div>
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
-                        <div className="flex flex-wrap gap-2">
-                            {filters.map(
-                                (filter) => {
-                                    const selected =
-                                        activeFilter ===
-                                        filter.value;
+  const firstVisibleRecord =
+    filteredAttendanceHistory.length === 0
+      ? 0
+      : (currentPage - 1) * RECORDS_PER_PAGE + 1;
 
-                                    return (
-                                        <button
-                                            key={
-                                                filter.value
-                                            }
-                                            type="button"
-                                            onClick={() =>
-                                                setActiveFilter(
-                                                    filter.value,
-                                                )
-                                            }
-                                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                                                selected
-                                                    ? "bg-slate-950 text-white"
-                                                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                                            }`}
-                                        >
-                                            {
-                                                filter.label
-                                            }{" "}
-                                            <span
-                                                className={
-                                                    selected
-                                                        ? "text-slate-300"
-                                                        : "text-slate-400"
-                                                }
-                                            >
-                                                {
-                                                    filter.count
-                                                }
-                                            </span>
-                                        </button>
-                                    );
-                                },
-                            )}
-                        </div>
-                    </div>
+  const lastVisibleRecord = Math.min(
+    currentPage * RECORDS_PER_PAGE,
+    filteredAttendanceHistory.length,
+  );
 
-                    {loading ? (
-                        <div
-                            aria-live="polite"
-                            className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-8 text-center"
-                        >
-                            <div className="mx-auto size-9 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+  const changePage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(totalPages, page)));
+  };
 
-                            <p className="mt-4 text-sm font-medium text-slate-600">
-                                Loading
-                                attendance
-                                history...
-                            </p>
-                        </div>
-                    ) : errorMessage ? (
-                        <div
-                            role="alert"
-                            className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center"
-                        >
-                            <p className="font-semibold text-red-800">
-                                Unable to load
-                                attendance
-                                history
-                            </p>
+  const filters: {
+    value: AttendanceFilter;
+    label: string;
+    count: number;
+  }[] = [
+    {
+      value: "all",
+      label: "All",
+      count: attendanceCounts.total,
+    },
+    {
+      value: "present",
+      label: "Present",
+      count: attendanceCounts.present,
+    },
+    {
+      value: "absent",
+      label: "Absent",
+      count: attendanceCounts.absent,
+    },
+    {
+      value: "pending",
+      label: "Pending",
+      count: attendanceCounts.pending,
+    },
+  ];
 
-                            <p className="mt-1 text-sm text-red-600">
-                                {errorMessage}
-                            </p>
+  return (
+    <main className="p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        {/* HEADER */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Participant Records
+              </p>
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    void fetchAttendanceHistory(
-                                        "initial",
-                                    )
-                                }
-                                className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    ) : attendanceHistory.length ===
-                      0 ? (
-                        <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-                            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
-                                <History
-                                    className="size-7"
-                                    aria-hidden="true"
-                                />
-                            </div>
+              <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
+                Attendance History
+              </h1>
 
-                            <h3 className="mt-4 text-lg font-semibold text-slate-950">
-                                No attendance
-                                records
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Review your attendance results, check-in methods, and recorded
+                check-in times.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void fetchAttendanceHistory("refresh")}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+        </section>
+
+        {/* SUMMARY */}
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">
+                  Total Records
+                </p>
+
+                <p className="mt-2 text-2xl font-bold text-slate-950">
+                  {attendanceCounts.total}
+                </p>
+              </div>
+
+              <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                <History className="size-5" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Present</p>
+
+                <p className="mt-2 text-2xl font-bold text-slate-950">
+                  {attendanceCounts.present}
+                </p>
+              </div>
+
+              <div className="flex size-11 items-center justify-center rounded-xl bg-green-50 text-green-700">
+                <UserCheck className="size-5" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Absent</p>
+
+                <p className="mt-2 text-2xl font-bold text-slate-950">
+                  {attendanceCounts.absent}
+                </p>
+              </div>
+
+              <div className="flex size-11 items-center justify-center rounded-xl bg-red-50 text-red-700">
+                <UserX className="size-5" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Pending</p>
+
+                <p className="mt-2 text-2xl font-bold text-slate-950">
+                  {attendanceCounts.pending}
+                </p>
+              </div>
+
+              <div className="flex size-11 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+                <Clock3 className="size-5" aria-hidden="true" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* RECORDS */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-950">
+                Attendance Records
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                View your event attendance status, venue, and check-in
+                information.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => {
+                const selected = activeFilter === filter.value;
+
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setActiveFilter(filter.value)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      selected
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                    }`}
+                  >
+                    {filter.label}{" "}
+                    <span
+                      className={selected ? "text-slate-300" : "text-slate-400"}
+                    >
+                      {filter.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {loading ? (
+            <div
+              aria-live="polite"
+              className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-8 text-center"
+            >
+              <div className="mx-auto size-9 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+
+              <p className="mt-4 text-sm font-medium text-slate-600">
+                Loading attendance history...
+              </p>
+            </div>
+          ) : errorMessage ? (
+            <div
+              role="alert"
+              className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center"
+            >
+              <p className="font-semibold text-red-800">
+                Unable to load attendance history
+              </p>
+
+              <p className="mt-1 text-sm text-red-600">{errorMessage}</p>
+
+              <button
+                type="button"
+                onClick={() => void fetchAttendanceHistory("initial")}
+                className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : attendanceHistory.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                <History className="size-7" aria-hidden="true" />
+              </div>
+
+              <h3 className="mt-4 text-lg font-semibold text-slate-950">
+                No attendance records
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+                Your attendance records will appear here after you register for
+                an event.
+              </p>
+            </div>
+          ) : filteredAttendanceHistory.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <p className="font-semibold text-slate-800">
+                No matching records
+              </p>
+
+              <p className="mt-1 text-sm text-slate-500">
+                There are no attendance records under the selected filter.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* LIST */}
+              <div className="mt-6 space-y-4">
+                {paginatedAttendanceHistory.map((item) => {
+                  const MethodIcon = getCheckInMethodIcon(
+                    item.attendance.method,
+                  );
+
+                  const attendanceStatus = normalizeStatus(
+                    item.attendance.status,
+                  );
+
+                  const effectiveEventStatus = getEffectiveEventStatus(
+                    item.event,
+                    currentTime,
+                  );
+
+                  return (
+                    <article
+                      key={item.attendance.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                    >
+                      <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                        {/* EVENT INFORMATION */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-950">
+                              {item.event.title}
                             </h3>
 
-                            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                                Your attendance
-                                records will
-                                appear here after
-                                you register for
-                                an event.
-                            </p>
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(
+                                item.attendance.status,
+                              )}`}
+                            >
+                              {getAttendanceStatusLabel(item.attendance.status)}
+                            </span>
+
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
+                                effectiveEventStatus,
+                              )}`}
+                            >
+                              {getEventStatusLabel(effectiveEventStatus)}
+                            </span>
+                          </div>
+
+                          {/* MUNICIPALITY + VENUE */}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+                            <span className="font-medium">
+                              {item.assignment.municipality}
+                            </span>
+
+                            <span className="inline-flex items-center gap-1.5">
+                              <MapPin
+                                className="size-4 shrink-0"
+                                aria-hidden="true"
+                              />
+
+                              <span className="font-medium">
+                                {item.venue?.venue_name || "Venue not assigned"}
+                              </span>
+                            </span>
+                          </div>
+
+                          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                            {item.event.description ||
+                              "No event description provided."}
+                          </p>
+
+                          {item.assignment.local_instructions && (
+                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                                Local Instructions
+                              </p>
+
+                              <p className="mt-1 text-sm leading-6 text-amber-900">
+                                {item.assignment.local_instructions}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                    ) : filteredAttendanceHistory.length ===
-                      0 ? (
-                        <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                            <p className="font-semibold text-slate-800">
-                                No matching
-                                records
+
+                        {/* EVENT + CHECK-IN DETAILS */}
+                        <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[500px]">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Event Starts
                             </p>
 
-                            <p className="mt-1 text-sm text-slate-500">
-                                There are no
-                                attendance
-                                records under the
-                                selected filter.
+                            <p className="mt-1 font-semibold text-slate-800">
+                              {formatDateTime(item.event.start_at)}
                             </p>
-                        </div>
-                    ) : (
-                        <>
-                            {/* LIST */}
-                            <div className="mt-6 space-y-4">
-                                {paginatedAttendanceHistory.map(
-                                    (
-                                        item,
-                                    ) => {
-                                        const MethodIcon =
-                                            getCheckInMethodIcon(
-                                                item
-                                                    .attendance
-                                                    .method,
-                                            );
+                          </div>
 
-                                        const attendanceStatus =
-                                            normalizeStatus(
-                                                item
-                                                    .attendance
-                                                    .status,
-                                            );
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Event Ends
+                            </p>
 
-                                        return (
-                                            <article
-                                                key={
-                                                    item
-                                                        .attendance
-                                                        .id
-                                                }
-                                                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                                            >
-                                                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                                                    {/* EVENT INFORMATION */}
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <h3 className="text-lg font-semibold text-slate-950">
-                                                                {
-                                                                    item
-                                                                        .event
-                                                                        .title
-                                                                }
-                                                            </h3>
+                            <p className="mt-1 font-semibold text-slate-800">
+                              {formatDateTime(item.event.end_at)}
+                            </p>
+                          </div>
 
-                                                            <span
-                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(
-                                                                    item
-                                                                        .attendance
-                                                                        .status,
-                                                                )}`}
-                                                            >
-                                                                {getAttendanceStatusLabel(
-                                                                    item
-                                                                        .attendance
-                                                                        .status,
-                                                                )}
-                                                            </span>
+                          <div className="border-t border-slate-200 pt-3">
+                            <div className="flex items-center gap-2">
+                              <MethodIcon
+                                className="size-4 text-slate-500"
+                                aria-hidden="true"
+                              />
 
-                                                            <span
-                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
-                                                                    item
-                                                                        .event
-                                                                        .status,
-                                                                )}`}
-                                                            >
-                                                                {getEventStatusLabel(
-                                                                    item
-                                                                        .event
-                                                                        .status,
-                                                                )}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* MUNICIPALITY + VENUE */}
-                                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-                                                            <span className="font-medium">
-                                                                {
-                                                                    item
-                                                                        .assignment
-                                                                        .municipality
-                                                                }
-                                                            </span>
-
-                                                            <span className="inline-flex items-center gap-1.5">
-                                                                <MapPin
-                                                                    className="size-4 shrink-0"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <span className="font-medium">
-                                                                    {item
-                                                                        .venue
-                                                                        ?.venue_name ||
-                                                                        "Venue not assigned"}
-                                                                </span>
-                                                            </span>
-                                                        </div>
-
-                                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                                            {item
-                                                                .event
-                                                                .description ||
-                                                                "No event description provided."}
-                                                        </p>
-
-                                                        {item
-                                                            .assignment
-                                                            .local_instructions && (
-                                                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                                    Local
-                                                                    Instructions
-                                                                </p>
-
-                                                                <p className="mt-1 text-sm leading-6 text-amber-900">
-                                                                    {
-                                                                        item
-                                                                            .assignment
-                                                                            .local_instructions
-                                                                    }
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* EVENT + CHECK-IN DETAILS */}
-                                                    <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[500px]">
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                Event
-                                                                Starts
-                                                            </p>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .event
-                                                                        .start_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                Event
-                                                                Ends
-                                                            </p>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .event
-                                                                        .end_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="border-t border-slate-200 pt-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <MethodIcon
-                                                                    className="size-4 text-slate-500"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                    Check-in
-                                                                    Method
-                                                                </p>
-                                                            </div>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {getCheckInMethodLabel(
-                                                                    item
-                                                                        .attendance
-                                                                        .method,
-                                                                )}
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="border-t border-slate-200 pt-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <Clock3
-                                                                    className="size-4 text-slate-500"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                    Check-in
-                                                                    Time
-                                                                </p>
-                                                            </div>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .attendance
-                                                                        .checked_in_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* RESULT */}
-                                                    <div className="shrink-0 xl:w-[230px]">
-                                                        {attendanceStatus ===
-                                                            "present" && (
-                                                            <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-                                                                <CheckCircle2
-                                                                    className="mt-0.5 size-5 shrink-0 text-green-700"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <div>
-                                                                    <p className="text-sm font-semibold text-green-900">
-                                                                        Attendance
-                                                                        Confirmed
-                                                                    </p>
-
-                                                                    <p className="mt-1 text-xs leading-5 text-green-700">
-                                                                        Your
-                                                                        attendance
-                                                                        was
-                                                                        successfully
-                                                                        recorded.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {attendanceStatus ===
-                                                            "absent" && (
-                                                            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                                                                <UserX
-                                                                    className="mt-0.5 size-5 shrink-0 text-red-700"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <div>
-                                                                    <p className="text-sm font-semibold text-red-900">
-                                                                        Marked
-                                                                        Absent
-                                                                    </p>
-
-                                                                    <p className="mt-1 text-xs leading-5 text-red-700">
-                                                                        No
-                                                                        successful
-                                                                        check-in
-                                                                        was
-                                                                        recorded.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {attendanceStatus ===
-                                                            "pending" && (
-                                                            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                                <Clock3
-                                                                    className="mt-0.5 size-5 shrink-0 text-amber-700"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <div>
-                                                                    <p className="text-sm font-semibold text-amber-900">
-                                                                        Attendance
-                                                                        Pending
-                                                                    </p>
-
-                                                                    <p className="mt-1 text-xs leading-5 text-amber-700">
-                                                                        Waiting
-                                                                        for
-                                                                        check-in
-                                                                        or event
-                                                                        completion.
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </article>
-                                        );
-                                    },
-                                )}
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Check-in Method
+                              </p>
                             </div>
 
-                            {/* PAGINATION */}
-                            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-sm text-slate-500">
-                                    Showing{" "}
-                                    <span className="font-semibold text-slate-700">
-                                        {
-                                            firstVisibleRecord
-                                        }
-                                    </span>
-                                    {" - "}
-                                    <span className="font-semibold text-slate-700">
-                                        {
-                                            lastVisibleRecord
-                                        }
-                                    </span>{" "}
-                                    of{" "}
-                                    <span className="font-semibold text-slate-700">
-                                        {
-                                            filteredAttendanceHistory.length
-                                        }
-                                    </span>{" "}
-                                    records
+                            <p className="mt-1 font-semibold text-slate-800">
+                              {getCheckInMethodLabel(item.attendance.method)}
+                            </p>
+                          </div>
+
+                          <div className="border-t border-slate-200 pt-3">
+                            <div className="flex items-center gap-2">
+                              <Clock3
+                                className="size-4 text-slate-500"
+                                aria-hidden="true"
+                              />
+
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Check-in Time
+                              </p>
+                            </div>
+
+                            <p className="mt-1 font-semibold text-slate-800">
+                              {formatDateTime(item.attendance.checked_in_at)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* RESULT */}
+                        <div className="shrink-0 xl:w-[230px]">
+                          {attendanceStatus === "present" && (
+                            <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+                              <CheckCircle2
+                                className="mt-0.5 size-5 shrink-0 text-green-700"
+                                aria-hidden="true"
+                              />
+
+                              <div>
+                                <p className="text-sm font-semibold text-green-900">
+                                  Attendance Confirmed
                                 </p>
 
-                                {totalPages >
-                                    1 && (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                changePage(
-                                                    currentPage -
-                                                        1,
-                                                )
-                                            }
-                                            disabled={
-                                                currentPage ===
-                                                1
-                                            }
-                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                        >
-                                            Previous
-                                        </button>
-
-                                        {Array.from(
-                                            {
-                                                length:
-                                                    totalPages,
-                                            },
-                                            (
-                                                _,
-                                                index,
-                                            ) => {
-                                                const pageNumber =
-                                                    index +
-                                                    1;
-
-                                                return (
-                                                    <button
-                                                        key={
-                                                            pageNumber
-                                                        }
-                                                        type="button"
-                                                        onClick={() =>
-                                                            changePage(
-                                                                pageNumber,
-                                                            )
-                                                        }
-                                                        aria-current={
-                                                            currentPage ===
-                                                            pageNumber
-                                                                ? "page"
-                                                                : undefined
-                                                        }
-                                                        className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                                                            currentPage ===
-                                                            pageNumber
-                                                                ? "bg-slate-950 text-white"
-                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                                        }`}
-                                                    >
-                                                        {
-                                                            pageNumber
-                                                        }
-                                                    </button>
-                                                );
-                                            },
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                changePage(
-                                                    currentPage +
-                                                        1,
-                                                )
-                                            }
-                                            disabled={
-                                                currentPage ===
-                                                totalPages
-                                            }
-                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                        >
-                                            Next
-                                        </button>
-                                    </div>
-                                )}
+                                <p className="mt-1 text-xs leading-5 text-green-700">
+                                  Your attendance was successfully recorded.
+                                </p>
+                              </div>
                             </div>
-                        </>
+                          )}
+
+                          {attendanceStatus === "absent" && (
+                            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                              <UserX
+                                className="mt-0.5 size-5 shrink-0 text-red-700"
+                                aria-hidden="true"
+                              />
+
+                              <div>
+                                <p className="text-sm font-semibold text-red-900">
+                                  Marked Absent
+                                </p>
+
+                                <p className="mt-1 text-xs leading-5 text-red-700">
+                                  No successful check-in was recorded.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {attendanceStatus === "pending" && (
+                            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                              <Clock3
+                                className="mt-0.5 size-5 shrink-0 text-amber-700"
+                                aria-hidden="true"
+                              />
+
+                              <div>
+                                <p className="text-sm font-semibold text-amber-900">
+                                  Attendance Pending
+                                </p>
+
+                                <p className="mt-1 text-xs leading-5 text-amber-700">
+                                  Waiting for check-in or event completion.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              {/* PAGINATION */}
+              <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-semibold text-slate-700">
+                    {firstVisibleRecord}
+                  </span>
+                  {" - "}
+                  <span className="font-semibold text-slate-700">
+                    {lastVisibleRecord}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-slate-700">
+                    {filteredAttendanceHistory.length}
+                  </span>{" "}
+                  records
+                </p>
+
+                {totalPages > 1 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => changePage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+
+                    {Array.from(
+                      {
+                        length: totalPages,
+                      },
+                      (_, index) => {
+                        const pageNumber = index + 1;
+
+                        return (
+                          <button
+                            key={pageNumber}
+                            type="button"
+                            onClick={() => changePage(pageNumber)}
+                            aria-current={
+                              currentPage === pageNumber ? "page" : undefined
+                            }
+                            className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                              currentPage === pageNumber
+                                ? "bg-slate-950 text-white"
+                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        );
+                      },
                     )}
-                </section>
-            </div>
-        </main>
-    );
+
+                    <button
+                      type="button"
+                      onClick={() => changePage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }
