@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  CalendarDays,
-  Check,
-  Circle,
-  Loader2,
-  Trash2,
-} from "lucide-react";
+import { CalendarDays, Check, Circle, Loader2, Trash2 } from "lucide-react";
 
-import type {
-  NotificationId,
-  ProvincialNotification,
-} from "../types";
+import type { NotificationId, ProvincialNotification } from "../types";
 import {
   formatNotificationDate,
   getNotificationIcon,
@@ -23,16 +14,37 @@ type NotificationItemProps = {
   notification: ProvincialNotification;
   updatingId: NotificationId | null;
   deletingId: NotificationId | null;
-  onOpen: (
-    notification: ProvincialNotification,
-  ) => void;
-  onMarkAsRead: (
-    notificationId: NotificationId,
-  ) => void;
-  onDelete: (
-    notificationId: NotificationId,
-  ) => void;
+  onOpen: (notification: ProvincialNotification) => void;
+  onMarkAsRead: (notificationId: NotificationId) => void;
+  onDelete: (notificationId: NotificationId) => void;
 };
+
+function renderMessageWithEventTitle(
+  message: string,
+  eventTitle?: string | null,
+) {
+  const title = eventTitle?.trim();
+
+  if (!title || !message.includes(title)) {
+    return message;
+  }
+
+  const parts = message.split(title);
+
+  return parts.flatMap((part, index) => [
+    <span key={`message-${index}`}>{part}</span>,
+    ...(index < parts.length - 1
+      ? [
+          <strong
+            key={`event-title-${index}`}
+            className="font-bold text-slate-900"
+          >
+            {title}
+          </strong>,
+        ]
+      : []),
+  ]);
+}
 
 export default function NotificationItem({
   notification,
@@ -42,15 +54,15 @@ export default function NotificationItem({
   onMarkAsRead,
   onDelete,
 }: NotificationItemProps) {
-  const NotificationIcon = getNotificationIcon(
-    notification.type,
-  );
+  const NotificationIcon = getNotificationIcon(notification.type);
 
-  const isUpdating =
-    updatingId === notification.id;
-
-  const isDeleting =
-    deletingId === notification.id;
+  const isUpdating = updatingId === notification.id;
+  const isDeleting = deletingId === notification.id;
+  const messageEventTitle =
+    notification.eventTitle?.trim() ||
+    notification.message
+      .match(/preparation status for (.+?) from /i)?.[1]
+      ?.trim();
 
   return (
     <article
@@ -82,9 +94,7 @@ export default function NotificationItem({
           >
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-bold text-slate-900">
-                {getNotificationTypeLabel(
-                  notification.type,
-                )}
+                {getNotificationTypeLabel(notification.type)}
               </p>
 
               {!notification.read && (
@@ -96,20 +106,21 @@ export default function NotificationItem({
             </div>
 
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              {notification.message}
+              {renderMessageWithEventTitle(
+                notification.message,
+                messageEventTitle,
+              )}
             </p>
 
             {notification.eventTitle && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200">
-                <CalendarDays className="h-3.5 w-3.5" />
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-slate-900 shadow-sm ring-1 ring-blue-200">
+                <CalendarDays className="h-3.5 w-3.5 text-blue-700" />
                 {notification.eventTitle}
               </div>
             )}
 
             <p className="mt-3 text-xs font-medium text-slate-400">
-              {formatNotificationDate(
-                notification.created_at,
-              )}
+              {formatNotificationDate(notification.created_at)}
             </p>
           </button>
         </div>
@@ -118,9 +129,7 @@ export default function NotificationItem({
           {!notification.read && (
             <button
               type="button"
-              onClick={() =>
-                onMarkAsRead(notification.id)
-              }
+              onClick={() => onMarkAsRead(notification.id)}
               disabled={isUpdating}
               title="Mark as read"
               className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -135,9 +144,7 @@ export default function NotificationItem({
 
           <button
             type="button"
-            onClick={() =>
-              onDelete(notification.id)
-            }
+            onClick={() => onDelete(notification.id)}
             disabled={isDeleting}
             title="Delete notification"
             className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"

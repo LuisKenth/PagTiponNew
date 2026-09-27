@@ -23,8 +23,8 @@ export default function MunicipalityOverview({
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Overview of municipal administrator coverage across
-            all 18 municipalities.
+            Overview of municipal administrator coverage across all 18
+            municipalities.
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export default function MunicipalityOverview({
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
           {municipalities.map((municipality) => (
             <MunicipalityCard
               key={municipality.name}

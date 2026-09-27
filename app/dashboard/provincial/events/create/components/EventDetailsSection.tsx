@@ -50,7 +50,7 @@ export default function EventDetailsSection({
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <label
               htmlFor="event-title"
-              className="text-sm font-medium text-slate-700"
+              className="text-sm font-bold text-slate-900"
             >
               Event Title
             </label>
@@ -99,7 +99,7 @@ export default function EventDetailsSection({
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <label
               htmlFor="event-description"
-              className="text-sm font-medium text-slate-700"
+              className="text-sm font-bold text-slate-900"
             >
               Event Description
             </label>
