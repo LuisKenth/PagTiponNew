@@ -8,6 +8,8 @@ import PrepareEventModal from "../components/PrepareEventModal";
 import ReceivedEventsSection from "../components/ReceivedEventsSection";
 import useMunicipalDashboard from "../hooks/useMunicipalDashboard";
 import MunicipalDeliveryToast from "../components/MunicipalDeliveryToast";
+import MunicipalEventsFilters from "../events/components/MunicipalEventsFilters";
+import useMunicipalEventsPage from "../events/hooks/useMunicipalEventsPage";
 
 import type { ReceivedEvent } from "../types/municipalDashboard";
 
@@ -66,6 +68,22 @@ export default function MunicipalPreparationsPage() {
 
     refreshEvents,
   } = useMunicipalDashboard();
+
+  const {
+    searchTerm,
+    statusFilter,
+    eventStatusFilter,
+    registrationFilter,
+    sortOption,
+    filteredEvents,
+    hasActiveFilters,
+    setSearchTerm,
+    setStatusFilter,
+    setEventStatusFilter,
+    setRegistrationFilter,
+    setSortOption,
+    clearFilters,
+  } = useMunicipalEventsPage(receivedEvents);
 
   /*
    * OPEN EVENT FROM DASHBOARD / EVENTS /
@@ -344,9 +362,27 @@ export default function MunicipalPreparationsPage() {
           </div>
         </section>
 
+        <MunicipalEventsFilters
+          searchTerm={searchTerm}
+          statusFilter={statusFilter}
+          eventStatusFilter={eventStatusFilter}
+          registrationFilter={registrationFilter}
+          sortOption={sortOption}
+          resultCount={filteredEvents.length}
+          hasActiveFilters={hasActiveFilters}
+          onSearchChange={setSearchTerm}
+          onStatusFilterChange={setStatusFilter}
+          onEventStatusFilterChange={setEventStatusFilter}
+          onRegistrationFilterChange={setRegistrationFilter}
+          onSortChange={setSortOption}
+          onClearFilters={clearFilters}
+        />
+
         {/* RECEIVED EVENTS */}
         <ReceivedEventsSection
-          events={receivedEvents}
+          events={filteredEvents}
+          hasActiveFilters={hasActiveFilters}
+          onClearFilters={clearFilters}
           venues={venues}
           loading={loading}
           highlightedEventId={highlightedEventId}

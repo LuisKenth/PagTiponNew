@@ -1,7 +1,4 @@
-import {
-  FilterX,
-  Search,
-} from "lucide-react";
+import { FilterX, Search } from "lucide-react";
 
 import type {
   MunicipalVenue,
@@ -19,9 +16,7 @@ type MunicipalEventsListProps = {
   totalFilteredEvents: number;
   hasActiveFilters: boolean;
 
-  onPrepare: (
-    item: ReceivedEvent,
-  ) => void;
+  onPrepare: (item: ReceivedEvent) => void;
 
   onClearFilters: () => void;
 };
@@ -46,33 +41,27 @@ export default function MunicipalEventsList({
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Open an event to review its schedule,
-            assigned venue, preparation, and
-            registration.
+            Open an event to review its schedule, assigned venue, preparation,
+            and registration.
           </p>
         </div>
 
-        {!loading &&
-          totalFilteredEvents > 0 && (
-            <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
-              {firstVisibleItem}–
-              {lastVisibleItem} of{" "}
-              {totalFilteredEvents}
-            </span>
-          )}
+        {!loading && totalFilteredEvents > 0 && (
+          <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
+            {firstVisibleItem}–{lastVisibleItem} of {totalFilteredEvents}
+          </span>
+        )}
       </div>
 
       <div className="p-4 sm:p-5 lg:p-6">
         {loading ? (
           <div className="space-y-4">
-            {[1, 2, 3].map(
-              (item) => (
-                <div
-                  key={item}
-                  className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-slate-100"
-                />
-              ),
-            )}
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-slate-100"
+              />
+            ))}
           </div>
         ) : totalFilteredEvents === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
@@ -83,9 +72,8 @@ export default function MunicipalEventsList({
             </h3>
 
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Try changing your search,
-              preparation status, or
-              registration filters.
+              Try changing your search, preparation status, or registration
+              filters.
             </p>
 
             {hasActiveFilters && (
@@ -107,7 +95,7 @@ export default function MunicipalEventsList({
                 item={item}
                 venues={venues}
                 onPrepare={onPrepare}
-                showActions={false}
+                compact
               />
             ))}
           </div>

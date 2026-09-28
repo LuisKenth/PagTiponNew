@@ -1,7 +1,13 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+
 import {
+  ChevronLeft,
+  ChevronRight,
   CircleDashed,
   ClipboardList,
-  Clock3,
   Keyboard,
   LoaderCircle,
   LogIn,
@@ -13,10 +19,14 @@ import {
 } from "lucide-react";
 
 import type { AttendanceRecord } from "../types";
+
 import { formatDateTime } from "../utils";
+
+const RECORDS_PER_PAGE = 10;
 
 type AttendanceRecordsTableProps = {
   records: AttendanceRecord[];
+
   loading: boolean;
 };
 
@@ -24,19 +34,42 @@ export default function AttendanceRecordsTable({
   records,
   loading,
 }: AttendanceRecordsTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(records.length / RECORDS_PER_PAGE));
+
+  const paginatedRecords = records.slice(
+    (currentPage - 1) * RECORDS_PER_PAGE,
+    currentPage * RECORDS_PER_PAGE,
+  );
+
+  const firstVisibleRecord =
+    records.length === 0 ? 0 : (currentPage - 1) * RECORDS_PER_PAGE + 1;
+
+  const lastVisibleRecord = Math.min(
+    currentPage * RECORDS_PER_PAGE,
+    records.length,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [records]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
   return (
     <section
       aria-label="Recent attendance records"
       className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
       {/* Records summary */}
+
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm ring-1 ring-slate-200">
-            <ClipboardList
-              className="h-5 w-5"
-              aria-hidden="true"
-            />
+            <ClipboardList className="h-5 w-5" aria-hidden="true" />
           </div>
 
           <div>
@@ -45,19 +78,15 @@ export default function AttendanceRecordsTable({
             </p>
 
             <p className="mt-0.5 text-xs text-slate-500">
-              Participant Time In and Time Out
-              records for the currently selected
-              event.
+              Participant Time In and Time Out records for the currently
+              selected event.
             </p>
           </div>
         </div>
 
         {!loading && (
           <div className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
-            {records.length}{" "}
-            {records.length === 1
-              ? "record"
-              : "records"}
+            {records.length} {records.length === 1 ? "record" : "records"}
           </div>
         )}
       </div>
@@ -69,174 +98,175 @@ export default function AttendanceRecordsTable({
       ) : (
         <>
           {/* Desktop table */}
+
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[980px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-white text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <th
-                    scope="col"
-                    className="px-6 py-4"
-                  >
+                  <th scope="col" className="px-6 py-4">
                     Participant
                   </th>
 
-                  <th
-                    scope="col"
-                    className="px-4 py-4"
-                  >
+                  <th scope="col" className="px-4 py-4">
                     Status
                   </th>
 
-                  <th
-                    scope="col"
-                    className="px-4 py-4"
-                  >
+                  <th scope="col" className="px-4 py-4">
                     Method
                   </th>
 
-                  <th
-                    scope="col"
-                    className="px-4 py-4"
-                  >
+                  <th scope="col" className="px-4 py-4">
                     Time In
                   </th>
 
-                  <th
-                    scope="col"
-                    className="px-4 py-4"
-                  >
+                  <th scope="col" className="px-4 py-4">
                     Time Out
                   </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {records.map(
-                  (record) => (
-                    <tr
-                      key={String(
-                        record.id,
-                      )}
-                      className="transition hover:bg-slate-50/80"
-                    >
-                      <td className="px-6 py-4">
-                        <ParticipantIdentifier
-                          userId={
-                            record.user_id
-                          }
-                          name={
-                            record.participant_name
-                          }
-                          email={
-                            record.participant_email
-                          }
-                        />
-                      </td>
+                {paginatedRecords.map((record) => (
+                  <tr
+                    key={String(record.id)}
+                    className="transition hover:bg-slate-50/80"
+                  >
+                    <td className="px-6 py-4">
+                      <ParticipantIdentifier
+                        userId={record.user_id}
+                        name={record.participant_name}
+                        email={record.participant_email}
+                      />
+                    </td>
 
-                      <td className="px-4 py-4">
-                        <StatusBadge
-                          status={
-                            record.status
-                          }
-                        />
-                      </td>
+                    <td className="px-4 py-4">
+                      <StatusBadge status={record.status} />
+                    </td>
 
-                      <td className="px-4 py-4">
-                        <MethodBadge
-                          method={
-                            record.method
-                          }
-                        />
-                      </td>
+                    <td className="px-4 py-4">
+                      <MethodBadge method={record.method} />
+                    </td>
 
-                      <td className="px-4 py-4">
-                        <AttendanceTime
-                          value={
-                            record.checked_in_at
-                          }
-                          type="check_in"
-                        />
-                      </td>
+                    <td className="px-4 py-4">
+                      <AttendanceTime
+                        value={record.checked_in_at}
+                        type="check_in"
+                      />
+                    </td>
 
-                      <td className="px-4 py-4">
-                        <AttendanceTime
-                          value={
-                            record.checked_out_at
-                          }
-                          type="check_out"
-                        />
-                      </td>
-                    </tr>
-                  ),
-                )}
+                    <td className="px-4 py-4">
+                      <AttendanceTime
+                        value={record.checked_out_at}
+                        type="check_out"
+                      />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           {/* Mobile cards */}
+
           <div className="divide-y divide-slate-100 md:hidden">
-            {records.map(
-              (record) => (
-                <article
-                  key={String(
-                    record.id,
-                  )}
-                  className="space-y-4 px-5 py-5"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <ParticipantIdentifier
-                      userId={
-                        record.user_id
-                      }
-                      name={
-                        record.participant_name
-                      }
-                      email={
-                        record.participant_email
-                      }
+            {paginatedRecords.map((record) => (
+              <article key={String(record.id)} className="space-y-4 px-5 py-5">
+                <div className="flex items-start justify-between gap-3">
+                  <ParticipantIdentifier
+                    userId={record.user_id}
+                    name={record.participant_name}
+                    email={record.participant_email}
+                  />
+
+                  <StatusBadge status={record.status} />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <RecordDetail label="Method">
+                    <MethodBadge method={record.method} />
+                  </RecordDetail>
+
+                  <RecordDetail label="Time In">
+                    <AttendanceTime
+                      value={record.checked_in_at}
+                      type="check_in"
+                      compact
                     />
+                  </RecordDetail>
 
-                    <StatusBadge
-                      status={
-                        record.status
-                      }
+                  <RecordDetail label="Time Out">
+                    <AttendanceTime
+                      value={record.checked_out_at}
+                      type="check_out"
+                      compact
                     />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <RecordDetail label="Method">
-                      <MethodBadge
-                        method={
-                          record.method
-                        }
-                      />
-                    </RecordDetail>
-
-                    <RecordDetail label="Time In">
-                      <AttendanceTime
-                        value={
-                          record.checked_in_at
-                        }
-                        type="check_in"
-                        compact
-                      />
-                    </RecordDetail>
-
-                    <RecordDetail label="Time Out">
-                      <AttendanceTime
-                        value={
-                          record.checked_out_at
-                        }
-                        type="check_out"
-                        compact
-                      />
-                    </RecordDetail>
-                  </div>
-                </article>
-              ),
-            )}
+                  </RecordDetail>
+                </div>
+              </article>
+            ))}
           </div>
         </>
+      )}
+
+      {records.length > RECORDS_PER_PAGE && (
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          {/* Previous / Page / Next buttons */}
+        </div>
+      )}
+
+      {!loading && records.length > 0 && (
+        <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="text-sm text-slate-500">
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {firstVisibleRecord}
+            </span>
+            –
+            <span className="font-semibold text-slate-900">
+              {lastVisibleRecord}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-slate-900">
+              {records.length}
+            </span>{" "}
+            records
+          </p>
+
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </button>
+
+            <span className="whitespace-nowrap text-sm font-medium text-slate-600">
+              Page{" "}
+              <span className="font-bold text-slate-900">{currentPage}</span> of{" "}
+              <span className="font-bold text-slate-900">{totalPages}</span>
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                setCurrentPage((page) => Math.min(totalPages, page + 1))
+              }
+              disabled={currentPage === totalPages}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {records.length > RECORDS_PER_PAGE && (
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          {/* Previous / Page / Next buttons */}
+        </div>
       )}
     </section>
   );
@@ -247,7 +277,6 @@ function LoadingState() {
     <div className="p-5 sm:p-6">
       <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
         <LoaderCircle className="h-5 w-5 animate-spin" />
-
         Loading attendance records...
       </div>
 
@@ -260,9 +289,13 @@ function LoadingState() {
             className="grid animate-pulse gap-3 rounded-xl border border-slate-100 p-4 sm:grid-cols-5"
           >
             <div className="h-4 rounded bg-slate-200" />
+
             <div className="h-4 rounded bg-slate-100" />
+
             <div className="h-4 rounded bg-slate-100" />
+
             <div className="h-4 rounded bg-slate-100" />
+
             <div className="h-4 rounded bg-slate-100" />
           </div>
         ))}
@@ -275,10 +308,7 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center px-5 py-12 text-center sm:px-6">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-        <ClipboardList
-          className="h-7 w-7"
-          aria-hidden="true"
-        />
+        <ClipboardList className="h-7 w-7" aria-hidden="true" />
       </div>
 
       <p className="mt-4 text-sm font-semibold text-slate-800">
@@ -286,9 +316,8 @@ function EmptyState() {
       </p>
 
       <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">
-        Successful participant Time In and Time
-        Out records for the selected event will
-        appear here.
+        Successful participant Time In and Time Out records for the selected
+        event will appear here.
       </p>
     </div>
   );
@@ -296,44 +325,51 @@ function EmptyState() {
 
 type ParticipantIdentifierProps = {
   userId: AttendanceRecord["user_id"];
+
   name?: string | null;
+
   email?: string | null;
 };
 
 function ParticipantIdentifier({
   userId,
+
   name,
+
   email,
 }: ParticipantIdentifierProps) {
-  const fullUserId =
-    String(userId);
+  const fullUserId = String(userId);
 
   const shortenedUserId =
     fullUserId.length > 18
       ? `${fullUserId.slice(
           0,
+
           8,
         )}…${fullUserId.slice(-6)}`
       : fullUserId;
 
-  const participantName =
-    name?.trim() ||
-    "Participant";
+  const participantName = name?.trim() || "Participant";
 
-  const participantEmail =
-    email?.trim() || null;
+  const participantEmail = email?.trim() || null;
 
-  const initials =
-    participantName
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((word) =>
-        word
-          .charAt(0)
-          .toUpperCase(),
-      )
-      .join("");
+  const initials = participantName
+
+    .split(/\s+/)
+
+    .filter(Boolean)
+
+    .slice(0, 2)
+
+    .map((word) =>
+      word
+
+        .charAt(0)
+
+        .toUpperCase(),
+    )
+
+    .join("");
 
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -343,9 +379,7 @@ function ParticipantIdentifier({
 
       <div className="min-w-0">
         <p
-          title={
-            participantName
-          }
+          title={participantName}
           className="truncate text-sm font-semibold text-slate-900"
         >
           {participantName}
@@ -353,18 +387,14 @@ function ParticipantIdentifier({
 
         {participantEmail ? (
           <p
-            title={
-              participantEmail
-            }
+            title={participantEmail}
             className="mt-0.5 max-w-[260px] truncate text-xs text-slate-500"
           >
             {participantEmail}
           </p>
         ) : (
           <p
-            title={
-              fullUserId
-            }
+            title={fullUserId}
             className="mt-0.5 max-w-[240px] truncate font-mono text-xs text-slate-400"
           >
             {shortenedUserId}
@@ -379,69 +409,59 @@ type StatusBadgeProps = {
   status: AttendanceRecord["status"];
 };
 
-function StatusBadge({
-  status,
-}: StatusBadgeProps) {
-  const normalizedStatus =
-    String(
-      status || "pending",
-    ).toLowerCase();
+function StatusBadge({ status }: StatusBadgeProps) {
+  const normalizedStatus = String(status || "pending").toLowerCase();
 
   const statusConfig: Record<
     string,
     {
       label: string;
+
       icon: LucideIcon;
+
       className: string;
     }
   > = {
     present: {
       label: "Present",
+
       icon: UserCheck,
-      className:
-        "border-emerald-200 bg-emerald-50 text-emerald-700",
+
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
     },
 
     absent: {
       label: "Absent",
+
       icon: UserX,
-      className:
-        "border-rose-200 bg-rose-50 text-rose-700",
+
+      className: "border-rose-200 bg-rose-50 text-rose-700",
     },
 
     pending: {
       label: "Pending",
+
       icon: CircleDashed,
-      className:
-        "border-amber-200 bg-amber-50 text-amber-700",
+
+      className: "border-amber-200 bg-amber-50 text-amber-700",
     },
   };
 
-  const config =
-    statusConfig[
-      normalizedStatus
-    ] ?? {
-      label:
-        normalizedStatus ||
-        "Unknown",
+  const config = statusConfig[normalizedStatus] ?? {
+    label: normalizedStatus || "Unknown",
 
-      icon: CircleDashed,
+    icon: CircleDashed,
 
-      className:
-        "border-slate-200 bg-slate-50 text-slate-600",
-    };
+    className: "border-slate-200 bg-slate-50 text-slate-600",
+  };
 
-  const Icon =
-    config.icon;
+  const Icon = config.icon;
 
   return (
     <span
       className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${config.className}`}
     >
-      <Icon
-        className="h-3.5 w-3.5"
-        aria-hidden="true"
-      />
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
 
       {config.label}
     </span>
@@ -452,40 +472,22 @@ type MethodBadgeProps = {
   method: AttendanceRecord["method"];
 };
 
-function MethodBadge({
-  method,
-}: MethodBadgeProps) {
-  const normalizedMethod =
-    String(
-      method || "",
-    ).toLowerCase();
+function MethodBadge({ method }: MethodBadgeProps) {
+  const normalizedMethod = String(method || "").toLowerCase();
 
-  if (
-    normalizedMethod === "qr"
-  ) {
+  if (normalizedMethod === "qr") {
     return (
       <span className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700">
-        <QrCode
-          className="h-3.5 w-3.5"
-          aria-hidden="true"
-        />
-
+        <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
         QR Scan
       </span>
     );
   }
 
-  if (
-    normalizedMethod ===
-    "manual"
-  ) {
+  if (normalizedMethod === "manual") {
     return (
       <span className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700">
-        <Keyboard
-          className="h-3.5 w-3.5"
-          aria-hidden="true"
-        />
-
+        <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
         Manual
       </span>
     );
@@ -493,11 +495,7 @@ function MethodBadge({
 
   return (
     <span className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
-      <CircleDashed
-        className="h-3.5 w-3.5"
-        aria-hidden="true"
-      />
-
+      <CircleDashed className="h-3.5 w-3.5" aria-hidden="true" />
       Not set
     </span>
   );
@@ -505,41 +503,36 @@ function MethodBadge({
 
 type AttendanceTimeProps = {
   value: string | null;
-  type:
-    | "check_in"
-    | "check_out";
+
+  type: "check_in" | "check_out";
+
   compact?: boolean;
 };
 
 function AttendanceTime({
   value,
+
   type,
+
   compact = false,
 }: AttendanceTimeProps) {
-  const isCheckIn =
-    type === "check_in";
+  const isCheckIn = type === "check_in";
 
   if (!value) {
     return (
       <span className="text-xs font-medium text-slate-400">
-        {isCheckIn
-          ? "No Time In"
-          : "No Time Out"}
+        {isCheckIn ? "No Time In" : "No Time Out"}
       </span>
     );
   }
 
-  const Icon = isCheckIn
-    ? LogIn
-    : LogOut;
+  const Icon = isCheckIn ? LogIn : LogOut;
 
   return (
     <div className="flex items-start gap-2">
       <Icon
         className={`mt-0.5 h-4 w-4 shrink-0 ${
-          isCheckIn
-            ? "text-emerald-500"
-            : "text-blue-500"
+          isCheckIn ? "text-emerald-500" : "text-blue-500"
         }`}
       />
 
@@ -550,9 +543,7 @@ function AttendanceTime({
             : "text-sm text-slate-600"
         }
       >
-        {formatDateTime(
-          value,
-        )}
+        {formatDateTime(value)}
       </span>
     </div>
   );
@@ -560,11 +551,13 @@ function AttendanceTime({
 
 type RecordDetailProps = {
   label: string;
-  children: React.ReactNode;
+
+  children: ReactNode;
 };
 
 function RecordDetail({
   label,
+
   children,
 }: RecordDetailProps) {
   return (

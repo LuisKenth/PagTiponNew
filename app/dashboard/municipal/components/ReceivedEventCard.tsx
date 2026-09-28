@@ -34,6 +34,7 @@ type ReceivedEventCardProps = {
   venues?: MunicipalVenue[];
   onPrepare: (item: ReceivedEvent) => void;
   showActions?: boolean;
+  compact?: boolean;
 };
 
 export default function ReceivedEventCard({
@@ -41,16 +42,13 @@ export default function ReceivedEventCard({
   venues,
   onPrepare,
   showActions = true,
+  compact = false,
 }: ReceivedEventCardProps) {
-  const municipalStatus = String(
-    item.municipal_status ?? "",
-  )
+  const municipalStatus = String(item.municipal_status ?? "")
     .trim()
     .toLowerCase();
 
-  const provincialStatus = String(
-    item.event?.status ?? "",
-  )
+  const provincialStatus = String(item.event?.status ?? "")
     .trim()
     .toLowerCase();
 
@@ -61,24 +59,17 @@ export default function ReceivedEventCard({
    * while the provincial event is upcoming.
    */
   const isCancelled =
-    municipalStatus === "cancelled" ||
-    provincialStatus === "cancelled";
+    municipalStatus === "cancelled" || provincialStatus === "cancelled";
 
-  const isOngoing =
-    provincialStatus === "ongoing";
+  const isOngoing = provincialStatus === "ongoing";
 
-  const isCompleted =
-    provincialStatus === "completed";
+  const isCompleted = provincialStatus === "completed";
 
-  const isUpcoming =
-    provincialStatus === "upcoming";
+  const isUpcoming = provincialStatus === "upcoming";
 
-  const isPreparationEditable =
-    isUpcoming &&
-    !isCancelled;
+  const isPreparationEditable = isUpcoming && !isCancelled;
 
-  const isPreparationLocked =
-    !isPreparationEditable;
+  const isPreparationLocked = !isPreparationEditable;
 
   const getEventStatusLabel = () => {
     switch (provincialStatus) {
@@ -124,14 +115,11 @@ export default function ReceivedEventCard({
     }
   };
 
-  const normalizedPreparationStatus =
-    normalizePreparationStatus(
-      item.municipal_status,
-    );
+  const normalizedPreparationStatus = normalizePreparationStatus(
+    item.municipal_status,
+  );
 
-  const isPrepared =
-    normalizedPreparationStatus ===
-    "prepared";
+  const isPrepared = normalizedPreparationStatus === "prepared";
 
   /*
    * Registration may only appear open while:
@@ -140,68 +128,109 @@ export default function ReceivedEventCard({
    * - registration_open is true
    */
   const isRegistrationOpen =
-    isPreparationEditable &&
-    isPrepared &&
-    item.registration_open === true;
+    isPreparationEditable && isPrepared && item.registration_open === true;
 
-  const registeredParticipants =
-    item.registered_participants ?? 0;
+  const registeredParticipants = item.registered_participants ?? 0;
 
   /*
    * Local instructions preview.
    */
-  const localInstructions =
-    String(
-      item.local_instructions ?? "",
-    ).trim();
+  const localInstructions = String(item.local_instructions ?? "").trim();
 
   /*
    * Match the venue assigned to this specific
    * event_municipalities record.
    */
-  const safeVenues =
-    Array.isArray(venues)
-      ? venues
-      : [];
+  const safeVenues = Array.isArray(venues) ? venues : [];
 
   const assignedVenue =
-    safeVenues.find(
-      (venue) =>
-        venue.id === item.local_venue_id,
-    ) ?? null;
+    safeVenues.find((venue) => venue.id === item.local_venue_id) ?? null;
 
-  const accentClass =
-    isCancelled
-      ? "bg-red-500"
-      : isOngoing
-        ? "bg-emerald-500"
-        : isCompleted
-          ? "bg-slate-500"
-          : isPrepared
-            ? "bg-emerald-500"
-            : normalizedPreparationStatus ===
-                "preparing"
-              ? "bg-blue-500"
-              : "bg-amber-500";
+  const accentClass = isCancelled
+    ? "bg-red-500"
+    : isOngoing
+      ? "bg-emerald-500"
+      : isCompleted
+        ? "bg-slate-500"
+        : isPrepared
+          ? "bg-emerald-500"
+          : normalizedPreparationStatus === "preparing"
+            ? "bg-blue-500"
+            : "bg-amber-500";
 
-  const preparationActionLabel =
-    isCancelled
-      ? "View Cancellation"
-      : isPreparationEditable
-        ? "Manage Preparation"
-        : "View Preparation";
+  const preparationActionLabel = isCancelled
+    ? "View Cancellation"
+    : isPreparationEditable
+      ? "Manage Preparation"
+      : "View Preparation";
 
-  const preparationActionDescription =
-    isCancelled
-      ? "Preparation and registration controls are locked because this event was cancelled."
-      : isOngoing
-        ? "The event is already ongoing. Preparation details are available for reference only."
-        : isCompleted
-          ? "The event has been completed. Preparation details are available for historical reference."
-          : isPreparationEditable
-            ? "Update municipal preparation and registration settings."
-            : "Preparation changes are not available for this event.";
+  const preparationActionDescription = isCancelled
+    ? "Preparation and registration controls are locked because this event was cancelled."
+    : isOngoing
+      ? "The event is already ongoing. Preparation details are available for reference only."
+      : isCompleted
+        ? "The event has been completed. Preparation details are available for historical reference."
+        : isPreparationEditable
+          ? "Update municipal preparation and registration settings."
+          : "Preparation changes are not available for this event.";
 
+  if (compact) {
+    return (
+      <article className="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getEventStatusClass()}`}
+            >
+              {getEventStatusLabel()}
+            </span>
+
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getPreparationStatusClass(
+                item.municipal_status,
+              )}`}
+            >
+              {isCancelled
+                ? "Cancelled"
+                : getPreparationStatusLabel(normalizedPreparationStatus)}
+            </span>
+
+            <span className="text-xs text-slate-500">
+              {isRegistrationOpen ? "Registration open" : "Registration closed"}
+            </span>
+          </div>
+
+          <h3 className="mt-2 truncate text-base font-bold text-slate-900">
+            {item.event?.title || "Untitled Event"}
+          </h3>
+
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+            <span>{formatDateTime(item.event?.start_at)}</span>
+            <span>{assignedVenue?.venue_name || "No venue assigned"}</span>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-3">
+          <Link
+            href={`/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
+              String(item.id),
+            )}`}
+            className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+          >
+            {registeredParticipants} registered
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => onPrepare(item)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            {preparationActionLabel}
+          </button>
+        </div>
+      </article>
+    );
+  }
   return (
     <article
       className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-200 ${
@@ -215,9 +244,7 @@ export default function ReceivedEventCard({
       }`}
     >
       {/* Left status accent */}
-      <div
-        className={`absolute inset-y-0 left-0 w-1 ${accentClass}`}
-      />
+      <div className={`absolute inset-y-0 left-0 w-1 ${accentClass}`} />
 
       {/* Cancelled-event notice */}
       {isCancelled && (
@@ -233,9 +260,8 @@ export default function ReceivedEventCard({
               </p>
 
               <p className="mt-1 text-sm leading-6 text-red-700">
-                Municipal preparation and participant
-                registration have been stopped. Event
-                information remains available for reference.
+                Municipal preparation and participant registration have been
+                stopped. Event information remains available for reference.
               </p>
             </div>
           </div>
@@ -256,9 +282,8 @@ export default function ReceivedEventCard({
               </p>
 
               <p className="mt-1 text-sm leading-6 text-emerald-700">
-                Municipal preparation is now locked.
-                Existing preparation information remains
-                available for reference.
+                Municipal preparation is now locked. Existing preparation
+                information remains available for reference.
               </p>
             </div>
           </div>
@@ -279,9 +304,8 @@ export default function ReceivedEventCard({
               </p>
 
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                Municipal preparation is complete and
-                locked. Existing information is retained
-                for historical reference.
+                Municipal preparation is complete and locked. Existing
+                information is retained for historical reference.
               </p>
             </div>
           </div>
@@ -291,9 +315,7 @@ export default function ReceivedEventCard({
       <div className="p-5 sm:p-6">
         <div
           className={`grid gap-6 ${
-            showActions
-              ? "xl:grid-cols-[minmax(0,1fr)_220px]"
-              : "grid-cols-1"
+            showActions ? "xl:grid-cols-[minmax(0,1fr)_220px]" : "grid-cols-1"
           }`}
         >
           {/* Main event information */}
@@ -321,9 +343,7 @@ export default function ReceivedEventCard({
                     item.municipal_status,
                   )}`}
                 >
-                  {getPreparationStatusLabel(
-                    normalizedPreparationStatus,
-                  )}
+                  {getPreparationStatusLabel(normalizedPreparationStatus)}
                 </span>
               )}
 
@@ -347,36 +367,29 @@ export default function ReceivedEventCard({
                   : "Registration Closed"}
               </span>
 
-              {isPreparationLocked &&
-                !isCancelled && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                    <LockKeyhole className="h-3.5 w-3.5" />
-                    Preparation Locked
-                  </span>
-                )}
+              {isPreparationLocked && !isCancelled && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                  <LockKeyhole className="h-3.5 w-3.5" />
+                  Preparation Locked
+                </span>
+              )}
             </div>
 
             {/* Title and description */}
             <h3
               className={`mt-3 text-xl font-bold tracking-tight sm:text-2xl ${
-                isCancelled
-                  ? "text-red-950"
-                  : "text-slate-950"
+                isCancelled ? "text-red-950" : "text-slate-950"
               }`}
             >
-              {item.event?.title ||
-                "Untitled Event"}
+              {item.event?.title || "Untitled Event"}
             </h3>
 
             <p
               className={`mt-2 max-w-3xl text-sm leading-6 ${
-                isCancelled
-                  ? "text-red-800"
-                  : "text-slate-600"
+                isCancelled ? "text-red-800" : "text-slate-600"
               }`}
             >
-              {item.event?.description ||
-                "No description provided."}
+              {item.event?.description || "No description provided."}
             </p>
 
             {/* Event schedule + venue */}
@@ -402,9 +415,7 @@ export default function ReceivedEventCard({
                 <div className="min-w-0">
                   <p
                     className={`text-[11px] font-bold uppercase tracking-wide ${
-                      isCancelled
-                        ? "text-red-500"
-                        : "text-slate-400"
+                      isCancelled ? "text-red-500" : "text-slate-400"
                     }`}
                   >
                     Start Date and Time
@@ -412,14 +423,10 @@ export default function ReceivedEventCard({
 
                   <p
                     className={`mt-1 text-sm font-semibold ${
-                      isCancelled
-                        ? "text-red-900"
-                        : "text-slate-800"
+                      isCancelled ? "text-red-900" : "text-slate-800"
                     }`}
                   >
-                    {formatDateTime(
-                      item.event?.start_at,
-                    )}
+                    {formatDateTime(item.event?.start_at)}
                   </p>
                 </div>
               </div>
@@ -439,9 +446,7 @@ export default function ReceivedEventCard({
                 <div className="min-w-0">
                   <p
                     className={`text-[11px] font-bold uppercase tracking-wide ${
-                      isCancelled
-                        ? "text-red-500"
-                        : "text-slate-400"
+                      isCancelled ? "text-red-500" : "text-slate-400"
                     }`}
                   >
                     End Date and Time
@@ -449,14 +454,10 @@ export default function ReceivedEventCard({
 
                   <p
                     className={`mt-1 text-sm font-semibold ${
-                      isCancelled
-                        ? "text-red-900"
-                        : "text-slate-800"
+                      isCancelled ? "text-red-900" : "text-slate-800"
                     }`}
                   >
-                    {formatDateTime(
-                      item.event?.end_at,
-                    )}
+                    {formatDateTime(item.event?.end_at)}
                   </p>
                 </div>
               </div>
@@ -478,9 +479,7 @@ export default function ReceivedEventCard({
                 <div className="min-w-0">
                   <p
                     className={`text-[11px] font-bold uppercase tracking-wide ${
-                      isCancelled
-                        ? "text-red-500"
-                        : "text-slate-400"
+                      isCancelled ? "text-red-500" : "text-slate-400"
                     }`}
                   >
                     Local Venue
@@ -495,16 +494,13 @@ export default function ReceivedEventCard({
                           : "text-slate-500"
                     }`}
                   >
-                    {assignedVenue?.venue_name ||
-                      "Not assigned yet"}
+                    {assignedVenue?.venue_name || "Not assigned yet"}
                   </p>
 
                   {assignedVenue &&
-                    typeof assignedVenue.capacity ===
-                      "number" && (
+                    typeof assignedVenue.capacity === "number" && (
                       <p className="mt-0.5 text-xs text-slate-500">
-                        Capacity:{" "}
-                        {assignedVenue.capacity.toLocaleString()}
+                        Capacity: {assignedVenue.capacity.toLocaleString()}
                       </p>
                     )}
                 </div>
@@ -535,9 +531,7 @@ export default function ReceivedEventCard({
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-[11px] font-bold uppercase tracking-wide ${
-                      isCancelled
-                        ? "text-red-500"
-                        : "text-slate-400"
+                      isCancelled ? "text-red-500" : "text-slate-400"
                     }`}
                   >
                     Local Instructions
@@ -546,9 +540,7 @@ export default function ReceivedEventCard({
                   {localInstructions ? (
                     <p
                       className={`mt-1 whitespace-pre-wrap break-words text-sm leading-6 ${
-                        isCancelled
-                          ? "text-red-800"
-                          : "text-slate-700"
+                        isCancelled ? "text-red-800" : "text-slate-700"
                       }`}
                     >
                       {localInstructions}
@@ -559,13 +551,12 @@ export default function ReceivedEventCard({
                     </p>
                   )}
 
-                  {isPreparationLocked &&
-                    localInstructions && (
-                      <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
-                        <LockKeyhole className="h-3.5 w-3.5" />
-                        Retained for reference
-                      </p>
-                    )}
+                  {isPreparationLocked && localInstructions && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+                      <LockKeyhole className="h-3.5 w-3.5" />
+                      Retained for reference
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -576,8 +567,7 @@ export default function ReceivedEventCard({
                 String(item.id),
               )}`}
               aria-label={`View registered participants for ${
-                item.event?.title ||
-                "this event"
+                item.event?.title || "this event"
               }`}
               className={`group mt-4 flex items-center gap-3 rounded-xl border p-4 transition ${
                 isCancelled
@@ -598,9 +588,7 @@ export default function ReceivedEventCard({
               <div className="min-w-0 flex-1">
                 <p
                   className={`text-[11px] font-bold uppercase tracking-wide ${
-                    isCancelled
-                      ? "text-red-500"
-                      : "text-slate-400"
+                    isCancelled ? "text-red-500" : "text-slate-400"
                   }`}
                 >
                   Registered Participants
@@ -608,9 +596,7 @@ export default function ReceivedEventCard({
 
                 <p
                   className={`mt-1 text-sm font-semibold ${
-                    isCancelled
-                      ? "text-red-900"
-                      : "text-slate-800"
+                    isCancelled ? "text-red-900" : "text-slate-800"
                   }`}
                 >
                   {registeredParticipants}{" "}
@@ -622,14 +608,10 @@ export default function ReceivedEventCard({
 
               <div
                 className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
-                  isCancelled
-                    ? "text-red-600"
-                    : "text-emerald-700"
+                  isCancelled ? "text-red-600" : "text-emerald-700"
                 }`}
               >
-                <span className="hidden sm:inline">
-                  View records
-                </span>
+                <span className="hidden sm:inline">View records</span>
 
                 <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
               </div>
@@ -661,9 +643,7 @@ export default function ReceivedEventCard({
                 <div>
                   <p
                     className={`text-xs font-bold ${
-                      isCancelled
-                        ? "text-red-900"
-                        : "text-slate-900"
+                      isCancelled ? "text-red-900" : "text-slate-900"
                     }`}
                   >
                     Event Actions
@@ -671,9 +651,7 @@ export default function ReceivedEventCard({
 
                   <p
                     className={`mt-0.5 text-xs ${
-                      isCancelled
-                        ? "text-red-600"
-                        : "text-slate-500"
+                      isCancelled ? "text-red-600" : "text-slate-500"
                     }`}
                   >
                     {isPreparationEditable
@@ -696,18 +674,14 @@ export default function ReceivedEventCard({
                     }`}
                   >
                     <FileText className="h-4 w-4" />
-
                     View Memo
-
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 )}
 
                 <button
                   type="button"
-                  onClick={() =>
-                    onPrepare(item)
-                  }
+                  onClick={() => onPrepare(item)}
                   className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold transition ${
                     isCancelled
                       ? "border-red-300 text-red-700 hover:bg-red-100"
