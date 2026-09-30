@@ -9,6 +9,7 @@ import {
     MapPin,
     QrCode,
     RefreshCw,
+    X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -555,6 +556,9 @@ export default function ParticipantAttendancePassPage() {
         setExpandedRsvpId,
     ] = useState("");
 
+    const [expandedQrToken, setExpandedQrToken] =
+        useState<string | null>(null);
+
     const [loading, setLoading] =
         useState(true);
 
@@ -577,6 +581,30 @@ export default function ParticipantAttendancePassPage() {
         currentTime,
         setCurrentTime,
     ] = useState(() => Date.now());
+
+    useEffect(() => {
+        if (!expandedQrToken) {
+            return;
+        }
+
+        const previousBodyOverflow =
+            document.body.style.overflow;
+
+        document.body.style.overflow = "hidden";
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setExpandedQrToken(null);
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousBodyOverflow;
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [expandedQrToken]);
 
     /*
      * =====================================================
@@ -1876,13 +1904,37 @@ export default function ParticipantAttendancePassPage() {
                                                             {item
                                                                 .rsvp
                                                                 .qr_token ? (
-                                                                <QRCodeBox
-                                                                    qrToken={
-                                                                        item
-                                                                            .rsvp
-                                                                            .qr_token
+                                                                <div
+                                                                    role="button"
+                                                                    tabIndex={0}
+                                                                    aria-label="Open enlarged attendance QR code"
+                                                                    aria-haspopup="dialog"
+                                                                    onClick={() =>
+                                                                        setExpandedQrToken(
+                                                                            item.rsvp.qr_token,
+                                                                        )
                                                                     }
-                                                                />
+                                                                    onKeyDown={(event) => {
+                                                                        if (
+                                                                            event.key === "Enter" ||
+                                                                            event.key === " "
+                                                                        ) {
+                                                                            event.preventDefault();
+                                                                            setExpandedQrToken(
+                                                                                item.rsvp.qr_token,
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                    className="cursor-zoom-in rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-300"
+                                                                >
+                                                                    <QRCodeBox
+                                                                        qrToken={
+                                                                            item
+                                                                                .rsvp
+                                                                                .qr_token
+                                                                        }
+                                                                    />
+                                                                </div>
                                                             ) : (
                                                                 <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
                                                                     <QrCode
@@ -2128,6 +2180,53 @@ export default function ParticipantAttendancePassPage() {
                     </section>
                 )}
             </div>
+
+            {expandedQrToken && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
+                    <button
+                        type="button"
+                        aria-label="Close enlarged QR code"
+                        onClick={() => setExpandedQrToken(null)}
+                        className="absolute inset-0 cursor-default"
+                    />
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Enlarged attendance QR code"
+                        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            autoFocus
+                            aria-label="Close enlarged QR code"
+                            onClick={() => setExpandedQrToken(null)}
+                            className="absolute right-4 top-4 z-10 inline-flex size-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-blue-200"
+                        >
+                            <X className="size-5" aria-hidden="true" />
+                        </button>
+
+                        <div className="pr-12">
+                            <h2 className="text-lg font-bold text-slate-950 sm:text-xl">
+                                Attendance QR Code
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-600">
+                                Show this enlarged code to Event Staff for scanning.
+                            </p>
+                        </div>
+
+                        <div className="mt-5 flex max-h-[65vh] items-center justify-center overflow-auto rounded-2xl bg-slate-50 p-4 [&_svg]:!h-64 [&_svg]:!w-64 [&_canvas]:!h-64 [&_canvas]:!w-64 [&_img]:!h-64 [&_img]:!w-64 [&_img]:!max-w-none sm:[&_svg]:!h-80 sm:[&_svg]:!w-80 sm:[&_canvas]:!h-80 sm:[&_canvas]:!w-80 sm:[&_img]:!h-80 sm:[&_img]:!w-80">
+                            <div className="w-full max-w-sm">
+                                <QRCodeBox qrToken={expandedQrToken} />
+                            </div>
+                        </div>
+
+                        <p className="mt-4 text-center text-xs text-slate-500">
+                            Click outside this window or press Escape to close.
+                        </p>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
