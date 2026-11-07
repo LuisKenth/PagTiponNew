@@ -15,6 +15,7 @@ export type EventMunicipalityAssignment = {
   event_id: string;
   municipality: string | null;
   municipal_status: string | null;
+  
 };
 
 export type MunicipalityEventItem = {

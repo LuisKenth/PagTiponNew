@@ -38,6 +38,7 @@ type ManualQrTokenEntryProps = {
     text: string,
     tone?: DashboardMessage["tone"],
   ) => void;
+  compact?: boolean;
 };
 
 export default function ManualQrTokenEntry({
@@ -46,6 +47,7 @@ export default function ManualQrTokenEntry({
   blockedMessage,
   onProcessToken,
   onShowMessage,
+  compact = false,
 }: ManualQrTokenEntryProps) {
   const formRef =
     useRef<HTMLFormElement | null>(
@@ -77,20 +79,20 @@ export default function ManualQrTokenEntry({
 
   const operationLabel =
     isCheckInMode
-      ? "Check In"
-      : "Check Out";
+      ? "Time-in"
+      : "Time-out";
 
   const operationAction =
     isCheckInMode
-      ? "Time In"
-      : "Time Out";
+      ? "Time-in"
+      : "Time-out";
 
   const trimmedToken =
     manualQrToken.trim();
 
   /**
    * Clear any token left in the field whenever
-   * staff changes between Check In and Check Out.
+   * staff changes between Time-in and Time-out.
    *
    * This prevents a token entered for one
    * operation from being accidentally submitted
@@ -108,8 +110,8 @@ export default function ManualQrTokenEntry({
     if (!trimmedToken) {
       onShowMessage(
         isCheckInMode
-          ? "Enter or paste the participant attendance code for check-in."
-          : "Enter or paste the participant attendance code for check-out.",
+          ? "Enter or paste the participant attendance code for time-in."
+          : "Enter or paste the participant attendance code for time-out.",
         "error",
       );
 
@@ -277,18 +279,18 @@ export default function ManualQrTokenEntry({
               />
             </div>
 
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+            {!compact && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
               {isCheckInMode
-                ? "Use the participant manual attendance code when the QR code cannot be scanned. A valid code will record the participant's Time In."
-                : "Use the same participant manual attendance code to record Time Out. The participant must already have a successful Time In."}
-            </p>
+                ? "Use the participant manual attendance code when the QR code cannot be scanned. A valid code will record the participant's Time-in."
+                : "Use the same participant manual attendance code to record Time-out. The participant must already have a successful Time-in."}
+            </p>}
           </div>
         </div>
       </div>
 
       <div className="p-5 sm:p-6">
         {/* Current operation */}
-        <div
+        {!compact && <div
           className={`mb-5 flex items-start gap-3 rounded-xl border p-4 ${
             isCheckInMode
               ? "border-emerald-200 bg-emerald-50"
@@ -320,11 +322,11 @@ export default function ManualQrTokenEntry({
               }`}
             >
               {isCheckInMode
-                ? "The next valid manual attendance code will record Time In."
-                : "The next valid manual attendance code will record Time Out."}
+                ? "The next valid manual attendance code will record Time-in."
+                : "The next valid manual attendance code will record Time-out."}
             </p>
           </div>
-        </div>
+        </div>}
 
         {!canUseAttendanceTools && (
           <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
@@ -340,8 +342,8 @@ export default function ManualQrTokenEntry({
               <p className="mt-1 text-sm leading-6">
                 {blockedMessage ||
                   (isCheckInMode
-                    ? "Select an event and open attendance check-in first."
-                    : "Select an eligible event before processing participant check-out.")}
+                    ? "Select an event and open attendance time-in first."
+                    : "Select an eligible event before processing participant time-out.")}
               </p>
             </div>
           </div>
@@ -381,7 +383,7 @@ export default function ManualQrTokenEntry({
                 handleKeyDown
               }
               placeholder="Example: PTP-7KQM-9X2H"
-              rows={4}
+              rows={compact ? 2 : 4}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="characters"
@@ -479,7 +481,7 @@ export default function ManualQrTokenEntry({
           </button>
         </form>
 
-        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        {!compact && <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-start gap-3">
             <TicketCheck className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
 
@@ -490,12 +492,12 @@ export default function ManualQrTokenEntry({
 
               <p className="mt-1 text-sm leading-6 text-slate-600">
                 {isCheckInMode
-                  ? "Before recording Time In, verify that the returned participant information matches the person presenting the attendance code."
-                  : "Before recording Time Out, verify that the participant information matches the person leaving the event."}
+                  ? "Before recording Time-in, verify that the returned participant information matches the person presenting the attendance code."
+                  : "Before recording Time-out, verify that the participant information matches the person leaving the event."}
               </p>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </section>
   );
@@ -512,7 +514,7 @@ function OperationBadge({
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
         <LogOut className="h-3.5 w-3.5" />
-        Check Out
+        Time-out
       </span>
     );
   }
@@ -520,7 +522,7 @@ function OperationBadge({
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
       <LogIn className="h-3.5 w-3.5" />
-      Check In
+      Time-in
     </span>
   );
 }

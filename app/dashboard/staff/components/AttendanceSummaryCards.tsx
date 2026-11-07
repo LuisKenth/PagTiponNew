@@ -28,7 +28,7 @@ export default function AttendanceSummaryCards({
   return (
     <section
       aria-label="Attendance summary"
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      className="mobile-summary-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
     >
       <SummaryCard
         icon={ClipboardList}
@@ -42,7 +42,7 @@ export default function AttendanceSummaryCards({
         icon={UserCheck}
         label="Present"
         value={String(totalPresent)}
-        description="Participants successfully checked in"
+        description="Participants successfully completed Time-in"
         iconClassName="bg-emerald-100 text-emerald-700"
       />
 

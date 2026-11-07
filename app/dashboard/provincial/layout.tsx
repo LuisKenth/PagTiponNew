@@ -1,3 +1,4 @@
+import ProvincialAccessGate from "./components/ProvincialAccessGate";
 import ProvincialSidebar from "./components/ProvincialSidebar";
 import ProvincialEmailStatusToast from "./components/ProvincialEmailStatusToast";
 
@@ -7,7 +8,7 @@ export default function ProvincialDashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+    <ProvincialAccessGate><div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
       <ProvincialEmailStatusToast />
 
       <ProvincialSidebar />
@@ -17,6 +18,6 @@ export default function ProvincialDashboardLayout({
           {children}
         </main>
       </div>
-    </div>
+    </div></ProvincialAccessGate>
   );
 }

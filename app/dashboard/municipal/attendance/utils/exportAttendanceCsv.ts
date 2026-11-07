@@ -52,8 +52,8 @@ export function exportAttendanceCsv({
     "Municipality",
     "Event",
     "Attendance Status",
-    "Check-in Method",
-    "Checked In At",
+    "Time-in Method",
+    "Time In",
     "Checked In By",
     "Registration Status",
   ];

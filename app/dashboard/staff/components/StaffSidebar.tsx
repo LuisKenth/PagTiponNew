@@ -11,13 +11,11 @@ import {
 } from "react";
 
 import {
-  BarChart3,
   ChevronRight,
   ClipboardCheck,
   LayoutDashboard,
   LogOut,
   Menu,
-  QrCode,
   ScanLine,
   X,
 } from "lucide-react";
@@ -52,19 +50,9 @@ const navigationGroups: NavigationGroup[] = [
     label: "Attendance Operations",
     links: [
       {
-        name: "Event Control",
+        name: "Event Control & Scanner",
         href: "/dashboard/staff/event-control",
         icon: ClipboardCheck,
-      },
-      {
-        name: "Attendance Overview",
-        href: "/dashboard/staff/attendance-overview",
-        icon: BarChart3,
-      },
-      {
-        name: "Participant Check-In",
-        href: "/dashboard/staff/participant-check-in",
-        icon: QrCode,
       },
       {
         name: "Attendance Records",
@@ -364,7 +352,7 @@ export default function StaffSidebar() {
               </p>
 
               <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                QR check-in and participant
+                QR time-in and participant
                 monitoring
               </p>
             </div>

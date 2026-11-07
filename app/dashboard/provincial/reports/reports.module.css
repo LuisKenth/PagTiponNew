@@ -1,0 +1,22 @@
+/* Keep the legacy compact-print rules from shrinking this report on screen. */
+@media screen {
+  :global(#printable-report).report {
+    font-size: 14px !important;
+  }
+  :global(#printable-report).report table {
+    font-size: 14px !important;
+  }
+  :global(#printable-report).report th,
+  :global(#printable-report).report td {
+    padding: 14px 16px !important;
+  }
+  :global(#printable-report).report :global(.p-5) {
+    padding: 20px !important;
+  }
+  :global(#printable-report).report :global(.text-3xl) {
+    font-size: 30px !important;
+  }
+  :global(#printable-report).report h2 {
+    font-size: 16px !important;
+  }
+}

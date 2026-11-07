@@ -1,0 +1,24 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const db=new PGlite();
+await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create role supabase_auth_admin;create schema auth;create schema storage;create schema extensions;
+create table auth.users(id uuid primary key,email text,raw_app_meta_data jsonb default '{}',raw_user_meta_data jsonb default '{}',banned_until timestamptz);
+create table auth.mfa_factors(id uuid primary key,user_id uuid references auth.users on delete cascade,status text,factor_type text);
+create table storage.objects(id uuid,name text,bucket_id text,owner_id text,created_at timestamptz);
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.uid',true),'')::uuid$$;
+create function auth.role() returns text language sql stable as $$select coalesce(nullif(current_setting('request.role',true),''),'service_role')$$;
+create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt',true),''),'{}')::jsonb$$;`);
+let schema=readFileSync(root+'supabase/current_public_schema.sql','utf8');
+// Local fixture has mock Supabase schemas; production file itself is left unchanged.
+await db.exec(schema);
+await db.exec('set check_function_bodies=true;set row_security=on;');
+await db.exec(readFileSync(root+'supabase/migrations/20261031090000_super_admin_role.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031090100_super_admin_management.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031100000_super_admin_portal.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031120000_provincial_admin_limit.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031130000_delete_inactive_provincial_admin.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261101020000_authenticator_recovery_request.sql','utf8'));
+console.log('PASS full supplied schema + all six migrations compile in embedded PostgreSQL');
+await db.close();

@@ -123,7 +123,7 @@ export default function ReportSummaryCards({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-px bg-slate-200 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mobile-summary-grid grid grid-cols-2 gap-px bg-slate-200 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {cards.map((card) => {
           const Icon = card.icon;
 

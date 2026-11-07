@@ -1,9 +1,7 @@
-export type PreparationStatus =
-  | "pending"
-  | "preparing"
-  | "prepared";
+export type PreparationStatus = "pending" | "preparing" | "prepared";
 
 export type EventRow = {
+  event_origin?: string;
   id: string;
   title: string | null;
   description: string | null;

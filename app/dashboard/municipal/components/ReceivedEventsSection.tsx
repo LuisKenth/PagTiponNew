@@ -146,7 +146,7 @@ export default function ReceivedEventsSection({
               id="received-events-heading"
               className="text-lg font-bold text-slate-900 sm:text-xl"
             >
-              Received Provincial Events
+              Event Assignments
             </h2>
 
             <p className="mt-1 text-sm leading-5 text-slate-500">

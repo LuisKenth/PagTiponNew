@@ -231,7 +231,7 @@ export default function ParticipantCertificatePage() {
       <div className="space-y-5">
         <button
           type="button"
-          onClick={() => router.push("/dashboard/participant/certificates")}
+          onClick={() => router.push("/dashboard/participant/my-events?tab=certificates")}
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-950"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -331,7 +331,7 @@ export default function ParticipantCertificatePage() {
           <div>
             <button
               type="button"
-              onClick={() => router.push("/dashboard/participant/certificates")}
+              onClick={() => router.push("/dashboard/participant/my-events?tab=certificates")}
               className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950"
             >
               <ArrowLeft className="h-4 w-4" />

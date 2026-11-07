@@ -1,31 +1,33 @@
 "use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  AlertCircle,
   CheckCircle2,
+  Circle,
+  Loader2,
   Save,
   Send,
+  ClipboardCheck,
 } from "lucide-react";
-
-type SubmitAction = "draft" | "published" | null;
-
-type CreateEventActionsProps = {
-  submitAction: SubmitAction;
-
+type Props = {
+  draftSaveLabel?: string;
+  requirementsOverride?: { label: string; complete: boolean }[];
+  footerText?: string;
+  submitAction: "draft" | "published" | null;
   title: string;
   description: string;
   startAt: string;
   endAt: string;
   memoCount: number;
   municipalityCount: number;
-
+  audienceComplete: boolean;
   onCancel: () => void;
   onSaveDraft: () => void;
   onPublish: () => void;
 };
-
 export default function CreateEventActions({
+  draftSaveLabel = "Save as Draft",
+  requirementsOverride,
+  footerText,
   submitAction,
   title,
   description,
@@ -33,181 +35,139 @@ export default function CreateEventActions({
   endAt,
   memoCount,
   municipalityCount,
+  audienceComplete,
   onCancel,
   onSaveDraft,
   onPublish,
-}: CreateEventActionsProps) {
-  const loading = submitAction !== null;
-
-  const [now, setNow] = useState(new Date());
-
+}: Props) {
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setNow(new Date());
-    }, 30_000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
+    const tick = () => setNow(new Date());
+    tick();
+    const timer = setInterval(tick, 30000);
+    return () => clearInterval(timer);
   }, []);
-
-  const requirements = useMemo(() => {
-    const startDate = startAt ? new Date(startAt) : null;
-    const endDate = endAt ? new Date(endAt) : null;
-
-    const validStart =
-      startDate !== null &&
-      !Number.isNaN(startDate.getTime()) &&
-      startDate.getTime() > now.getTime();
-
-    const validEnd =
-      startDate !== null &&
-      endDate !== null &&
-      !Number.isNaN(startDate.getTime()) &&
-      !Number.isNaN(endDate.getTime()) &&
-      endDate.getTime() > startDate.getTime();
-
-    return [
-      {
-        label: "Event title",
-        complete: title.trim().length > 0,
-      },
-      {
-        label: "Description",
-        complete: description.trim().length > 0,
-      },
-      {
-        label: "Valid schedule",
-        complete: validStart && validEnd,
-      },
-      {
-        label: "Official memo",
-        complete: memoCount > 0,
-      },
-      {
-        label: "Municipality",
-        complete: municipalityCount > 0,
-      },
-    ];
-  }, [
-    title,
-    description,
-    startAt,
-    endAt,
-    memoCount,
-    municipalityCount,
-    now,
-  ]);
-
-  const missingRequirements = requirements.filter(
-    (item) => !item.complete
-  );
-
-  const readyToPublish =
-    missingRequirements.length === 0;
-
+  const start = Date.parse(startAt),
+    end = Date.parse(endAt),
+    loading = submitAction !== null;
+  const requirements = requirementsOverride ?? [
+    { label: "Event title", complete: !!title.trim() },
+    { label: "Event description", complete: !!description.trim() },
+    { label: "Participant audience", complete: audienceComplete },
+    {
+      label: "Future start and valid end time",
+      complete:
+        !!now &&
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        start > now.getTime() &&
+        end > start,
+    },
+    { label: "At least one official memo", complete: memoCount > 0 },
+    { label: "At least one municipality", complete: municipalityCount > 0 },
+  ];
+  const complete = requirements.filter((r) => r.complete).length,
+    ready = complete === requirements.length;
   return (
-    <section className="sticky bottom-3 z-20 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:bottom-4 sm:p-4">
-      <div className="flex flex-col gap-4">
-        {/* Status */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${readyToPublish
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-amber-50 text-amber-600"
-                }`}
-            >
-              {readyToPublish ? (
-                <CheckCircle2 size={18} />
-              ) : (
-                <AlertCircle size={18} />
-              )}
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold text-slate-800">
-                {readyToPublish
-                  ? "Ready to publish"
-                  : `${missingRequirements.length} ${missingRequirements.length === 1
-                    ? "requirement"
-                    : "requirements"
-                  } remaining`}
-              </p>
-
-              <p className="text-xs text-slate-500">
-                {readyToPublish
-                  ? "All required event information is complete."
-                  : "You can still save this event as a draft."}
-              </p>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row">
-            <button
-              type="button"
-              disabled={loading}
-              onClick={onCancel}
-              className="col-span-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:col-auto"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={onSaveDraft}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save size={16} />
-
-              {submitAction === "draft"
-                ? "Saving Draft..."
-                : "Save as Draft"}
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={onPublish}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${readyToPublish
-                ? "bg-slate-900 hover:bg-slate-800"
-                : "bg-slate-700 hover:bg-slate-800"
-                }`}
-            >
-              <Send size={16} />
-
-              {submitAction === "published"
-                ? "Publishing..."
-                : "Publish Event"}
-            </button>
-          </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+          <ClipboardCheck aria-hidden="true" className="h-5 w-5" />
+        </span>
+        <div>
+          <h2 className="font-semibold text-slate-900">Review & Publish</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {complete} of {requirements.length} requirements complete
+          </p>
         </div>
-
-        {/* Requirement checklist */}
-        {!readyToPublish && (
-          <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-            {requirements.map((item) => (
-              <div
-                key={item.label}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${item.complete
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-slate-100 text-slate-500"
-                  }`}
-              >
-                {item.complete ? (
-                  <CheckCircle2 size={12} />
-                ) : (
-                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                )}
-
-                {item.label}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+      <div
+        role="progressbar"
+        aria-label="Publishing requirements"
+        aria-valuenow={complete}
+        aria-valuemin={0}
+        aria-valuemax={requirements.length}
+        className="h-1.5 overflow-hidden rounded-full bg-slate-100"
+      >
+        <div
+          className="h-full rounded-full bg-indigo-500 transition-all"
+          style={{ width: `${(complete / requirements.length) * 100}%` }}
+        />
+      </div>
+      <ul className="my-5 space-y-3">
+        {requirements.map((r) => (
+          <li
+            key={r.label}
+            className={`flex items-start gap-2.5 text-xs leading-5 ${r.complete ? "text-emerald-700" : "text-slate-500"}`}
+          >
+            {r.complete ? (
+              <CheckCircle2
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+            ) : (
+              <Circle
+                aria-hidden="true"
+                className="mt-0.5 h-4 w-4 shrink-0 text-slate-300"
+              />
+            )}
+            <span>
+              {r.label}
+              <span className="sr-only">
+                {r.complete ? ": complete" : ": incomplete"}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p
+        role="status"
+        className={`mb-4 rounded-xl p-3 text-xs leading-5 ${ready ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-500"}`}
+      >
+        {ready
+          ? "Ready to publish. Review the information before continuing."
+          : "Complete the publishing requirements above. You can also save a draft and continue later."}
+      </p>
+      <div className="space-y-2.5">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={onPublish}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitAction === "published" ? (
+            <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send aria-hidden="true" className="h-4 w-4" />
+          )}
+          {submitAction === "published" ? "Publishing…" : "Publish Event"}
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={onSaveDraft}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {submitAction === "draft" ? (
+            <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save aria-hidden="true" className="h-4 w-4" />
+          )}
+          {submitAction === "draft" ? "Saving Draft…" : draftSaveLabel}
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={onCancel}
+          className="min-h-11 w-full rounded-xl px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+      <p className="mt-4 text-xs leading-5 text-slate-400">
+        {footerText ??
+          "Publishing assigns this event to the selected municipalities and starts the notification process."}
+      </p>
     </section>
   );
 }

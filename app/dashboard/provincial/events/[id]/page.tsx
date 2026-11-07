@@ -1,4 +1,8 @@
 "use client";
+import ProvincialPageHeader, {
+  provincialHeaderButton,
+} from "@/app/dashboard/provincial/components/ProvincialPageHeader";
+import { FileText as ProvincialHeaderIcon } from "lucide-react";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -435,18 +439,13 @@ export default function ProvincialEventDetailsPage() {
       );
 
       try {
-        const {
-          data: emailResult,
-          error: emailError,
-        } = await supabase.functions.invoke(
-          "send-event-email",
-          {
+        const { data: emailResult, error: emailError } =
+          await supabase.functions.invoke("send-event-email", {
             body: {
               eventId: event.id,
               notificationType: "event_cancelled",
             },
-          },
-        );
+          });
 
         if (emailError) {
           throw emailError;
@@ -664,88 +663,71 @@ export default function ProvincialEventDetailsPage() {
 
   return (
     <div className="space-y-6">
-      {/* =========================
-          HEADER
-          ========================= */}
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <Link
-            href="/dashboard/provincial/events"
-            className="mb-3 inline-flex text-sm font-medium text-slate-600 transition hover:text-slate-900"
-          >
-            ← Back to Events
-          </Link>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {event.title || "Untitled Event"}
-            </h1>
-
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(
-                automaticStatus,
-              )}`}
-            >
-              {automaticStatus}
-            </span>
-          </div>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Provincial event overview, official memos, and municipality
-            preparation monitoring.
-          </p>
-        </div>
-
-        {/* ACTIONS */}
-        <div className="flex flex-wrap gap-2">
-          {/* EDIT */}
-          {canEdit && (
+      <ProvincialPageHeader
+        icon={<ProvincialHeaderIcon className="h-5 w-5" aria-hidden="true" />}
+        eyebrow="Event Details"
+        title={event.title || "Untitled Event"}
+        description="Provincial event overview, official memos, and municipality preparation monitoring."
+        actions={
+          <>
             <Link
-              href={`/dashboard/provincial/events/${event.id}/edit`}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              href="/dashboard/provincial/events"
+              className={provincialHeaderButton}
             >
-              Edit Event
-            </Link>
-          )}
-
-          {/* PUBLISH */}
-          {isDraft && (
-            <button
-              type="button"
-              disabled={publishing}
-              onClick={handlePublish}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {publishing ? "Publishing..." : "Publish Event"}
-            </button>
-          )}
-
-          {/* CANCEL */}
-          {isUpcoming && (
-            <button
-              type="button"
-              disabled={cancelling}
-              onClick={handleCancel}
-              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {cancelling ? "Cancelling..." : "Cancel Event"}
-            </button>
-          )}
-
-          {/* DELETE */}
-          {isDraft && (
-            <button
-              type="button"
-              disabled={deleting}
-              onClick={handleDelete}
-              className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {deleting ? "Deleting..." : "Delete Draft"}
-            </button>
-          )}
-        </div>
-      </div>
-
+              ← Back to Events
+            </Link>{" "}
+            {/* EDIT */}
+            {canEdit && (
+              <Link
+                href={`/dashboard/provincial/events/${event.id}/edit`}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Edit Event
+              </Link>
+            )}
+            {/* PUBLISH */}
+            {isDraft && (
+              <button
+                type="button"
+                disabled={publishing}
+                onClick={handlePublish}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {publishing ? "Publishing..." : "Publish Event"}
+              </button>
+            )}
+            {/* CANCEL */}
+            {isUpcoming && (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={handleCancel}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {cancelling ? "Cancelling..." : "Cancel Event"}
+              </button>
+            )}
+            {/* DELETE */}
+            {isDraft && (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDelete}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete Draft"}
+              </button>
+            )}
+          </>
+        }
+        footer={
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(automaticStatus)}`}
+          >
+            {automaticStatus}
+          </span>
+        }
+      />
       {/* =========================
           STATUS NOTICE
           ========================= */}
@@ -811,9 +793,9 @@ export default function ProvincialEventDetailsPage() {
       {/* =========================
           MAIN CONTENT
           ========================= */}
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
         {/* EVENT INFORMATION */}
-        <div className="space-y-6 xl:col-span-2">
+        <div className="min-w-0 space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -822,17 +804,9 @@ export default function ProvincialEventDetailsPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  General event details and schedule.
+                  Review the event description and schedule.
                 </p>
               </div>
-
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(
-                  automaticStatus,
-                )}`}
-              >
-                {automaticStatus}
-              </span>
             </div>
 
             <div className="mt-6 space-y-6">
@@ -842,7 +816,7 @@ export default function ProvincialEventDetailsPage() {
                   Description
                 </p>
 
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
                   {event.description || "No description provided."}
                 </p>
               </div>

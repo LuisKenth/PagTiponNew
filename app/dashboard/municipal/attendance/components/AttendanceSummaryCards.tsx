@@ -1,5 +1,4 @@
 import {
-  CircleDashed,
   Clock3,
   QrCode,
   ScanLine,
@@ -29,7 +28,7 @@ const attendanceCards = [
   {
     key: "present",
     label: "Present",
-    description: "Checked in on time",
+    description: "Timed in on time",
     icon: UserCheck,
     iconClass:
       "bg-emerald-50 text-emerald-700 ring-emerald-200",
@@ -53,21 +52,12 @@ const attendanceCards = [
       "bg-red-50 text-red-700 ring-red-200",
     valueClass: "text-red-700",
   },
-  {
-    key: "pending",
-    label: "Pending",
-    description: "Awaiting attendance",
-    icon: CircleDashed,
-    iconClass:
-      "bg-slate-100 text-slate-600 ring-slate-200",
-    valueClass: "text-slate-700",
-  },
 ] as const;
 
 const checkInCards = [
   {
     key: "qrCheckIns",
-    label: "QR Check-ins",
+    label: "QR Time-ins",
     description:
       "Attendance recorded through QR scanning",
     icon: QrCode,
@@ -77,7 +67,7 @@ const checkInCards = [
   },
   {
     key: "manualCheckIns",
-    label: "Manual Check-ins",
+    label: "Manual Time-ins",
     description:
       "Attendance recorded manually by event staff",
     icon: ScanLine,
@@ -104,7 +94,7 @@ export default function AttendanceSummaryCards({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-px bg-slate-200 lg:grid-cols-5">
+      <div className="mobile-summary-grid grid grid-cols-2 gap-px bg-slate-200 lg:grid-cols-4">
         {attendanceCards.map((card) => {
           const Icon = card.icon;
 
@@ -139,14 +129,14 @@ export default function AttendanceSummaryCards({
         })}
       </div>
 
-      {/* Check-in method */}
+      {/* Time-in method */}
       <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 sm:px-6">
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-          Check-in Methods
+          Time-in Methods
         </p>
       </div>
 
-      <div className="grid gap-px bg-slate-200 sm:grid-cols-2">
+      <div className="mobile-summary-grid grid gap-px bg-slate-200 sm:grid-cols-2">
         {checkInCards.map((card) => {
           const Icon = card.icon;
 

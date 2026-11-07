@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -19,7 +19,11 @@ import type {
   SupabaseErrorLike,
 } from "../types";
 
-import { formatDatabaseError, formatDateTime } from "../utils";
+import {
+  formatAttendanceTerms,
+  formatDatabaseError,
+  formatDateTime,
+} from "../utils";
 
 type ParticipantProfileRow = {
   id: string;
@@ -37,6 +41,28 @@ function getRpcRow<T>(data: unknown): T | null {
   }
 
   return data as T;
+}
+
+/** Remember the selected event in this browser tab for the signed-in Event Staff. */
+function readSavedStaffEvent(key: string): string | null {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function saveSelectedStaffEvent(key: string | null, eventId: string) {
+  if (!key) return;
+  try {
+    if (eventId) {
+      window.sessionStorage.setItem(key, eventId);
+    } else {
+      window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // A browser may block storage; the in-memory selection still works.
+  }
 }
 
 export function useStaffAttendanceDashboard() {
@@ -72,10 +98,18 @@ export function useStaffAttendanceDashboard() {
 
   const [currentTime, setCurrentTime] = useState(0);
 
+  // Account-scoped key prevents one staff account from reusing another's event.
+  const selectedEventStorageKeyRef = useRef<string | null>(null);
+
+  // Throttle retries if connectivity is lost when the event ends.
+  const autoCloseAttemptAtRef = useRef<Map<string, number>>(new Map());
+  // Separate throttling for deadline-triggered automatic Time-out closure.
+  const autoCloseCheckOutAttemptAtRef = useRef<Map<string, number>>(new Map());
+
   const showMessage = useCallback(
     (text: string, tone: DashboardMessage["tone"] = "info") => {
       setMessage({
-        text,
+        text: formatAttendanceTerms(text),
         tone,
       });
     },
@@ -102,6 +136,26 @@ export function useStaffAttendanceDashboard() {
     ? new Date(selectedAssignment.event.end_at).getTime()
     : null;
 
+  // Field is loaded from event_municipalities; retained via the extended row below.
+  // The fallback deadline is exactly two hours after the scheduled event end.
+  const checkoutOverride = (
+    selectedAssignment as
+      | (EventAssignment & { check_out_deadline_at?: string | null })
+      | null
+  )?.check_out_deadline_at;
+  const checkoutOverrideTime = checkoutOverride
+    ? new Date(checkoutOverride).getTime()
+    : NaN;
+  const checkOutDeadlineTime = Number.isFinite(checkoutOverrideTime)
+    ? checkoutOverrideTime
+    : eventEndTime !== null && Number.isFinite(eventEndTime)
+      ? eventEndTime + 2 * 60 * 60 * 1000
+      : null;
+  const checkOutDeadlineAt =
+    checkOutDeadlineTime === null
+      ? null
+      : new Date(checkOutDeadlineTime).toISOString();
+
   const eventStatus = selectedAssignment?.event.status?.toLowerCase() ?? "";
 
   const isCancelled = eventStatus === "cancelled";
@@ -109,73 +163,109 @@ export function useStaffAttendanceDashboard() {
   const isCompleted = eventStatus === "completed";
 
   const isDraft = eventStatus === "draft";
+
+  // Avoid enabling controls before the client clock is initialized.
+  const hasInitializedClock = currentTime > 0;
+
+  // Time-in cannot open or process tokens before the scheduled start.
+  const isBeforeEventStart =
+    eventStartTime !== null &&
+    hasInitializedClock &&
+    currentTime < eventStartTime;
+
   const isBeforeEventEnd = eventEndTime !== null && currentTime < eventEndTime;
 
   const hasEventEnded = eventEndTime !== null && currentTime >= eventEndTime;
 
+  const isCheckOutExpired = Boolean(
+    hasInitializedClock &&
+    checkOutDeadlineTime !== null &&
+    currentTime >= checkOutDeadlineTime,
+  );
+
   /*
    * =====================================================
-   * CHECK-IN SESSION STATE
+   * TIME-IN SESSION STATE
    * =====================================================
    */
 
+  // A session is EFFECTIVELY closed at the scheduled end, even before
+  // a background refresh has saved its check_in_closed_at timestamp.
   const isCheckInOpen = Boolean(
     selectedAssignment?.check_in_opened_at &&
-    !selectedAssignment?.check_in_closed_at,
+    !selectedAssignment?.check_in_closed_at &&
+    !hasEventEnded,
   );
 
   const wasCheckInOpened = Boolean(selectedAssignment?.check_in_opened_at);
 
-  const wasCheckInClosed = Boolean(selectedAssignment?.check_in_closed_at);
+  const wasCheckInClosed = Boolean(
+    selectedAssignment?.check_in_closed_at ||
+    (selectedAssignment?.check_in_opened_at && hasEventEnded),
+  );
 
   /*
    * =====================================================
-   * CHECK-OUT SESSION STATE
+   * TIME-OUT SESSION STATE
    * =====================================================
    */
 
+  // At the effective deadline the session is closed immediately for ALL UI
+  // consumers, even before the background database job writes closed_at.
+  // The raw timestamps are still used in the auto-close effect below.
   const isCheckOutOpen = Boolean(
     selectedAssignment?.check_out_opened_at &&
-    !selectedAssignment?.check_out_closed_at,
+    !selectedAssignment?.check_out_closed_at &&
+    !isCheckOutExpired,
   );
 
   const wasCheckOutOpened = Boolean(selectedAssignment?.check_out_opened_at);
 
-  const wasCheckOutClosed = Boolean(selectedAssignment?.check_out_closed_at);
+  const wasCheckOutClosed = Boolean(
+    selectedAssignment?.check_out_closed_at ||
+    (selectedAssignment?.check_out_opened_at && isCheckOutExpired),
+  );
 
+  // Reject invalid dates and schedules with an end at/before the start.
   const hasValidSchedule = Boolean(
-    eventStartTime !== null && eventEndTime !== null,
+    eventStartTime !== null &&
+    eventEndTime !== null &&
+    Number.isFinite(eventStartTime) &&
+    Number.isFinite(eventEndTime) &&
+    eventEndTime > eventStartTime,
   );
 
   /*
    * =====================================================
-   * CHECK-IN PERMISSIONS
+   * TIME-IN PERMISSIONS
    * =====================================================
    *
    * Staff may:
    *
-   * - Open Check-In before or during the event
-   * - Close Check-In
-   * - Reopen Check-In for late participants
+   * - Open Time-in only at or after the scheduled start
+   * - Close Time-in
+   * - Reopen Time-in for late participants
    *
-   * Historical CLOSED Check-Out records must not
-   * permanently lock Check-In while the event is
+   * Historical CLOSED Time-out records must not
+   * permanently lock Time-in while the event is
    * still ongoing.
    *
-   * Check-In and Check-Out must never be active
+   * Time-in and Time-out must never be active
    * at the same time.
    *
    * Once the scheduled event end time is reached,
-   * Check-In becomes permanently unavailable.
+   * Time-in becomes permanently unavailable.
    */
 
   const canOpenCheckIn = Boolean(
     selectedAssignment &&
     hasValidSchedule &&
+    hasInitializedClock &&
     !isCheckInOpen &&
     !isCancelled &&
     !isCompleted &&
     !isDraft &&
+    !isBeforeEventStart &&
     !hasEventEnded &&
     !isCheckOutOpen,
   );
@@ -183,46 +273,51 @@ export function useStaffAttendanceDashboard() {
   const canUseCheckInTools = Boolean(
     selectedAssignment &&
     hasValidSchedule &&
+    hasInitializedClock &&
     isCheckInOpen &&
     !isCancelled &&
     !isCompleted &&
     !isDraft &&
+    !isBeforeEventStart &&
     !hasEventEnded &&
     !isCheckOutOpen,
   );
 
   /*
    * =====================================================
-   * CHECK-OUT PERMISSIONS
+   * TIME-OUT PERMISSIONS
    * =====================================================
    *
    * Required flow:
    *
-   * Open Check-In
+   * Open Time-in
    *      ↓
-   * Time In
+   * Time-in
    *      ↓
-   * Close Check-In
+   * Close Time-in
    *      ↓
-   * May still Reopen Check-In
+   * May still Reopen Time-in
    *      ↓
-   * Close Check-In
+   * Close Time-in
    *      ↓
-   * Open Check-Out
+   * Open Time-out
    *      ↓
-   * Check-In becomes permanently locked
+   * Time-in becomes permanently locked
    *      ↓
-   * Time Out
+   * Time-out
    *      ↓
-   * Close Check-Out
+   * Close Time-out
    */
 
   const canOpenCheckOut = Boolean(
     selectedAssignment &&
     hasValidSchedule &&
+    hasInitializedClock &&
+    !isCheckInOpen &&
     !isCancelled &&
     !isDraft &&
     !isBeforeEventEnd &&
+    !isCheckOutExpired &&
     wasCheckInOpened &&
     wasCheckInClosed &&
     !isCheckOutOpen,
@@ -235,10 +330,13 @@ export function useStaffAttendanceDashboard() {
   const canUseCheckOutTools = Boolean(
     selectedAssignment &&
     hasValidSchedule &&
+    hasInitializedClock &&
+    !isCheckInOpen &&
     isCheckOutOpen &&
     !isCancelled &&
     !isDraft &&
-    !isBeforeEventEnd,
+    !isBeforeEventEnd &&
+    !isCheckOutExpired,
   );
 
   const canUseAttendanceTools =
@@ -252,57 +350,69 @@ export function useStaffAttendanceDashboard() {
 
   const getCheckInBlockedMessage = useCallback(() => {
     if (!selectedAssignment) {
-      return "Select an event before using attendance check-in.";
+      return "Select an event before using attendance time-in.";
     }
 
     if (!hasValidSchedule) {
       return "The selected event does not have a valid start and end schedule.";
     }
 
+    if (!hasInitializedClock) {
+      return "Attendance session information is initializing. Please try again.";
+    }
+
     if (isCancelled) {
-      return "Check-in is unavailable because the selected event was cancelled.";
+      return "Time-in is unavailable because the selected event was cancelled.";
     }
 
     if (isDraft) {
-      return "Check-in is unavailable because the selected event is still a draft.";
+      return "Time-in is unavailable because the selected event is still a draft.";
     }
 
     if (isCompleted) {
-      return "Check-in is unavailable because the selected event is completed.";
+      return "Time-in is unavailable because the selected event is completed.";
     }
 
     /*
      * Once the scheduled event end time is reached,
-     * late Check-In is no longer allowed.
+     * late Time-in is no longer allowed.
      */
     if (hasEventEnded) {
-      return "Check-In is permanently closed because the scheduled event end time has been reached.";
+      return "Time-in is permanently closed because the scheduled event end time has been reached.";
+    }
+
+    if (isBeforeEventStart) {
+      return selectedAssignment.event.start_at
+        ? `Time-in will be available when the event starts at ${formatDateTime(selectedAssignment.event.start_at)}.`
+        : "Time-in is not available before the event starts.";
     }
 
     /*
      * Normally impossible under the new rules,
      * but protects against legacy event states.
      *
-     * Check-In and Check-Out cannot be active
+     * Time-in and Time-out cannot be active
      * at the same time.
      */
     if (isCheckOutOpen) {
-      return "Close the active Check-Out session before reopening Check-In.";
+      return "Close the active Time-out session before reopening Time-in.";
     }
 
     /*
-     * Closed Check-In may be reopened for
+     * Closed Time-in may be reopened for
      * late participants until event end.
      */
     if (!isCheckInOpen) {
       return wasCheckInClosed
-        ? "Check-In is closed. Event Staff may reopen it for late participants until the event ends."
-        : "Open attendance Check-In to begin recording participant Time In.";
+        ? "Time-in is closed. Event Staff may reopen it for late participants until the event ends."
+        : "Open attendance Time-in to begin recording participant Time-in.";
     }
 
-    return "Attendance Check-In tools are currently unavailable.";
+    return "Attendance Time-in tools are currently unavailable.";
   }, [
     hasEventEnded,
+    isBeforeEventStart,
+    hasInitializedClock,
     hasValidSchedule,
     isCancelled,
     isCheckInOpen,
@@ -315,53 +425,66 @@ export function useStaffAttendanceDashboard() {
 
   const getCheckOutBlockedMessage = useCallback(() => {
     if (!selectedAssignment) {
-      return "Select an event before using attendance check-out.";
+      return "Select an event before using attendance time-out.";
     }
 
     if (!hasValidSchedule) {
       return "The selected event does not have a valid start and end schedule.";
     }
 
+    if (!hasInitializedClock) {
+      return "Attendance session information is initializing. Please try again.";
+    }
+
     if (isCancelled) {
-      return "Check-out is unavailable because the selected event was cancelled.";
+      return "Time-out is unavailable because the selected event was cancelled.";
     }
 
     if (isDraft) {
-      return "Check-out is unavailable because the selected event is still a draft.";
+      return "Time-out is unavailable because the selected event is still a draft.";
     }
 
     /*
-     * Check-Out must wait until the scheduled
+     * Time-out must wait until the scheduled
      * event end time has been reached.
      */
     if (isBeforeEventEnd) {
       return selectedAssignment.event.end_at
-        ? `Check-Out will become available when the event ends at ${formatDateTime(
+        ? `Time-out will become available when the event ends at ${formatDateTime(
             selectedAssignment.event.end_at,
           )}.`
-        : "Check-Out will become available after the event has ended.";
+        : "Time-out will become available after the event has ended.";
+    }
+
+    if (isCheckOutExpired) {
+      return checkOutDeadlineAt
+        ? `Time-out window expired at ${formatDateTime(checkOutDeadlineAt)}. Contact the Municipal Admin to request an extension.`
+        : "The Time-out window has expired. Contact the Municipal Admin.";
     }
 
     if (!wasCheckInOpened) {
-      return "Open attendance Check-In before using Check-Out.";
+      return "Open attendance Time-in before using Time-out.";
     }
 
     if (!wasCheckInClosed) {
-      return "Close attendance Check-In before opening Check-Out.";
+      return "Close attendance Time-in before opening Time-out.";
     }
 
     if (isCheckOutOpen) {
-      return "Attendance Check-Out is currently open.";
+      return "Attendance Time-out is currently open.";
     }
 
     if (wasCheckOutClosed) {
-      return "Check-Out is closed. Event Staff may reopen it to continue recording participant Time Out.";
+      return "Time-out is closed. Event Staff may reopen it to continue recording participant Time-out.";
     }
 
-    return "Open attendance Check-Out to begin recording participant Time Out.";
+    return "Open attendance Time-out to begin recording participant Time-out.";
   }, [
+    hasInitializedClock,
     hasValidSchedule,
     isBeforeEventEnd,
+    isCheckOutExpired,
+    checkOutDeadlineAt,
     isCancelled,
     isCheckOutOpen,
     isDraft,
@@ -434,6 +557,8 @@ export function useStaffAttendanceDashboard() {
             id,
             event_id,
             municipality,
+            local_venue_id,
+            local_instructions,
 
             check_in_opened_at,
             check_in_closed_at,
@@ -442,12 +567,14 @@ export function useStaffAttendanceDashboard() {
 
             check_out_opened_at,
             check_out_closed_at,
+            check_out_deadline_at,
             check_out_opened_by,
             check_out_closed_by,
 
             events (
               id,
               title,
+              description,
               status,
               start_at,
               end_at
@@ -461,7 +588,40 @@ export function useStaffAttendanceDashboard() {
         throw error;
       }
 
-      const normalizedAssignments = ((data ?? []) as RawEventAssignment[])
+      // Resolve venue names separately to avoid depending on an
+      // embedded PostgREST relationship between the two tables.
+      // Event Staff only receives the names needed to display details.
+      const assignmentRows = (data ?? []) as RawEventAssignment[];
+      const venueIds = Array.from(
+        new Set(
+          assignmentRows
+            .map((row) => String(row.local_venue_id ?? "").trim())
+            .filter((id) => id.length > 0),
+        ),
+      );
+
+      const venueNameById = new Map<string, string>();
+      if (venueIds.length > 0) {
+        const { data: venueRows, error: venueError } = await supabase
+          .from("venues")
+          .select("id, venue_name")
+          .in("id", venueIds);
+
+        if (venueError) {
+          // Some RLS configurations limit venue reads for Event Staff.
+          // Do not block attendance operations if venue lookup fails.
+          console.warn(
+            "Unable to load assigned venue names:",
+            venueError.message,
+          );
+        } else {
+          for (const venue of venueRows ?? []) {
+            venueNameById.set(String(venue.id), venue.venue_name ?? "");
+          }
+        }
+      }
+
+      const normalizedAssignments = assignmentRows
         .map((assignment) => {
           const eventDetails = Array.isArray(assignment.events)
             ? assignment.events[0]
@@ -477,6 +637,12 @@ export function useStaffAttendanceDashboard() {
             event_id: assignment.event_id,
 
             municipality: assignment.municipality,
+            local_venue_id: assignment.local_venue_id ?? null,
+            local_instructions: assignment.local_instructions ?? null,
+            venue_name:
+              assignment.local_venue_id != null
+                ? (venueNameById.get(String(assignment.local_venue_id)) ?? null)
+                : null,
 
             check_in_opened_at: assignment.check_in_opened_at,
 
@@ -494,12 +660,20 @@ export function useStaffAttendanceDashboard() {
 
             check_out_closed_by: assignment.check_out_closed_by,
 
+            // Spread allows a schema extension without changing shared types.ts.
+            ...{
+              check_out_deadline_at:
+                (
+                  assignment as RawEventAssignment & {
+                    check_out_deadline_at?: string | null;
+                  }
+                ).check_out_deadline_at ?? null,
+            },
+
             event: eventDetails,
           } satisfies EventAssignment;
         })
-        .filter(
-          (assignment): assignment is EventAssignment => assignment !== null,
-        );
+        .filter((assignment) => assignment !== null);
 
       normalizedAssignments.sort((first, second) => {
         const firstCheckOutOpen = Boolean(
@@ -720,8 +894,13 @@ export function useStaffAttendanceDashboard() {
         assignments[0] ??
         null;
 
-      setSelectedEventMunicipalityId(
-        preferredAssignment ? String(preferredAssignment.id) : "",
+      const nextSelectedId = preferredAssignment
+        ? String(preferredAssignment.id)
+        : "";
+      setSelectedEventMunicipalityId(nextSelectedId);
+      saveSelectedStaffEvent(
+        selectedEventStorageKeyRef.current,
+        nextSelectedId,
       );
 
       return preferredAssignment;
@@ -779,19 +958,27 @@ export function useStaffAttendanceDashboard() {
 
       setMunicipality(profile.municipality);
 
-      const assignments = await loadEventAssignments(profile.municipality);
+      const storageKey = `pagtipon:staff:selected-event:${user.id}`;
+      selectedEventStorageKeyRef.current = storageKey;
 
+      const assignments = await loadEventAssignments(profile.municipality);
       setEventAssignments(assignments);
 
-      const firstAssignment = assignments[0] ?? null;
+      // Restore only an event still assigned to the current staff user.
+      // If the old assignment was removed, fall back to the first allowed one.
+      const savedId = readSavedStaffEvent(storageKey);
+      const initialAssignment =
+        assignments.find((assignment) => String(assignment.id) === savedId) ??
+        assignments[0] ??
+        null;
+      const initialId = initialAssignment ? String(initialAssignment.id) : "";
 
-      if (firstAssignment) {
-        setSelectedEventMunicipalityId(String(firstAssignment.id));
+      setSelectedEventMunicipalityId(initialId);
+      saveSelectedStaffEvent(storageKey, initialId);
 
-        await fetchAttendanceRecords(firstAssignment.id);
+      if (initialAssignment) {
+        await fetchAttendanceRecords(initialAssignment.id);
       } else {
-        setSelectedEventMunicipalityId("");
-
         setAttendanceRecords([]);
       }
     } catch (error) {
@@ -832,29 +1019,168 @@ export function useStaffAttendanceDashboard() {
 
   /*
    * =====================================================
+   * AUTOMATIC TIME-IN CLOSE ON EVENT END
+   * =====================================================
+   * The server already rejects Time-in at/after event.end_at.
+   * This saves the closed timestamp while a staff session is online.
+   * The Open Time-out RPC migration also finalizes a still-open
+   * Time-in atomically, so no manual Close is required even after
+   * reloading the portal or when no staff had the page open.
+   */
+  useEffect(() => {
+    if (
+      !hasInitializedClock ||
+      !hasEventEnded ||
+      !selectedAssignment?.check_in_opened_at ||
+      selectedAssignment.check_in_closed_at
+    ) {
+      return;
+    }
+
+    const assignmentId = String(selectedAssignment.id);
+    const previousAttempt =
+      autoCloseAttemptAtRef.current.get(assignmentId) ?? 0;
+
+    if (Date.now() - previousAttempt < 30_000) {
+      return;
+    }
+
+    autoCloseAttemptAtRef.current.set(assignmentId, Date.now());
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("close_event_check_in", {
+          p_event_municipality_id: assignmentId,
+        });
+
+        if (error) throw error;
+
+        const result = getRpcRow<
+          CheckInRpcResult & { closed_at?: string | null }
+        >(data);
+
+        if (!result || result.success === false) {
+          throw new Error(
+            result?.message || "Unable to automatically close Time-in.",
+          );
+        }
+
+        // Update just this event; do not unexpectedly change the
+        // Event Staff's selected event if they switched screens.
+        const closedAt = result.closed_at ?? new Date().toISOString();
+        setEventAssignments((current) =>
+          current.map((assignment) =>
+            String(assignment.id) === assignmentId
+              ? { ...assignment, check_in_closed_at: closedAt }
+              : assignment,
+          ),
+        );
+      } catch (error) {
+        console.error("Automatic Time-in closure failed:", error);
+        // Will retry, at most once every 30 seconds, while this page
+        // is mounted and the event is still stored as open.
+      }
+    })();
+  }, [currentTime, hasEventEnded, hasInitializedClock, selectedAssignment]);
+
+  /*
+   * =====================================================
+   * KEEP EXPIRED TIME-OUT STATUS IN SYNC WITH THE DATABASE
+   * =====================================================
+   * The UI becomes Closed at the effective deadline, even if the browser
+   * has not yet received the persisted closed_at timestamp. The pg_cron
+   * migration writes that timestamp while the browser is offline.
+   *
+   * DO NOT call close_event_check_out() from this effect: an Event Staff
+   * tab could have an outdated deadline after a Municipal Admin extension.
+   * That RPC permits manual closure; using it with a stale deadline would
+   * accidentally close a valid extended session. Instead, read the latest
+   * server values every 30 seconds until the status is settled.
+   */
+  useEffect(() => {
+    if (
+      !hasInitializedClock ||
+      !isCheckOutExpired ||
+      !selectedAssignment?.check_out_opened_at ||
+      selectedAssignment.check_out_closed_at
+    ) {
+      return;
+    }
+
+    const assignmentId = String(selectedAssignment.id);
+    const lastAttempt =
+      autoCloseCheckOutAttemptAtRef.current.get(assignmentId) ?? 0;
+    if (Date.now() - lastAttempt < 30_000) {
+      return;
+    }
+    autoCloseCheckOutAttemptAtRef.current.set(assignmentId, Date.now());
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from("event_municipalities")
+        .select("id, check_out_closed_at, check_out_deadline_at")
+        .eq("id", assignmentId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn(
+          "Could not refresh expired Time-out status:",
+          error.message,
+        );
+        return;
+      }
+      if (!data) return;
+
+      setEventAssignments((current) =>
+        current.map((assignment) =>
+          String(assignment.id) === assignmentId
+            ? {
+                ...assignment,
+                check_out_closed_at: data.check_out_closed_at ?? null,
+                check_out_deadline_at: data.check_out_deadline_at ?? null,
+              }
+            : assignment,
+        ),
+      );
+    })();
+  }, [currentTime, hasInitializedClock, isCheckOutExpired, selectedAssignment]);
+
+  /*
+   * =====================================================
    * SELECT EVENT
    * =====================================================
    */
 
   const selectEvent = useCallback(
     async (eventMunicipalityId: string) => {
-      setSelectedEventMunicipalityId(eventMunicipalityId);
+      // The user may only select an event in their active assignments.
+      const nextAssignment = eventAssignments.find(
+        (assignment) => String(assignment.id) === String(eventMunicipalityId),
+      );
+      if (!nextAssignment) {
+        showMessage(
+          "This event is no longer assigned to you. Refresh and try again.",
+          "error",
+        );
+        return;
+      }
 
-      /*
-       * Reset to Check-In when changing event.
-       */
+      const nextId = String(nextAssignment.id);
+      setSelectedEventMunicipalityId(nextId);
+      saveSelectedStaffEvent(selectedEventStorageKeyRef.current, nextId);
+
+      /* Reset to Time-in when changing event. */
       setAttendanceMode("check_in");
-
       setMessage(null);
 
-      await fetchAttendanceRecords(eventMunicipalityId);
+      await fetchAttendanceRecords(nextAssignment.id);
     },
-    [fetchAttendanceRecords],
+    [eventAssignments, fetchAttendanceRecords, showMessage],
   );
 
   /*
    * =====================================================
-   * OPEN / REOPEN CHECK-IN
+   * OPEN / REOPEN TIME-IN
    * =====================================================
    */
 
@@ -879,7 +1205,7 @@ export function useStaffAttendanceDashboard() {
       });
 
       if (error) {
-        console.error("Open check-in RPC error:", error);
+        console.error("Open time-in RPC error:", error);
 
         showMessage(formatDatabaseError(error), "error");
 
@@ -889,14 +1215,14 @@ export function useStaffAttendanceDashboard() {
       const result = getRpcRow<CheckInRpcResult>(data);
 
       if (!result) {
-        showMessage("The check-in request returned no result.", "error");
+        showMessage("The time-in request returned no result.", "error");
 
         return;
       }
 
       if (result.success === false) {
         showMessage(
-          result.message || "Unable to open attendance check-in.",
+          result.message || "Unable to open attendance time-in.",
           "error",
         );
 
@@ -915,9 +1241,9 @@ export function useStaffAttendanceDashboard() {
 
       showMessage(
         result.already_open
-          ? "Attendance check-in is already open."
+          ? "Attendance time-in is already open."
           : result.message ||
-              "Attendance check-in is now open. QR scanning and manual attendance codes are enabled.",
+              "Attendance time-in is now open. QR scanning and manual attendance codes are enabled.",
         "success",
       );
     } finally {
@@ -934,7 +1260,7 @@ export function useStaffAttendanceDashboard() {
 
   /*
    * =====================================================
-   * CLOSE CHECK-IN
+   * CLOSE TIME-IN
    * =====================================================
    */
 
@@ -953,7 +1279,7 @@ export function useStaffAttendanceDashboard() {
       });
 
       if (error) {
-        console.error("Close check-in RPC error:", error);
+        console.error("Close time-in RPC error:", error);
 
         showMessage(formatDatabaseError(error), "error");
 
@@ -963,14 +1289,14 @@ export function useStaffAttendanceDashboard() {
       const result = getRpcRow<CheckInRpcResult>(data);
 
       if (!result) {
-        showMessage("The close check-in request returned no result.", "error");
+        showMessage("The close time-in request returned no result.", "error");
 
         return;
       }
 
       if (result.success === false) {
         showMessage(
-          result.message || "Unable to close attendance check-in.",
+          result.message || "Unable to close attendance time-in.",
           "error",
         );
 
@@ -987,9 +1313,9 @@ export function useStaffAttendanceDashboard() {
 
       showMessage(
         result.already_closed
-          ? "Attendance check-in is already closed."
+          ? "Attendance time-in is already closed."
           : result.message ||
-              "Attendance check-in has been closed. New Time In entries are blocked.",
+              "Attendance time-in has been closed. New Time-in entries are blocked.",
         "success",
       );
     } finally {
@@ -1004,7 +1330,7 @@ export function useStaffAttendanceDashboard() {
 
   /*
    * =====================================================
-   * OPEN CHECK-OUT
+   * OPEN TIME-OUT
    * =====================================================
    */
 
@@ -1029,7 +1355,7 @@ export function useStaffAttendanceDashboard() {
       });
 
       if (error) {
-        console.error("Open check-out RPC error:", error);
+        console.error("Open time-out RPC error:", error);
 
         showMessage(formatDatabaseError(error), "error");
 
@@ -1039,14 +1365,14 @@ export function useStaffAttendanceDashboard() {
       const result = getRpcRow<CheckOutRpcResult>(data);
 
       if (!result) {
-        showMessage("The check-out request returned no result.", "error");
+        showMessage("The time-out request returned no result.", "error");
 
         return;
       }
 
       if (!result.success) {
         showMessage(
-          result.message || "Unable to open attendance check-out.",
+          result.message || "Unable to open attendance time-out.",
           "error",
         );
 
@@ -1065,9 +1391,9 @@ export function useStaffAttendanceDashboard() {
 
       showMessage(
         result.already_open
-          ? "Attendance check-out is already open."
+          ? "Attendance time-out is already open."
           : result.message ||
-              "Attendance check-out is now open. QR scanning and manual attendance codes can now record Time Out.",
+              "Attendance time-out is now open. QR scanning and manual attendance codes can now record Time-out.",
         "success",
       );
     } finally {
@@ -1084,7 +1410,7 @@ export function useStaffAttendanceDashboard() {
 
   /*
    * =====================================================
-   * CLOSE CHECK-OUT
+   * CLOSE TIME-OUT
    * =====================================================
    */
 
@@ -1109,7 +1435,7 @@ export function useStaffAttendanceDashboard() {
       });
 
       if (error) {
-        console.error("Close check-out RPC error:", error);
+        console.error("Close time-out RPC error:", error);
 
         showMessage(formatDatabaseError(error), "error");
 
@@ -1119,14 +1445,14 @@ export function useStaffAttendanceDashboard() {
       const result = getRpcRow<CheckOutRpcResult>(data);
 
       if (!result) {
-        showMessage("The close check-out request returned no result.", "error");
+        showMessage("The close time-out request returned no result.", "error");
 
         return;
       }
 
       if (!result.success) {
         showMessage(
-          result.message || "Unable to close attendance check-out.",
+          result.message || "Unable to close attendance time-out.",
           "error",
         );
 
@@ -1143,9 +1469,9 @@ export function useStaffAttendanceDashboard() {
 
       showMessage(
         result.already_closed
-          ? "Attendance check-out is already closed."
+          ? "Attendance time-out is already closed."
           : result.message ||
-              "Attendance check-out has been closed. New Time Out entries are blocked.",
+              "Attendance time-out has been closed. New Time-out entries are blocked.",
         "success",
       );
     } finally {
@@ -1208,15 +1534,15 @@ export function useStaffAttendanceDashboard() {
 
       /*
        * =================================================
-       * CHECK IN
+       * TIME-IN
        * =================================================
        */
 
       if (attendanceMode === "check_in") {
         showMessage(
           attendanceMethod === "qr"
-            ? "Checking participant QR code for Time In..."
-            : "Checking participant attendance code for Time In...",
+            ? "Checking participant QR code for Time-in..."
+            : "Checking participant attendance code for Time-in...",
           "info",
         );
 
@@ -1229,7 +1555,7 @@ export function useStaffAttendanceDashboard() {
         });
 
         if (error) {
-          console.error("Attendance check-in RPC error:", error);
+          console.error("Attendance time-in RPC error:", error);
 
           showMessage(formatDatabaseError(error), "error");
 
@@ -1240,7 +1566,7 @@ export function useStaffAttendanceDashboard() {
 
         if (!result) {
           showMessage(
-            "The Time In request returned no result. Please try again.",
+            "The Time-in request returned no result. Please try again.",
             "error",
           );
 
@@ -1249,15 +1575,6 @@ export function useStaffAttendanceDashboard() {
 
         const participantName =
           result.participant_name?.trim() || "Participant";
-
-        if (!result.success) {
-          showMessage(
-            result.result_message || "Unable to record participant Time In.",
-            "error",
-          );
-
-          return false;
-        }
 
         if (
           result.already_checked_in ||
@@ -1269,12 +1586,23 @@ export function useStaffAttendanceDashboard() {
 
           showMessage(
             checkedInTime
-              ? `${participantName} was already checked in at ${checkedInTime}.`
-              : `${participantName} already has a Time In record.`,
+              ? `${participantName} was already completed Time-in at ${checkedInTime}.`
+              : `${participantName} already has a Time-in record.`,
             "info",
           );
 
           await fetchAttendanceRecords(selectedAssignment.id);
+
+          return false;
+        }
+
+        // Some RPCs return success=false for duplicate scans.
+        // Handle duplicates before the generic failure branch.
+        if (!result.success) {
+          showMessage(
+            result.result_message || "Unable to record participant Time-in.",
+            "error",
+          );
 
           return false;
         }
@@ -1285,8 +1613,8 @@ export function useStaffAttendanceDashboard() {
 
         showMessage(
           checkedInTime
-            ? `${participantName} checked in successfully at ${checkedInTime}.`
-            : `${participantName} checked in successfully.`,
+            ? `${participantName} completed Time-in successfully at ${checkedInTime}.`
+            : `${participantName} completed Time-in successfully.`,
           "success",
         );
 
@@ -1297,14 +1625,14 @@ export function useStaffAttendanceDashboard() {
 
       /*
        * =================================================
-       * CHECK OUT
+       * TIME-OUT
        * =================================================
        */
 
       showMessage(
         attendanceMethod === "qr"
-          ? "Checking participant QR code for Time Out..."
-          : "Checking participant attendance code for Time Out...",
+          ? "Checking participant QR code for Time-out..."
+          : "Checking participant attendance code for Time-out...",
         "info",
       );
 
@@ -1320,7 +1648,7 @@ export function useStaffAttendanceDashboard() {
       );
 
       if (error) {
-        console.error("Attendance check-out RPC error:", error);
+        console.error("Attendance time-out RPC error:", error);
 
         showMessage(formatDatabaseError(error), "error");
 
@@ -1331,7 +1659,7 @@ export function useStaffAttendanceDashboard() {
 
       if (!result) {
         showMessage(
-          "The Time Out request returned no result. Please try again.",
+          "The Time-out request returned no result. Please try again.",
           "error",
         );
 
@@ -1339,17 +1667,6 @@ export function useStaffAttendanceDashboard() {
       }
 
       const participantName = result.participant_name?.trim() || "Participant";
-
-      if (!result.success) {
-        showMessage(
-          result.result_message || "Unable to record participant Time Out.",
-          "error",
-        );
-
-        await fetchAttendanceRecords(selectedAssignment.id);
-
-        return false;
-      }
 
       if (
         result.already_checked_out ||
@@ -1361,9 +1678,21 @@ export function useStaffAttendanceDashboard() {
 
         showMessage(
           checkedOutTime
-            ? `${participantName} was already checked out at ${checkedOutTime}.`
-            : `${participantName} already has a Time Out record.`,
+            ? `${participantName} was already completed Time-out at ${checkedOutTime}.`
+            : `${participantName} already has a Time-out record.`,
           "info",
+        );
+
+        await fetchAttendanceRecords(selectedAssignment.id);
+
+        return false;
+      }
+
+      // Report a duplicate even if the RPC marks it unsuccessful.
+      if (!result.success) {
+        showMessage(
+          result.result_message || "Unable to record participant Time-out.",
+          "error",
         );
 
         await fetchAttendanceRecords(selectedAssignment.id);
@@ -1377,8 +1706,8 @@ export function useStaffAttendanceDashboard() {
 
       showMessage(
         checkedOutTime
-          ? `${participantName} checked out successfully at ${checkedOutTime}.`
-          : `${participantName} checked out successfully.`,
+          ? `${participantName} completed Time-out successfully at ${checkedOutTime}.`
+          : `${participantName} completed Time-out successfully.`,
         "success",
       );
 
@@ -1404,23 +1733,32 @@ export function useStaffAttendanceDashboard() {
    * =====================================================
    */
 
-  const totalPresent = attendanceRecords.filter(
-    (record) => String(record.status).toLowerCase() === "present",
-  ).length;
+  const totalPresent = attendanceRecords.filter((record) => {
+    const status = String(record.status).toLowerCase();
 
-  const totalInside = attendanceRecords.filter(
-    (record) =>
-      String(record.status).toLowerCase() === "present" &&
-      Boolean(record.checked_in_at) &&
-      !record.checked_out_at,
-  ).length;
+    return (
+      (status === "present" || status === "late") &&
+      Boolean(record.checked_in_at)
+    );
+  }).length;
 
-  const totalCheckedOut = attendanceRecords.filter(
-    (record) =>
-      String(record.status).toLowerCase() === "present" &&
+  const totalInside = attendanceRecords.filter((record) => {
+    const status = String(record.status).toLowerCase();
+    return (
+      (status === "present" || status === "late") &&
       Boolean(record.checked_in_at) &&
-      Boolean(record.checked_out_at),
-  ).length;
+      !record.checked_out_at
+    );
+  }).length;
+
+  const totalCheckedOut = attendanceRecords.filter((record) => {
+    const status = String(record.status).toLowerCase();
+    return (
+      (status === "present" || status === "late") &&
+      Boolean(record.checked_in_at) &&
+      Boolean(record.checked_out_at)
+    );
+  }).length;
 
   return {
     municipality,
@@ -1454,7 +1792,7 @@ export function useStaffAttendanceDashboard() {
     attendanceLoading,
 
     /*
-     * Check-In
+     * Time-in
      */
     controlLoading,
 
@@ -1469,7 +1807,7 @@ export function useStaffAttendanceDashboard() {
     closeCheckIn,
 
     /*
-     * Check-Out
+     * Time-out
      */
     checkOutControlLoading,
 
@@ -1480,6 +1818,8 @@ export function useStaffAttendanceDashboard() {
     canOpenCheckOut,
     canCloseCheckOut,
     canUseCheckOutTools,
+    checkOutDeadlineAt,
+    isCheckOutExpired,
 
     openCheckOut,
     closeCheckOut,

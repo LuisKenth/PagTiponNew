@@ -1,9 +1,7 @@
-import {
-  AlignLeft,
-  FileText,
-} from "lucide-react";
+import { AlignLeft, FileText } from "lucide-react";
 
 type EventDetailsSectionProps = {
+  scope?: "provincial" | "municipal";
   title: string;
   description: string;
   onTitleChange: (value: string) => void;
@@ -14,32 +12,29 @@ const TITLE_MAX_LENGTH = 150;
 const DESCRIPTION_MAX_LENGTH = 2000;
 
 export default function EventDetailsSection({
+  scope = "provincial",
   title,
   description,
   onTitleChange,
   onDescriptionChange,
 }: EventDetailsSectionProps) {
-  const titleRemaining =
-    TITLE_MAX_LENGTH - title.length;
+  const titleRemaining = TITLE_MAX_LENGTH - title.length;
 
-  const descriptionRemaining =
-    DESCRIPTION_MAX_LENGTH - description.length;
+  const descriptionRemaining = DESCRIPTION_MAX_LENGTH - description.length;
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       {/* Header */}
       <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
           <FileText size={19} />
         </div>
 
         <div>
-          <h2 className="font-semibold text-slate-900">
-            Event Details
-          </h2>
+          <h2 className="font-semibold text-slate-900">Event Details</h2>
 
           <p className="text-sm text-slate-500">
-            Provide the basic information for the provincial event.
+            Provide the basic information for the {scope} event.
           </p>
         </div>
       </div>
@@ -69,20 +64,17 @@ export default function EventDetailsSection({
             <input
               id="event-title"
               type="text"
+              autoComplete="off"
               value={title}
               maxLength={TITLE_MAX_LENGTH}
-              onChange={(e) =>
-                onTitleChange(e.target.value)
-              }
-              placeholder="Example: Provincial Youth Development Summit"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-16 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+              onChange={(e) => onTitleChange(e.target.value.toUpperCase())}
+              placeholder="Input the title of the event..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-16 text-sm text-slate-900 outline-none focus-visible:outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
             />
 
             <span
               className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-medium ${
-                titleRemaining <= 20
-                  ? "text-amber-500"
-                  : "text-slate-400"
+                titleRemaining <= 20 ? "text-amber-500" : "text-slate-400"
               }`}
             >
               {title.length}/{TITLE_MAX_LENGTH}
@@ -119,12 +111,10 @@ export default function EventDetailsSection({
               id="event-description"
               value={description}
               maxLength={DESCRIPTION_MAX_LENGTH}
-              onChange={(e) =>
-                onDescriptionChange(e.target.value)
-              }
+              onChange={(e) => onDescriptionChange(e.target.value)}
               placeholder="Describe the purpose, objectives, and important information about this event..."
               rows={4}
-              className="w-full resize-none rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+              className="w-full resize-none rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm leading-6 text-slate-900 outline-none focus-visible:outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
             />
           </div>
 
@@ -149,9 +139,9 @@ export default function EventDetailsSection({
       {/* Information */}
       <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3">
         <p className="text-xs leading-5 text-slate-500">
-          The event title is required when saving a draft.
-          A complete description is required before the event can be
-          published to the selected municipalities.
+          The event title is required when saving a draft. A complete
+          description is required before the event can be published to the
+          selected municipalities.
         </p>
       </div>
     </section>

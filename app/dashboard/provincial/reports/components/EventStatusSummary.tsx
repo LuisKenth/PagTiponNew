@@ -28,7 +28,7 @@ export default function EventStatusSummary({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mobile-summary-grid mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatusCard
           label="Draft"
           value={summary.draft}

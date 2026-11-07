@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
-import { FilePlus2, FileText, Upload, X } from "lucide-react";
+import { FileText, Upload, X } from "lucide-react";
 
 type MemoUploadSectionProps = {
   memoFiles: File[];
@@ -104,6 +104,7 @@ export default function MemoUploadSection({
     event.preventDefault();
     setIsDragging(false);
 
+    if (inputRef.current?.matches(":disabled")) return;
     const droppedFiles = Array.from(event.dataTransfer.files || []);
     addFiles(droppedFiles);
   };
@@ -123,176 +124,138 @@ export default function MemoUploadSection({
   };
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      {/* Header */}
-      <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-            <FileText size={19} />
-          </div>
-
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <FileText aria-hidden="true" size={20} />
+          </span>
           <div>
             <h2 className="font-semibold text-slate-900">Official Memos</h2>
-            <p className="text-sm text-slate-500">
-              Attach one or more official documents for this provincial event.
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Attach the official documents for this event.
             </p>
           </div>
         </div>
+        <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">
+          Required to publish
+        </span>
+      </div>
 
-        {hasFiles && (
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
-              {memoFiles.length} {memoFiles.length === 1 ? "file" : "files"}
-            </span>
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`mt-5 flex flex-col gap-4 rounded-xl border border-dashed p-4 transition sm:flex-row sm:items-center sm:justify-between ${isDragging ? "border-indigo-500 bg-indigo-50" : "border-slate-300 bg-slate-50"}`}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <Upload
+            aria-hidden="true"
+            className="h-6 w-6 shrink-0 text-indigo-500"
+          />
+          <div>
+            <p className="text-sm font-semibold text-slate-700">
+              {isDragging
+                ? "Drop documents here"
+                : "Choose or drop your documents"}
+            </p>
+            <p
+              id="memo-file-help"
+              className="mt-1 text-xs leading-5 text-slate-500"
+            >
+              PDF, DOC, DOCX, PNG, JPG, JPEG · Up to 10 MB per file
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          <Upload aria-hidden="true" size={16} />
+          {hasFiles ? "Add Files" : "Choose Files"}
+        </button>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+        onChange={handleFileChange}
+        aria-label="Select official memos"
+        aria-describedby="memo-file-help"
+        className="hidden"
+      />
 
+      {fileError && (
+        <p
+          role="alert"
+          className="mt-3 break-words rounded-xl border border-red-100 bg-red-50 p-3 text-xs leading-5 text-red-700"
+        >
+          {fileError}
+        </p>
+      )}
+
+      {hasFiles ? (
+        <div className="mt-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p role="status" className="text-xs font-semibold text-slate-600">
+              {memoFiles.length}{" "}
+              {memoFiles.length === 1
+                ? "document selected"
+                : "documents selected"}
+            </p>
             <button
               type="button"
               onClick={removeAllFiles}
-              className="rounded-lg px-3 py-2 text-xs font-semibold text-red-500 transition hover:bg-red-50"
+              className="min-h-10 rounded-lg px-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               Remove All
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Selected Files */}
-      {hasFiles && (
-        <div className="mb-4 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Selected Documents
-          </p>
-
-          <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+          <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
             {memoFiles.map((file, index) => (
-              <div
+              <li
                 key={`${file.name}-${file.size}-${file.lastModified}`}
-                className="flex items-center gap-3 bg-white px-4 py-3"
+                className="flex items-center gap-3 p-3"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                  <FileText size={18} />
-                </div>
-
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <FileText aria-hidden="true" size={19} />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-700">
+                  <p
+                    title={file.name}
+                    className="truncate text-sm font-medium text-slate-800"
+                  >
                     {file.name}
                   </p>
-
-                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                    <span>{getFileExtension(file.name).toUpperCase()}</span>
-                    <span>•</span>
-                    <span>{formatFileSize(file.size)}</span>
-                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {getFileExtension(file.name).toUpperCase()} ·{" "}
+                    {formatFileSize(file.size)}
+                  </p>
                 </div>
-
                 <button
                   type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    removeFile(index);
-                  }}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                  onClick={() => removeFile(index)}
                   aria-label={`Remove ${file.name}`}
-                  title="Remove file"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                 >
-                  <X size={17} />
+                  <X aria-hidden="true" size={18} />
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Upload Area / Add More button */}
-      <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`cursor-pointer rounded-xl border-2 border-dashed transition ${
-          hasFiles
-            ? "flex items-center justify-center gap-3 px-4 py-3 text-left"
-            : "p-6 text-center"
-        } ${
-          isDragging
-            ? "border-slate-500 bg-slate-100"
-            : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100/70"
-        }`}
-      >
-        <div
-          className={`${hasFiles ? "shrink-0" : "mx-auto"} flex items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ${
-            hasFiles ? "h-9 w-9" : "h-12 w-12"
-          }`}
-        >
-          {hasFiles ? <FilePlus2 size={18} /> : <Upload size={21} />}
-        </div>
-
-        <div className={hasFiles ? "min-w-0" : ""}>
-          <p
-            className={`font-semibold text-slate-700 ${
-              hasFiles ? "text-xs sm:text-sm" : "mt-3 text-sm"
-            }`}
-          >
-            {isDragging
-              ? "Drop the files here"
-              : hasFiles
-                ? "Add More Official Documents"
-                : "Upload official documents"}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-500">
-            {hasFiles
-              ? "Click or drag and drop to add more files"
-              : "Click to browse or drag and drop multiple files"}
-          </p>
-
-          {!hasFiles && (
-            <>
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                {["PDF", "DOC", "DOCX", "PNG", "JPG"].map((type) => (
-                  <span
-                    key={type}
-                    className="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-500"
-                  >
-                    {type}
-                  </span>
-                ))}
-              </div>
-
-              <p className="mt-3 text-[11px] text-slate-400">
-                Maximum file size: 10 MB per file
-              </p>
-            </>
-          )}
-        </div>
-
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-      </div>
-
-      {/* Error */}
-      {fileError && (
-        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-          <p className="text-xs font-medium leading-5 text-red-600">
-            {fileError}
+          </ul>
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            Selected documents will be uploaded when you save or publish the
+            event.
           </p>
         </div>
-      )}
-
-      {/* Information */}
-      <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
-        <p className="text-xs leading-5 text-slate-500">
-          At least one official memo is required before publishing. You may
-          attach multiple supporting documents to a single event. Draft events
-          may be saved without any memo.
+      ) : (
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          No documents selected. Add at least one official memo before
+          publishing.
         </p>
-      </div>
+      )}
     </section>
   );
 }

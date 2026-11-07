@@ -1,11 +1,8 @@
 "use client";
 
-import {
-  CheckCircle2,
-  CircleAlert,
-  X,
-} from "lucide-react";
+import { CheckCircle2, CircleAlert, X } from "lucide-react";
 
+import VenueCreatedPopup from "./components/VenueCreatedPopup";
 import VenueForm from "./components/VenueForm";
 import VenuesFilters from "./components/VenuesFilters";
 import VenuesHeader from "./components/VenuesHeader";
@@ -31,6 +28,12 @@ export default function MunicipalVenuesPage() {
 
     venueName,
     capacity,
+    location,
+    photoFiles,
+    formVersion,
+    setLocation,
+    setPhotoFiles,
+    selectGoogleVenue,
     searchTerm,
 
     totalCapacity,
@@ -56,6 +59,8 @@ export default function MunicipalVenuesPage() {
     handleSubmit,
     handleEdit,
     handleDelete,
+    pendingCleanupId,
+    retryPhotoCleanup,
     cancelEdit,
     clearSearch,
 
@@ -71,101 +76,109 @@ export default function MunicipalVenuesPage() {
       <VenuesHeader
         municipality={municipality}
         totalVenues={venues.length}
-        filteredVenues={
-          filteredVenues.length
-        }
+        filteredVenues={filteredVenues.length}
         totalCapacity={totalCapacity}
         loading={loading}
         refreshing={refreshing}
-        onRefresh={() =>
-          void refreshVenues()
-        }
+        onRefresh={() => void refreshVenues()}
       />
 
-      {feedback && (
-        <section
-          className={`relative flex items-start gap-3 rounded-2xl border p-4 pr-12 shadow-sm ${feedback.type === "success"
-              ? "border-emerald-200 bg-emerald-50"
-              : "border-red-200 bg-red-50"
-            }`}
-        >
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${feedback.type === "success"
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-red-100 text-red-700"
-              }`}
-          >
-            {feedback.type ===
-              "success" ? (
-              <CheckCircle2 className="h-5 w-5" />
-            ) : (
-              <CircleAlert className="h-5 w-5" />
-            )}
-          </div>
-
-          <div>
-            <p
-              className={`text-sm font-bold ${feedback.type === "success"
-                  ? "text-emerald-900"
-                  : "text-red-900"
-                }`}
-            >
-              {feedback.type === "success"
-                ? successFeedbackTitles[
-                feedback.action
-                ]
-                : "Venue Action Failed"}
-            </p>
-
-            <p
-              className={`mt-1 text-sm leading-6 ${feedback.type === "success"
-                  ? "text-emerald-700"
-                  : "text-red-700"
-                }`}
-            >
-              {feedback.message}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              setFeedback(null)
-            }
-            aria-label="Dismiss venue message"
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/70 hover:text-slate-700"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </section>
+      {feedback?.type === "success" && feedback.action === "added" && (
+        <VenueCreatedPopup
+          message={feedback.message}
+          onClose={() => setFeedback(null)}
+        />
       )}
+      {feedback &&
+        !(feedback.type === "success" && feedback.action === "added") && (
+          <section
+            className={`relative flex items-start gap-3 rounded-2xl border p-4 pr-12 shadow-sm ${
+              feedback.type === "success"
+                ? "border-emerald-200 bg-emerald-50"
+                : "border-red-200 bg-red-50"
+            }`}
+          >
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                feedback.type === "success"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {feedback.type === "success" ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <CircleAlert className="h-5 w-5" />
+              )}
+            </div>
 
+            <div>
+              <p
+                className={`text-sm font-bold ${
+                  feedback.type === "success"
+                    ? "text-emerald-900"
+                    : "text-red-900"
+                }`}
+              >
+                {feedback.type === "success"
+                  ? successFeedbackTitles[feedback.action]
+                  : "Venue Action Failed"}
+              </p>
+
+              <p
+                className={`mt-1 text-sm leading-6 ${
+                  feedback.type === "success"
+                    ? "text-emerald-700"
+                    : "text-red-700"
+                }`}
+              >
+                {feedback.message}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              aria-label="Dismiss venue message"
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/70 hover:text-slate-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </section>
+        )}
+
+      {pendingCleanupId && (
+        <button
+          type="button"
+          disabled={Boolean(deletingVenueId)}
+          onClick={() => void retryPhotoCleanup()}
+          className="rounded-xl bg-amber-100 px-4 py-3 font-semibold text-amber-900"
+        >
+          Retry photo cleanup
+        </button>
+      )}
       <VenueForm
+        key={`${editingVenue?.id ?? "new"}-${formVersion}`}
+        location={location}
+        photoFiles={photoFiles}
+        onLocationChange={setLocation}
+        onPhotosChange={setPhotoFiles}
+        onPlaceSelect={selectGoogleVenue}
         editingVenue={editingVenue}
         venueName={venueName}
         capacity={capacity}
         saving={saving}
-        onVenueNameChange={
-          setVenueName
-        }
-        onCapacityChange={
-          setCapacity
-        }
+        onVenueNameChange={setVenueName}
+        onCapacityChange={setCapacity}
         onSubmit={handleSubmit}
         onCancelEdit={cancelEdit}
       />
 
       <VenuesFilters
         searchTerm={searchTerm}
-        resultCount={
-          filteredVenues.length
-        }
-        hasActiveSearch={
-          hasActiveSearch
-        }
-        onSearchChange={
-          setSearchTerm
-        }
+        resultCount={filteredVenues.length}
+        hasActiveSearch={hasActiveSearch}
+        onSearchChange={setSearchTerm}
         onClearSearch={clearSearch}
       />
 
@@ -177,17 +190,14 @@ export default function MunicipalVenuesPage() {
             </h2>
 
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Review venue capacity and
-              maintain locations available
-              for municipal event planning.
+              Review venue capacity and maintain locations available for
+              municipal event planning.
             </p>
           </div>
 
           <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
             {filteredVenues.length}{" "}
-            {filteredVenues.length === 1
-              ? "venue"
-              : "venues"}
+            {filteredVenues.length === 1 ? "venue" : "venues"}
           </span>
         </div>
 
@@ -195,46 +205,25 @@ export default function MunicipalVenuesPage() {
           venues={paginatedVenues}
           loading={loading}
           errorMessage={errorMessage}
-          deletingVenueId={
-            deletingVenueId
-          }
-          editingVenueId={
-            editingVenue?.id ?? null
-          }
+          deletingVenueId={deletingVenueId}
+          editingVenueId={editingVenue?.id ?? null}
           onEdit={handleEdit}
-          onDelete={(venue) =>
-            void handleDelete(venue)
-          }
+          onDelete={(venue) => void handleDelete(venue)}
         />
 
-        {!loading &&
-          !errorMessage && (
-            <VenuesPagination
-              currentPage={
-                currentPage
-              }
-              totalPages={totalPages}
-              pageSize={pageSize}
-              totalItems={
-                filteredVenues.length
-              }
-              firstVisibleItem={
-                firstVisibleItem
-              }
-              lastVisibleItem={
-                lastVisibleItem
-              }
-              onPageSizeChange={
-                changePageSize
-              }
-              onPreviousPage={
-                goToPreviousPage
-              }
-              onNextPage={
-                goToNextPage
-              }
-            />
-          )}
+        {!loading && !errorMessage && (
+          <VenuesPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredVenues.length}
+            firstVisibleItem={firstVisibleItem}
+            lastVisibleItem={lastVisibleItem}
+            onPageSizeChange={changePageSize}
+            onPreviousPage={goToPreviousPage}
+            onNextPage={goToNextPage}
+          />
+        )}
       </section>
     </div>
   );

@@ -23,6 +23,7 @@ type AttendanceRow = {
   status: string;
   method: string | null;
   checked_in_at: string | null;
+  checked_out_at: string | null;
   checked_in_by: string | null;
   created_at: string;
   updated_at: string;
@@ -58,7 +59,7 @@ type AttendanceHistoryItem = {
   venue: VenueRow | null;
 };
 
-type AttendanceFilter = "all" | "present" | "absent" | "pending";
+type AttendanceFilter = "all" | "present" | "late" | "absent" | "pending";
 
 type FetchMode = "initial" | "refresh" | "silent";
 
@@ -131,12 +132,14 @@ function getAttendanceStatusLabel(status: string | null) {
     return "Present";
   }
 
+  if (normalizedStatus === "late") return "Late";
+
   if (normalizedStatus === "absent") {
     return "Absent";
   }
 
   if (normalizedStatus === "pending") {
-    return "Pending";
+    return "Awaiting Time-in";
   }
 
   return status || "Unknown";
@@ -148,6 +151,8 @@ function getAttendanceStatusClasses(status: string | null) {
   if (normalizedStatus === "present") {
     return "bg-green-100 text-green-700";
   }
+
+  if (normalizedStatus === "late") return "bg-amber-100 text-amber-800";
 
   if (normalizedStatus === "absent") {
     return "bg-red-100 text-red-700";
@@ -293,6 +298,7 @@ export default function ParticipantAttendanceHistoryPage() {
                                 status,
                                 method,
                                 checked_in_at,
+                                checked_out_at,
                                 checked_in_by,
                                 created_at,
                                 updated_at
@@ -533,8 +539,10 @@ export default function ParticipantAttendanceHistoryPage() {
       total: attendanceHistory.length,
 
       present: attendanceHistory.filter(
-        (item) => normalizeStatus(item.attendance.status) === "present",
+        (item) => ["present", "late"].includes(normalizeStatus(item.attendance.status)) && Boolean(item.attendance.checked_in_at),
       ).length,
+
+      late: attendanceHistory.filter((item) => normalizeStatus(item.attendance.status) === "late").length,
 
       absent: attendanceHistory.filter(
         (item) => normalizeStatus(item.attendance.status) === "absent",
@@ -551,9 +559,10 @@ export default function ParticipantAttendanceHistoryPage() {
       return attendanceHistory;
     }
 
-    return attendanceHistory.filter(
-      (item) => normalizeStatus(item.attendance.status) === activeFilter,
-    );
+    return attendanceHistory.filter((item) => activeFilter === "present"
+      ? ["present", "late"].includes(normalizeStatus(item.attendance.status)) && Boolean(item.attendance.checked_in_at)
+      : normalizeStatus(item.attendance.status) === activeFilter);
+
   }, [activeFilter, attendanceHistory]);
 
   const totalPages = Math.max(
@@ -609,6 +618,7 @@ export default function ParticipantAttendanceHistoryPage() {
       label: "Present",
       count: attendanceCounts.present,
     },
+    { value: "late", label: "Late", count: attendanceCounts.late },
     {
       value: "absent",
       label: "Absent",
@@ -616,7 +626,7 @@ export default function ParticipantAttendanceHistoryPage() {
     },
     {
       value: "pending",
-      label: "Pending",
+      label: "Awaiting Time-in",
       count: attendanceCounts.pending,
     },
   ];
@@ -637,8 +647,7 @@ export default function ParticipantAttendanceHistoryPage() {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Review your attendance results, check-in methods, and recorded
-                check-in times.
+                Review your attendance status, Time-in, and Time-out records.
               </p>
             </div>
 
@@ -659,7 +668,7 @@ export default function ParticipantAttendanceHistoryPage() {
         </section>
 
         {/* SUMMARY */}
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mobile-summary-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
@@ -682,6 +691,7 @@ export default function ParticipantAttendanceHistoryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Present</p>
+                <p className="mt-1 text-xs text-slate-500">Includes late arrivals</p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-950">
                   {attendanceCounts.present}
@@ -713,10 +723,10 @@ export default function ParticipantAttendanceHistoryPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-500">Pending</p>
+                <p className="text-sm font-medium text-slate-500">Late</p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-950">
-                  {attendanceCounts.pending}
+                  {attendanceCounts.late}
                 </p>
               </div>
 
@@ -736,7 +746,7 @@ export default function ParticipantAttendanceHistoryPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                View your event attendance status, venue, and check-in
+                View your event attendance status, venue, and time in
                 information.
               </p>
             </div>
@@ -842,187 +852,46 @@ export default function ParticipantAttendanceHistoryPage() {
                   );
 
                   return (
-                    <article
-                      key={item.attendance.id}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                    >
-                      <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                        {/* EVENT INFORMATION */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-950">
-                              {item.event.title}
-                            </h3>
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(
-                                item.attendance.status,
-                              )}`}
-                            >
-                              {getAttendanceStatusLabel(item.attendance.status)}
-                            </span>
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
-                                effectiveEventStatus,
-                              )}`}
-                            >
-                              {getEventStatusLabel(effectiveEventStatus)}
-                            </span>
-                          </div>
-
-                          {/* MUNICIPALITY + VENUE */}
-                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-                            <span className="font-medium">
-                              {item.assignment.municipality}
-                            </span>
-
-                            <span className="inline-flex items-center gap-1.5">
-                              <MapPin
-                                className="size-4 shrink-0"
-                                aria-hidden="true"
-                              />
-
-                              <span className="font-medium">
-                                {item.venue?.venue_name || "Venue not assigned"}
-                              </span>
-                            </span>
-                          </div>
-
-                          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                            {item.event.description ||
-                              "No event description provided."}
+                    <article key={item.attendance.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <header className="p-5 sm:p-6">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(item.attendance.status)}`}>{getAttendanceStatusLabel(item.attendance.status)}</span>
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(effectiveEventStatus)}`}>{getEventStatusLabel(effectiveEventStatus)}</span>
+                        </div>
+                        <h3 className="mt-3 break-words text-xl font-bold text-slate-950">{item.event.title}</h3>
+                        <p className="mt-2 flex items-start gap-2 text-sm text-slate-600"><MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />{item.venue?.venue_name || "Venue not assigned"} · {item.assignment.municipality}</p>
+                        <p className="mt-2 text-sm text-slate-500">{formatDateTime(item.event.start_at)} – {formatDateTime(item.event.end_at)}</p>
+                      </header>
+                      <div className="grid gap-3 border-y border-slate-100 bg-slate-50 p-5 sm:grid-cols-3 sm:p-6">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time-in</p>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(item.attendance.checked_in_at)}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time-out</p>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(item.attendance.checked_out_at)}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance method</p>
+                          <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-900"><MethodIcon className="h-4 w-4" aria-hidden="true" />{getCheckInMethodLabel(item.attendance.method)}</p>
+                        </div>
+                      </div>
+                      <div className="p-5 sm:p-6">
+                        {["present", "late"].includes(attendanceStatus) && item.attendance.checked_in_at && (
+                          <p className="flex items-start gap-2 text-sm text-slate-700"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                            {item.attendance.checked_out_at ? "Your Time-in and Time-out are recorded." : "Your Time-in is recorded. Your Time-out has not been recorded yet."}
                           </p>
-
-                          {item.assignment.local_instructions && (
-                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                Local Instructions
-                              </p>
-
-                              <p className="mt-1 text-sm leading-6 text-amber-900">
-                                {item.assignment.local_instructions}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* EVENT + CHECK-IN DETAILS */}
-                        <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[500px]">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                              Event Starts
-                            </p>
-
-                            <p className="mt-1 font-semibold text-slate-800">
-                              {formatDateTime(item.event.start_at)}
-                            </p>
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                              Event Ends
-                            </p>
-
-                            <p className="mt-1 font-semibold text-slate-800">
-                              {formatDateTime(item.event.end_at)}
-                            </p>
-                          </div>
-
-                          <div className="border-t border-slate-200 pt-3">
-                            <div className="flex items-center gap-2">
-                              <MethodIcon
-                                className="size-4 text-slate-500"
-                                aria-hidden="true"
-                              />
-
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                Check-in Method
-                              </p>
-                            </div>
-
-                            <p className="mt-1 font-semibold text-slate-800">
-                              {getCheckInMethodLabel(item.attendance.method)}
-                            </p>
-                          </div>
-
-                          <div className="border-t border-slate-200 pt-3">
-                            <div className="flex items-center gap-2">
-                              <Clock3
-                                className="size-4 text-slate-500"
-                                aria-hidden="true"
-                              />
-
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                Check-in Time
-                              </p>
-                            </div>
-
-                            <p className="mt-1 font-semibold text-slate-800">
-                              {formatDateTime(item.attendance.checked_in_at)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* RESULT */}
-                        <div className="shrink-0 xl:w-[230px]">
-                          {attendanceStatus === "present" && (
-                            <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-                              <CheckCircle2
-                                className="mt-0.5 size-5 shrink-0 text-green-700"
-                                aria-hidden="true"
-                              />
-
-                              <div>
-                                <p className="text-sm font-semibold text-green-900">
-                                  Attendance Confirmed
-                                </p>
-
-                                <p className="mt-1 text-xs leading-5 text-green-700">
-                                  Your attendance was successfully recorded.
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {attendanceStatus === "absent" && (
-                            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                              <UserX
-                                className="mt-0.5 size-5 shrink-0 text-red-700"
-                                aria-hidden="true"
-                              />
-
-                              <div>
-                                <p className="text-sm font-semibold text-red-900">
-                                  Marked Absent
-                                </p>
-
-                                <p className="mt-1 text-xs leading-5 text-red-700">
-                                  No successful check-in was recorded.
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {attendanceStatus === "pending" && (
-                            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                              <Clock3
-                                className="mt-0.5 size-5 shrink-0 text-amber-700"
-                                aria-hidden="true"
-                              />
-
-                              <div>
-                                <p className="text-sm font-semibold text-amber-900">
-                                  Attendance Pending
-                                </p>
-
-                                <p className="mt-1 text-xs leading-5 text-amber-700">
-                                  Waiting for check-in or event completion.
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        )}
+                        {attendanceStatus === "absent" && <p className="text-sm text-red-700">No successful Time-in was recorded for this event.</p>}
+                        {attendanceStatus === "pending" && <p className="text-sm text-slate-600">Your attendance is awaiting Time-in or finalization.</p>}
+                        <details className="mt-4 rounded-xl border border-slate-200 p-4">
+                          <summary className="cursor-pointer text-sm font-semibold text-slate-700">Event Details & Instructions</summary>
+                          <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{item.event.description || "No event description provided."}</p>
+                          {item.assignment.local_instructions && <div className="mt-4 rounded-lg bg-amber-50 p-4">
+                            <h4 className="text-sm font-semibold text-amber-900">Participant Instructions</h4>
+                            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900 [overflow-wrap:anywhere]">{item.assignment.local_instructions}</p>
+                          </div>}
+                        </details>
                       </div>
                     </article>
                   );

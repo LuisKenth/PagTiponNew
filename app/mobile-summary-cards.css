@@ -1,0 +1,38 @@
+/* Shared summary-card layout across all five portals. Desktop and print retain their existing styles. */
+@media screen and (max-width: 639px) {
+  .mobile-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+    align-items: stretch;
+  }
+  .mobile-summary-grid.gap-px { gap: 1px; }
+  .mobile-summary-grid > * {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.75rem;
+    grid-column: auto;
+    overflow-wrap: anywhere;
+  }
+  .mobile-summary-grid > * :where(div, p, h2, h3, span) { min-width: 0; }
+  .mobile-summary-grid .flex { gap: 0.375rem; }
+  .mobile-summary-grid .flex:not(.shrink-0) { flex-wrap: nowrap; }
+  .mobile-summary-grid :is(.truncate, .whitespace-nowrap) {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .mobile-summary-grid :is(.text-sm, h2, h3) { font-size: 0.75rem; line-height: 1.125rem; }
+  .mobile-summary-grid .text-xs { font-size: 0.6875rem; line-height: 1rem; }
+  .mobile-summary-grid :is(.text-2xl, .text-3xl, .text-4xl) {
+    font-size: 1.5rem;
+    line-height: 1.875rem;
+  }
+  .mobile-summary-grid :is(.mt-2, .mt-3, .mt-4) { margin-top: 0.375rem; }
+  .mobile-summary-grid :is(.size-10, .size-11, .size-12, .h-10.w-10, .h-11.w-11, .h-12.w-12) {
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    padding: 0.375rem;
+  }
+  .mobile-summary-grid svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+}

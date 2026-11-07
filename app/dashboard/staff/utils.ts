@@ -56,15 +56,15 @@ export function formatDatabaseError(
     ],
     [
       "CHECK_IN_OPEN_TOO_EARLY",
-      "Check-in cannot be opened yet. It becomes available 30 minutes before the event starts.",
+      "Time-in cannot be opened yet. It becomes available 30 minutes before the event starts.",
     ],
     [
       "CHECK_IN_EVENT_ENDED",
-      "Check-in cannot be opened because the event has already ended.",
+      "Time-in cannot be opened because the event has already ended.",
     ],
     [
       "CHECK_IN_NOT_OPENED",
-      "Attendance check-in has not been opened.",
+      "Attendance time-in has not been opened.",
     ],
     [
       "ATTENDANCE_EVENT_NOT_FOUND",
@@ -76,28 +76,28 @@ export function formatDatabaseError(
     ],
     [
       "ATTENDANCE_EVENT_CANCELLED",
-      "This participant cannot check in because the event was cancelled.",
+      "This participant cannot time-in because the event was cancelled.",
     ],
     [
       "ATTENDANCE_EVENT_COMPLETED",
-      "This participant cannot check in because the event is completed.",
+      "This participant cannot time-in because the event is completed.",
     ],
-    ["ATTENDANCE_TOO_EARLY", "Attendance check-in is not available yet."],
+    ["ATTENDANCE_TOO_EARLY", "Attendance time-in is not available yet."],
     [
       "ATTENDANCE_WINDOW_CLOSED",
       "The attendance window has already ended.",
     ],
     [
       "ATTENDANCE_CHECK_IN_NOT_OPEN",
-      "Event staff has not opened attendance check-in.",
+      "Event staff has not opened attendance time-in.",
     ],
     [
       "ATTENDANCE_CHECK_IN_CLOSED",
-      "Attendance check-in has already been closed by event staff.",
+      "Attendance time-in has already been closed by event staff.",
     ],
     [
       "CHECK_IN_CONTROL_DIRECT_UPDATE_BLOCKED",
-      "Check-in controls must be changed using the Open or Close Check-in button.",
+      "Time-in controls must be changed using the Open or Close Time-in button.",
     ],
   ];
 
@@ -111,5 +111,13 @@ export function formatDatabaseError(
     error.details ||
     error.message ||
     "An unexpected database error occurred."
+  );
+}
+
+
+// Normalize messages returned by attendance RPCs for display.
+export function formatAttendanceTerms(message: string): string {
+  return message.replace(/\bcheck[- ](in|out)\b/gi, (_, action: string) =>
+    action.toLowerCase() === "in" ? "Time-in" : "Time-out",
   );
 }

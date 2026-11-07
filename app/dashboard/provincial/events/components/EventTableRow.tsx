@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { EventWithMunicipalities } from "../types";
 
 import {
@@ -12,6 +13,8 @@ import {
 import EventActions from "./EventActions";
 
 type EventTableRowProps = {
+  extraActions?: (event: EventWithMunicipalities) => ReactNode;
+  onView?: (event: EventWithMunicipalities) => void;
   event: EventWithMunicipalities;
 
   deletingId: string | null;
@@ -26,6 +29,8 @@ type EventTableRowProps = {
 };
 
 export default function EventTableRow({
+  extraActions,
+  onView,
   event,
   deletingId,
   publishingId,
@@ -35,11 +40,7 @@ export default function EventTableRow({
   onPublish,
   onCancel,
 }: EventTableRowProps) {
-  const automaticStatus =
-    getAutomaticEventStatus(
-      event,
-      currentTime
-    );
+  const automaticStatus = getAutomaticEventStatus(event, currentTime);
 
   return (
     <tr className="border-b border-slate-100 transition last:border-b-0 hover:bg-slate-50/80">
@@ -53,15 +54,11 @@ export default function EventTableRow({
         </p>
 
         {automaticStatus === "draft" && (
-          <p className="mt-1 text-xs text-slate-400">
-            Not yet published
-          </p>
+          <p className="mt-1 text-xs text-slate-400">Not yet published</p>
         )}
 
         {automaticStatus === "cancelled" && (
-          <p className="mt-1 text-xs text-red-400">
-            Event cancelled
-          </p>
+          <p className="mt-1 text-xs text-red-400">Event cancelled</p>
         )}
       </td>
 
@@ -79,37 +76,27 @@ export default function EventTableRow({
       {/* MUNICIPALITIES */}
       <td className="max-w-[300px] py-4 pr-4 align-top">
         {event.municipalities.length === 0 ? (
-          <span className="text-xs text-slate-400">
-            No municipality
-          </span>
+          <span className="text-xs text-slate-400">No municipality</span>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {event.municipalities
-              .slice(0, 4)
-              .map((item) => (
-                <span
-                  key={item.id}
-                  className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
-                >
-                  {item.municipality}
-                </span>
-              ))}
+            {event.municipalities.slice(0, 4).map((item) => (
+              <span
+                key={item.id}
+                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+              >
+                {item.municipality}
+              </span>
+            ))}
 
             {event.municipalities.length > 4 && (
               <span
                 title={event.municipalities
                   .slice(4)
-                  .map(
-                    (item) =>
-                      item.municipality
-                  )
+                  .map((item) => item.municipality)
                   .join(", ")}
                 className="cursor-help rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700"
               >
-                +
-                {event.municipalities.length -
-                  4}{" "}
-                more
+                +{event.municipalities.length - 4} more
               </span>
             )}
           </div>
@@ -119,11 +106,11 @@ export default function EventTableRow({
       {/* MEMO */}
       <td className="py-4 pr-4 align-top">
         <span
-          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${event.memo_url ||
-            event.memo_filename
-            ? "bg-green-50 text-green-700"
-            : "bg-slate-100 text-slate-500"
-            }`}
+          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+            event.memo_url || event.memo_filename
+              ? "bg-green-50 text-green-700"
+              : "bg-slate-100 text-slate-500"
+          }`}
         >
           {getMemoLabel(event)}
         </span>
@@ -132,9 +119,7 @@ export default function EventTableRow({
       {/* PREPARATION */}
       <td className="py-4 pr-4 align-top">
         <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-          {getPreparationLabel(
-            event.municipalities
-          )}
+          {getPreparationLabel(event.municipalities)}
         </span>
       </td>
 
@@ -142,7 +127,7 @@ export default function EventTableRow({
       <td className="py-4 pr-4 align-top">
         <span
           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getStatusClass(
-            automaticStatus
+            automaticStatus,
           )}`}
         >
           {automaticStatus}
@@ -152,10 +137,10 @@ export default function EventTableRow({
       {/* ACTIONS */}
       <td className="min-w-[250px] py-4 align-top">
         <EventActions
+          onView={onView}
+          extraActions={extraActions}
           event={event}
-          automaticStatus={
-            automaticStatus
-          }
+          automaticStatus={automaticStatus}
           deletingId={deletingId}
           publishingId={publishingId}
           cancellingId={cancellingId}

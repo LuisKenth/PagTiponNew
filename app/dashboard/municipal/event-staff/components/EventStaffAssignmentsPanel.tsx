@@ -56,7 +56,7 @@ type StaffAssignment = {
   id: string;
   event_municipality_id: string;
   staff_id: string;
-  assigned_by: string;
+  assigned_by: string | null;
   status: "active" | "removed";
   assigned_at: string;
   removed_at: string | null;
@@ -161,21 +161,24 @@ export default function EventStaffAssignmentsPanel() {
     [assignments],
   );
 
-  const availableEvents = useMemo(() => {
-    if (!selectedStaffId) {
-      return events;
+  // Pick the event first; only show approved staff who are not
+  // already actively assigned to that specific event.
+  const availableStaff = useMemo(() => {
+    if (!selectedEventMunicipalityId) {
+      return [];
     }
 
-    const assignedEventIds = new Set(
+    const assignedStaffIds = new Set(
       activeAssignments
-        .filter((assignment) => assignment.staff_id === selectedStaffId)
-        .map((assignment) => assignment.event_municipality_id),
+        .filter(
+          (assignment) =>
+            assignment.event_municipality_id === selectedEventMunicipalityId,
+        )
+        .map((assignment) => assignment.staff_id),
     );
 
-    return events.filter(
-      (municipalEvent) => !assignedEventIds.has(municipalEvent.id),
-    );
-  }, [activeAssignments, events, selectedStaffId]);
+    return approvedStaff.filter((profile) => !assignedStaffIds.has(profile.id));
+  }, [activeAssignments, approvedStaff, selectedEventMunicipalityId]);
 
   const closeDeliveryToast = useCallback(() => {
     setDeliveryToast(null);
@@ -299,13 +302,23 @@ export default function EventStaffAssignmentsPanel() {
     setSuccessMessage("");
     setDeliveryToast(null);
 
+    if (!selectedEventMunicipalityId) {
+      setFormError("Please select a prepared event first.");
+      return;
+    }
+
+    if (!events.some((municipalEvent) => municipalEvent.id === selectedEventMunicipalityId)) {
+      setFormError("The selected event is no longer available. Please refresh and try again.");
+      return;
+    }
+
     if (!selectedStaffId) {
       setFormError("Please select an approved Event Staff account.");
       return;
     }
 
-    if (!selectedEventMunicipalityId) {
-      setFormError("Please select a prepared event.");
+    if (!availableStaff.some((profile) => profile.id === selectedStaffId)) {
+      setFormError("This staff member is unavailable or already assigned to the selected event.");
       return;
     }
 
@@ -461,8 +474,9 @@ export default function EventStaffAssignmentsPanel() {
         onClose={closeDeliveryToast}
       />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-500">
             <Link2 className="h-4 w-4" />
             Event Access
@@ -473,8 +487,7 @@ export default function EventStaffAssignmentsPanel() {
           </h2>
 
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-            Manage which prepared events each approved staff member should
-            access in {municipality || "your municipality"}.
+            Assign approved Event Staff to prepared events in {municipality || "your municipality"}.
           </p>
         </div>
 
@@ -503,12 +516,12 @@ export default function EventStaffAssignmentsPanel() {
             Assign to Event
           </button>
         </div>
-      </div>
+        </div>
 
       {successMessage && (
         <div
           role="status"
-          className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+          className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
 
@@ -519,7 +532,7 @@ export default function EventStaffAssignmentsPanel() {
       {pageError && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+          className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
 
@@ -537,16 +550,12 @@ export default function EventStaffAssignmentsPanel() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3 sm:px-6">
           <div>
-            <h3 className="text-lg font-bold text-slate-950">
-              Active Event Assignments
+            <h3 className="text-sm font-bold text-slate-800">
+              Assigned Events
             </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              These records will restrict Event Staff Dashboard access.
-            </p>
           </div>
 
           <div className="flex gap-2 text-xs font-bold">
@@ -570,29 +579,22 @@ export default function EventStaffAssignmentsPanel() {
             ))}
           </div>
         ) : activeAssignments.length === 0 ? (
-          <div className="flex flex-col items-center px-6 py-14 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-              <Link2 className="h-8 w-8" />
+          <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-6 sm:px-6">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+              <Link2 className="h-5 w-5" />
             </div>
-
-            <h3 className="mt-4 text-lg font-bold text-slate-900">
-              No active assignments
-            </h3>
-
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Assign an approved Event Staff account to a prepared event.
-            </p>
-
-            {approvedStaff.length > 0 && events.length > 0 && (
-              <button
-                type="button"
-                onClick={openDialog}
-                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-              >
-                <UserPlus className="h-4 w-4" />
-                Assign Event Staff
-              </button>
-            )}
+            <div>
+              <h3 className="font-semibold text-slate-900">
+                No Event Staff assigned yet
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {approvedStaff.length === 0
+                  ? "Create and approve an Event Staff account first."
+                  : events.length === 0
+                    ? "Prepare an event before assigning staff."
+                    : "Use Assign Event Staff above to get started."}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -656,6 +658,7 @@ export default function EventStaffAssignmentsPanel() {
           </div>
         )}
       </div>
+      </div>
 
       {dialogOpen && (
         <div
@@ -682,7 +685,7 @@ export default function EventStaffAssignmentsPanel() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Select an approved staff member and prepared event.
+                  Select a prepared event first, then choose an approved Event Staff member.
                 </p>
               </div>
 
@@ -701,19 +704,51 @@ export default function EventStaffAssignmentsPanel() {
               {formError && (
                 <div
                   role="alert"
-                  className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+                  className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
                 >
                   <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
 
+              {/* STEP 1: Choose the prepared event. */}
+              <div>
+                <label
+                  htmlFor="assignment-event"
+                  className="mb-2 block text-sm font-semibold text-slate-700"
+                >
+                  1. Prepared Event
+                </label>
+
+                <select
+                  id="assignment-event"
+                  value={selectedEventMunicipalityId}
+                  onChange={(event) => {
+                    setSelectedEventMunicipalityId(event.target.value);
+                    setSelectedStaffId("");
+                    setFormError("");
+                  }}
+                  disabled={submitting}
+                  className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-700 focus:ring-4 focus:ring-slate-100 disabled:bg-slate-100"
+                >
+                  <option value="">Select a prepared event</option>
+
+                  {events.map((municipalEvent) => (
+                    <option key={municipalEvent.id} value={municipalEvent.id}>
+                      {municipalEvent.event.title} —{" "}
+                      {formatDateTime(municipalEvent.event.start_at)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* STEP 2: Only show staff not already assigned to this event. */}
               <div>
                 <label
                   htmlFor="assignment-staff"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Event Staff
+                  2. Event Staff
                 </label>
 
                 <select
@@ -721,59 +756,31 @@ export default function EventStaffAssignmentsPanel() {
                   value={selectedStaffId}
                   onChange={(event) => {
                     setSelectedStaffId(event.target.value);
-
-                    setSelectedEventMunicipalityId("");
+                    setFormError("");
                   }}
-                  disabled={submitting}
+                  disabled={submitting || !selectedEventMunicipalityId || availableStaff.length === 0}
                   className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-700 focus:ring-4 focus:ring-slate-100 disabled:bg-slate-100"
                 >
-                  <option value="">Select approved Event Staff</option>
+                  <option value="">
+                    {!selectedEventMunicipalityId
+                      ? "Select a prepared event first"
+                      : availableStaff.length === 0
+                        ? "No available Event Staff"
+                        : "Select approved Event Staff"}
+                  </option>
 
-                  {approvedStaff.map((profile) => (
+                  {availableStaff.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.full_name || "Unnamed Staff"}
-
                       {profile.email ? ` — ${profile.email}` : ""}
                     </option>
                   ))}
                 </select>
-              </div>
 
-              <div>
-                <label
-                  htmlFor="assignment-event"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
-                >
-                  Prepared Event
-                </label>
-
-                <select
-                  id="assignment-event"
-                  value={selectedEventMunicipalityId}
-                  onChange={(event) =>
-                    setSelectedEventMunicipalityId(event.target.value)
-                  }
-                  disabled={submitting || !selectedStaffId}
-                  className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-700 focus:ring-4 focus:ring-slate-100 disabled:bg-slate-100"
-                >
-                  <option value="">
-                    {selectedStaffId
-                      ? "Select prepared event"
-                      : "Select Event Staff first"}
-                  </option>
-
-                  {availableEvents.map((municipalEvent) => (
-                    <option key={municipalEvent.id} value={municipalEvent.id}>
-                      {municipalEvent.event.title} —{" "}
-                      {formatDateTime(municipalEvent.event.start_at)}
-                    </option>
-                  ))}
-                </select>
-
-                {selectedStaffId && availableEvents.length === 0 && (
+                {selectedEventMunicipalityId && availableStaff.length === 0 && (
                   <p className="mt-2 text-xs font-medium text-amber-700">
-                    This staff member is already assigned to every available
-                    event.
+                    No approved staff members are available for this event. They may
+                    already be assigned, or an Event Staff account needs approval.
                   </p>
                 )}
               </div>

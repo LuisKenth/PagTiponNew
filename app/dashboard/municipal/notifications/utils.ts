@@ -1,3 +1,4 @@
+
 import {
   AlarmClock,
   CalendarDays,
@@ -13,21 +14,21 @@ import type {
   MunicipalNotificationFilter,
 } from "./types";
 
+/*
+ * SIMPLIFIED NOTIFICATION FILTERS
+ */
 export const municipalNotificationFilters: {
   label: string;
   value: MunicipalNotificationFilter;
 }[] = [
   { label: "All", value: "all" },
   { label: "Unread", value: "unread" },
-  { label: "Event Invitations", value: "invitations" },
-  { label: "Event Updates", value: "updates" },
-  { label: "Cancellations", value: "cancellations" },
-  { label: "Reminders", value: "reminders" },
+  { label: "Events", value: "events" },
   { label: "System", value: "system" },
 ];
 
 /*
- * Convert notification types into a consistent format.
+ * NORMALIZE NOTIFICATION TYPE
  */
 export function normalizeMunicipalNotificationType(
   type: string | null,
@@ -89,17 +90,24 @@ export function isSystemNotification(
 }
 
 /*
- * Returns true for notifications connected
- * to a received provincial event.
+ * EVENT NOTIFICATION GROUP
+ *
+ * Includes event invitations, updates,
+ * cancellations, reminders, preparation
+ * updates, and other event-related notices.
  */
 export function isMunicipalEventNotification(
   type: string | null,
 ) {
+  const normalizedType =
+    normalizeMunicipalNotificationType(type);
+
   return (
-    isEventInvitationNotification(type) ||
-    isEventUpdatedNotification(type) ||
-    isEventCancelledNotification(type) ||
-    isReminderNotification(type)
+    normalizedType.startsWith("event_") ||
+    normalizedType === "municipal_preparation_update" ||
+    normalizedType === "registration_open" ||
+    normalizedType === "local_instructions_updated" ||
+    normalizedType === "venue_updated"
   );
 }
 
@@ -129,11 +137,15 @@ export function getMunicipalNotificationIcon(
     return CircleCheckBig;
   }
 
+  if (isMunicipalEventNotification(type)) {
+    return PencilLine;
+  }
+
   return Info;
 }
 
 /*
- * ICON BACKGROUND AND TEXT STYLE
+ * NOTIFICATION ICON COLORS
  */
 export function getMunicipalNotificationIconClass(
   type: string | null,
@@ -158,14 +170,18 @@ export function getMunicipalNotificationIconClass(
     return "bg-emerald-100 text-emerald-700";
   }
 
+  if (isMunicipalEventNotification(type)) {
+    return "bg-violet-100 text-violet-700";
+  }
+
   return "bg-slate-100 text-slate-700";
 }
 
 /*
- * OPTIONAL CARD STYLE
+ * NOTIFICATION CARD STYLE
  *
- * Gagamitin natin ito sa MunicipalNotificationList
- * para maging malinaw ang cancelled notification.
+ * Preserve distinct visual feedback
+ * for cancellations and event updates.
  */
 export function getMunicipalNotificationCardClass(
   notification: MunicipalNotification,
@@ -190,7 +206,7 @@ export function getMunicipalNotificationCardClass(
 }
 
 /*
- * HUMAN-READABLE TYPE LABEL
+ * HUMAN-READABLE NOTIFICATION LABEL
  */
 export function getMunicipalNotificationTypeLabel(
   type: string | null,
@@ -209,6 +225,13 @@ export function getMunicipalNotificationTypeLabel(
 
   if (isReminderNotification(type)) {
     return "Event Reminder";
+  }
+
+  if (
+    normalizeMunicipalNotificationType(type) ===
+    "municipal_preparation_update"
+  ) {
+    return "Municipal Preparation Update";
   }
 
   if (!type) {
@@ -242,7 +265,15 @@ export function formatMunicipalNotificationDate(
 }
 
 /*
- * FILTER LOGIC
+ * SIMPLIFIED FILTER LOGIC
+ *
+ * All    = Every notification
+ * Unread = Unread notifications
+ * Events = Event-related notifications
+ * System = Other/system notifications
+ *
+ * Unknown notification types remain
+ * visible under All and System.
  */
 export function matchesMunicipalNotificationFilter(
   notification: MunicipalNotification,
@@ -252,28 +283,13 @@ export function matchesMunicipalNotificationFilter(
     case "unread":
       return !notification.read;
 
-    case "invitations":
-      return isEventInvitationNotification(
-        notification.type,
-      );
-
-    case "updates":
-      return isEventUpdatedNotification(
-        notification.type,
-      );
-
-    case "cancellations":
-      return isEventCancelledNotification(
-        notification.type,
-      );
-
-    case "reminders":
-      return isReminderNotification(
+    case "events":
+      return isMunicipalEventNotification(
         notification.type,
       );
 
     case "system":
-      return isSystemNotification(
+      return !isMunicipalEventNotification(
         notification.type,
       );
 
@@ -286,17 +302,15 @@ export function matchesMunicipalNotificationFilter(
 /*
  * EXACT RECEIVED-EVENT NAVIGATION
  *
- * event_municipality_id is prioritized because
- * it points to the exact municipal assignment.
+ * Prioritize event_municipality_id to
+ * open the correct municipal assignment.
  *
- * event_id remains available as a fallback and
- * for validating the parent provincial event.
+ * Keep event_id as a fallback.
  */
 export function getMunicipalNotificationLink(
   notification: MunicipalNotification,
 ) {
-  const searchParameters =
-    new URLSearchParams();
+  const searchParameters = new URLSearchParams();
 
   if (notification.event_municipality_id) {
     searchParameters.set(

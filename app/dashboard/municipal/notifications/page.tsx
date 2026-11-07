@@ -1,9 +1,10 @@
+
 "use client";
 
 import MunicipalNotificationFilters from "./components/MunicipalNotificationFilters";
 import MunicipalNotificationList from "./components/MunicipalNotificationList";
-import MunicipalNotificationStats from "./components/MunicipalNotificationStats";
 import MunicipalNotificationsHeader from "./components/MunicipalNotificationsHeader";
+
 import { useMunicipalNotifications } from "./hooks/useMunicipalNotifications";
 
 export default function MunicipalNotificationsPage() {
@@ -28,7 +29,8 @@ export default function MunicipalNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* Notifications Header */}
         <MunicipalNotificationsHeader
           unreadCount={unreadCount}
           refreshing={refreshing}
@@ -37,21 +39,18 @@ export default function MunicipalNotificationsPage() {
           onMarkAllAsRead={markAllAsRead}
         />
 
-        <MunicipalNotificationStats
-          totalCount={notifications.length}
-          unreadCount={unreadCount}
-        />
-      </section>
-
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
+        {/* Notification Filters */}
         <MunicipalNotificationFilters
           activeFilter={activeFilter}
           unreadCount={unreadCount}
           onFilterChange={setActiveFilter}
         />
 
+        {/* Notification List */}
         <MunicipalNotificationList
           notifications={filteredNotifications}
+          totalNotifications={notifications.length}
+          activeFilter={activeFilter}
           loading={loading}
           error={error}
           updatingId={updatingId}

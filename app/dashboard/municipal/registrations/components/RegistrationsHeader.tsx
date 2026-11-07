@@ -107,7 +107,7 @@ export default function RegistrationsHeader({
       </div>
 
       {/* Summary statistics */}
-      <div className="grid grid-cols-2 border-t border-slate-200 bg-slate-50 sm:grid-cols-4">
+      <div className="mobile-summary-grid grid grid-cols-2 border-t border-slate-200 bg-slate-50 sm:grid-cols-4">
         {/* Total registrations */}
         <div className="border-b border-r border-slate-200 p-4 sm:border-b-0 sm:p-5">
           <div className="flex items-start gap-3">

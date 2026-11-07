@@ -153,7 +153,8 @@ async function authorizeMunicipalAdmin(request: Request): Promise<
 
   if (
     normalizeValue(profile.role) !== "municipal_admin" ||
-    normalizeValue(profile.verification_status) !== "approved"
+    normalizeValue(profile.verification_status) !== "approved" ||
+    userData.user.app_metadata?.must_change_password === true
   ) {
     return {
       response: NextResponse.json(
@@ -845,9 +846,6 @@ export async function POST(request: Request) {
           )
           .update({
             status: "active",
-
-            assigned_by:
-              admin.id,
 
             assigned_at:
               reactivatedAt,

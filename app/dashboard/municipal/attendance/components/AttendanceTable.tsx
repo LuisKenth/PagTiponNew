@@ -392,7 +392,7 @@ export default function AttendanceTable({
 
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                    Provincial Event
+                    Event
                   </p>
 
                   <h3
@@ -448,7 +448,7 @@ export default function AttendanceTable({
                     {eventGroup.pendingCount > 0 && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                         <Clock3 className="h-3.5 w-3.5" />
-                        {eventGroup.pendingCount} pending
+                        {eventGroup.pendingCount} not timed in yet
                       </span>
                     )}
                   </div>
@@ -498,7 +498,7 @@ export default function AttendanceTable({
                           "Participant",
                           "Attendance",
                           "Method",
-                          "Check-in Time",
+                          "Time In",
                           "Checked In By",
                         ].map((heading) => (
                           <th
@@ -618,7 +618,7 @@ export default function AttendanceTable({
                           <dl className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
                             <div>
                               <dt className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                                Check-in method
+                                Time-in method
                               </dt>
 
                               <dd className="mt-1 font-semibold text-slate-700">
@@ -630,7 +630,7 @@ export default function AttendanceTable({
 
                             <div>
                               <dt className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                                Check-in time
+                                Time In
                               </dt>
 
                               <dd className="mt-1 font-semibold text-slate-700">

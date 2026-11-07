@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -7,14 +8,10 @@ import { ArrowLeft, TriangleAlert } from "lucide-react";
 import MunicipalityAdminSection from "./components/MunicipalityAdminSection";
 import MunicipalityDetailHeader from "./components/MunicipalityDetailHeader";
 import MunicipalityDetailLoading from "./components/MunicipalityDetailLoading";
-import MunicipalityEventsList from "./components/MunicipalityEventsList";
-import MunicipalityEventSummary from "./components/MunicipalityEventSummary";
 import useMunicipalityDetails from "./hooks/useMunicipalityDetails";
 
 export default function MunicipalityDetailsPage() {
-  const params = useParams<{
-    municipality: string;
-  }>();
+  const params = useParams<{ municipality: string }>();
 
   const municipalitySlug =
     typeof params.municipality === "string"
@@ -26,6 +23,7 @@ export default function MunicipalityDetailsPage() {
     loading,
     errorMessage,
     municipalityName,
+    refresh,
   } = useMunicipalityDetails(municipalitySlug);
 
   if (loading) {
@@ -69,11 +67,10 @@ export default function MunicipalityDetailsPage() {
         municipalityName={data.municipalityName}
       />
 
-      <MunicipalityEventSummary events={data.events} />
-
-      <MunicipalityAdminSection admins={data.admins} />
-
-      <MunicipalityEventsList events={data.events} />
+      <MunicipalityAdminSection
+        admins={data.admins}
+        onChanged={refresh}
+      />
     </div>
   );
 }

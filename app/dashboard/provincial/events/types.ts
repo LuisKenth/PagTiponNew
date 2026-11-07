@@ -1,6 +1,8 @@
 export type EventItem = {
   id: string;
   title: string | null;
+  audience_type?: "all" | "categories" | null;
+  audience_categories?: string[];
   description: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -24,15 +26,6 @@ export type EventWithMunicipalities = EventItem & {
 };
 
 export type EventStatusFilter =
-  | "all"
-  | "draft"
-  | "upcoming"
-  | "ongoing"
-  | "completed"
-  | "cancelled";
+  "all" | "draft" | "upcoming" | "ongoing" | "completed" | "cancelled";
 
-  export type EventSortOption =
-  | "newest"
-  | "soonest"
-  | "latest"
-  | "title_asc";
+export type EventSortOption = "newest" | "soonest" | "latest" | "title_asc";

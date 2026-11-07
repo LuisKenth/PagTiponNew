@@ -56,9 +56,7 @@ type VenueRow = {
 };
 
 type ParticipantEmailNotificationType =
-  | "registration_open"
-  | "local_instructions_updated"
-  | "venue_updated";
+  "registration_open" | "local_instructions_updated" | "venue_updated";
 
 type ParticipantEmailResult = {
   message?: string;
@@ -528,6 +526,7 @@ export default function useMunicipalDashboard() {
               end_at,
               memo_url,
               memo_filename,
+              event_origin,
               status,
               created_at
             `,
@@ -553,6 +552,8 @@ export default function useMunicipalDashboard() {
           String(event.id),
           {
             id: String(event.id),
+
+            event_origin: event.event_origin,
 
             title: event.title ?? null,
 
@@ -748,7 +749,12 @@ export default function useMunicipalDashboard() {
       return;
     }
 
-    const trimmedInstructions = localInstructions.trim();
+    const isMunicipalEvent = selectedEvent.event?.event_origin === "municipal";
+    let trimmedInstructions = localInstructions.trim();
+    if (!isMunicipalEvent && trimmedInstructions.length > 2000) {
+      alert("Local instructions must not exceed 2,000 characters.");
+      return;
+    }
 
     if (preparationStatus !== "pending" && !trimmedInstructions) {
       alert(
@@ -839,6 +845,8 @@ export default function useMunicipalDashboard() {
       }
 
       const latestAssignment = latestAssignmentData as LatestAssignmentRow;
+      if (isMunicipalEvent)
+        trimmedInstructions = latestAssignment.local_instructions?.trim() ?? "";
 
       /*
        * Re-read provincial event.
@@ -1005,7 +1013,9 @@ export default function useMunicipalDashboard() {
 
           local_venue_id: selectedVenueId || null,
 
-          local_instructions: trimmedInstructions || null,
+          ...(!isMunicipalEvent
+            ? { local_instructions: trimmedInstructions || null }
+            : {}),
 
           registration_open:
             savedStatus === "prepared" ? registrationOpen : false,
@@ -1105,6 +1115,7 @@ export default function useMunicipalDashboard() {
         latestAssignment.registration_open !== true;
 
       const shouldNotifyInstructionUpdate =
+        !isMunicipalEvent &&
         savedStatus === "prepared" &&
         previousInstructions.length > 0 &&
         currentInstructions.length > 0 &&

@@ -30,7 +30,7 @@ export default function EventsSummary({
   ).length;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mobile-summary-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard
         label="Total Events"
         value={totalEvents}

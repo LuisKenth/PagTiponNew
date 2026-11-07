@@ -1,4 +1,9 @@
 "use client";
+import ProvincialPageHeader, {
+  provincialHeaderButton,
+  provincialHeaderPrimaryButton,
+} from "@/app/dashboard/provincial/components/ProvincialPageHeader";
+import { FileText as ProvincialHeaderIcon } from "lucide-react";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -27,6 +32,7 @@ export default function MemoViewerPage() {
       const { data, error } = await supabase
         .from("events")
         .select("id, title, memo_url, memo_filename")
+        .eq("event_origin", "provincial")
         .eq("id", eventId)
         .maybeSingle<EventMemo>();
 
@@ -61,9 +67,7 @@ export default function MemoViewerPage() {
   if (loading) {
     return (
       <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">
-          Loading official memo...
-        </p>
+        <p className="text-sm text-slate-500">Loading official memo...</p>
       </div>
     );
   }
@@ -79,9 +83,7 @@ export default function MemoViewerPage() {
         </Link>
 
         <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-bold text-slate-900">
-            Memo Not Found
-          </h1>
+          <h1 className="text-xl font-bold text-slate-900">Memo Not Found</h1>
 
           <p className="mt-2 text-sm text-slate-500">
             This event does not have an official memo.
@@ -93,39 +95,28 @@ export default function MemoViewerPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <p className="text-sm font-medium text-slate-500">
-            Official Memo
-          </p>
-
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">
-            {event.title || "Untitled Event"}
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500">
-            {event.memo_filename || "Official Memo"}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/dashboard/provincial/memos"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            ← Back to Official Memos
-          </Link>
-
-          <Link
-            href={`/dashboard/provincial/events/${event.id}`}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            Back to Event
-          </Link>
-        </div>
-      </div>
-
+      <ProvincialPageHeader
+        icon={<ProvincialHeaderIcon className="h-5 w-5" aria-hidden="true" />}
+        eyebrow="Official Memo"
+        title={event.title || "Untitled Event"}
+        description={event.memo_filename || "Official Memo"}
+        actions={
+          <>
+            <Link
+              href="/dashboard/provincial/memos"
+              className={provincialHeaderButton}
+            >
+              ← Back to Official Memos
+            </Link>
+            <Link
+              href={`/dashboard/provincial/events/${event.id}`}
+              className={provincialHeaderPrimaryButton}
+            >
+              Back to Event
+            </Link>
+          </>
+        }
+      />
       {/* Memo Viewer */}
       <div className="overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
         {isPdf && (

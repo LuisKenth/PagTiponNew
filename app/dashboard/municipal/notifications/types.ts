@@ -1,12 +1,10 @@
+
 export type MunicipalNotificationId = string | number;
 
 export type MunicipalNotificationFilter =
   | "all"
   | "unread"
-  | "invitations"
-  | "updates"
-  | "cancellations"
-  | "reminders"
+  | "events"
   | "system";
 
 export type MunicipalNotificationType =

@@ -119,7 +119,7 @@ export default function EventStatusOverview({
       </div>
 
       {loading ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="mobile-summary-grid mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, index) => (
             <div
               key={index}
@@ -140,7 +140,7 @@ export default function EventStatusOverview({
         </div>
       ) : (
         <>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="mobile-summary-grid mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <StatusCard
               label="Draft"
               count={statusCounts.draft}

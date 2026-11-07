@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 import {
@@ -35,6 +36,8 @@ type ReceivedEventCardProps = {
   onPrepare: (item: ReceivedEvent) => void;
   showActions?: boolean;
   compact?: boolean;
+  extraActions?: ReactNode;
+  showParticipantCount?: boolean;
 };
 
 export default function ReceivedEventCard({
@@ -43,7 +46,13 @@ export default function ReceivedEventCard({
   onPrepare,
   showActions = true,
   compact = false,
+  extraActions,
+  showParticipantCount = true,
 }: ReceivedEventCardProps) {
+  const sourceLabel =
+    item.event?.event_origin === "municipal"
+      ? "Municipal Event"
+      : "Provincial Event";
   const municipalStatus = String(item.municipal_status ?? "")
     .trim()
     .toLowerCase();
@@ -158,11 +167,14 @@ export default function ReceivedEventCard({
             ? "bg-blue-500"
             : "bg-amber-500";
 
-  const preparationActionLabel = isCancelled
-    ? "View Cancellation"
-    : isPreparationEditable
-      ? "Manage Preparation"
-      : "View Preparation";
+  const preparationActionLabel =
+    provincialStatus === "draft"
+      ? "Continue Draft"
+      : isCancelled
+        ? "View Cancellation"
+        : isPreparationEditable
+          ? "Manage Preparation"
+          : "View Preparation";
 
   const preparationActionDescription = isCancelled
     ? "Preparation and registration controls are locked because this event was cancelled."
@@ -256,7 +268,7 @@ export default function ReceivedEventCard({
 
             <div className="min-w-0">
               <p className="text-sm font-bold text-red-900">
-                Provincial Event Cancelled
+                {sourceLabel} Cancelled
               </p>
 
               <p className="mt-1 text-sm leading-6 text-red-700">
@@ -323,7 +335,7 @@ export default function ReceivedEventCard({
             {/* Status badges */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                Provincial Event
+                {sourceLabel}
               </span>
 
               <span
@@ -562,60 +574,62 @@ export default function ReceivedEventCard({
             </div>
 
             {/* Registered participants */}
-            <Link
-              href={`/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
-                String(item.id),
-              )}`}
-              aria-label={`View registered participants for ${
-                item.event?.title || "this event"
-              }`}
-              className={`group mt-4 flex items-center gap-3 rounded-xl border p-4 transition ${
-                isCancelled
-                  ? "border-red-200 bg-red-50/50 hover:bg-red-100/60"
-                  : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50"
-              }`}
-            >
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+            {showParticipantCount && (
+              <Link
+                href={`/dashboard/municipal/registrations?eventMunicipalityId=${encodeURIComponent(
+                  String(item.id),
+                )}`}
+                aria-label={`View registered participants for ${
+                  item.event?.title || "this event"
+                }`}
+                className={`group mt-4 flex items-center gap-3 rounded-xl border p-4 transition ${
                   isCancelled
-                    ? "bg-red-100 text-red-700"
-                    : "bg-emerald-50 text-emerald-700"
+                    ? "border-red-200 bg-red-50/50 hover:bg-red-100/60"
+                    : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50"
                 }`}
               >
-                <UsersRound className="h-4 w-4" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p
-                  className={`text-[11px] font-bold uppercase tracking-wide ${
-                    isCancelled ? "text-red-500" : "text-slate-400"
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                    isCancelled
+                      ? "bg-red-100 text-red-700"
+                      : "bg-emerald-50 text-emerald-700"
                   }`}
                 >
-                  Registered Participants
-                </p>
+                  <UsersRound className="h-4 w-4" />
+                </div>
 
-                <p
-                  className={`mt-1 text-sm font-semibold ${
-                    isCancelled ? "text-red-900" : "text-slate-800"
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-[11px] font-bold uppercase tracking-wide ${
+                      isCancelled ? "text-red-500" : "text-slate-400"
+                    }`}
+                  >
+                    Registered Participants
+                  </p>
+
+                  <p
+                    className={`mt-1 text-sm font-semibold ${
+                      isCancelled ? "text-red-900" : "text-slate-800"
+                    }`}
+                  >
+                    {registeredParticipants}{" "}
+                    {registeredParticipants === 1
+                      ? "participant"
+                      : "participants"}
+                  </p>
+                </div>
+
+                <div
+                  className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
+                    isCancelled ? "text-red-600" : "text-emerald-700"
                   }`}
                 >
-                  {registeredParticipants}{" "}
-                  {registeredParticipants === 1
-                    ? "participant"
-                    : "participants"}
-                </p>
-              </div>
+                  <span className="hidden sm:inline">View records</span>
 
-              <div
-                className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
-                  isCancelled ? "text-red-600" : "text-emerald-700"
-                }`}
-              >
-                <span className="hidden sm:inline">View records</span>
-
-                <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-              </div>
-            </Link>
+                  <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                </div>
+              </Link>
+            )}
           </div>
 
           {/* Right-side actions */}
@@ -662,6 +676,7 @@ export default function ReceivedEventCard({
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
+                {extraActions}
                 {item.event?.memo_url && (
                   <a
                     href={item.event.memo_url}

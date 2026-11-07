@@ -2,16 +2,13 @@
 
 import {
     ArrowRight,
-    Bell,
     CalendarDays,
-    CheckCircle2,
     ClipboardCheck,
     History,
     MapPin,
     QrCode,
     RefreshCw,
     TicketCheck,
-    UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -20,6 +17,8 @@ import {
     useMemo,
     useState,
 } from "react";
+
+import { useParticipantVerification } from "./components/ParticipantVerificationProvider";
 
 import { supabase } from "@/lib/supabase";
 
@@ -91,51 +90,6 @@ const ACTIVE_PASS_STATUSES = [
     "published",
     "upcoming",
     "ongoing",
-];
-
-const participantActions = [
-    {
-        title: "Available Events",
-        description:
-            "Browse events currently open for registration.",
-        href: "/dashboard/participant/events",
-        icon: CalendarDays,
-    },
-    {
-        title: "My Registrations",
-        description:
-            "View active, completed, and cancelled registrations.",
-        href: "/dashboard/participant/registrations",
-        icon: ClipboardCheck,
-    },
-    {
-        title: "Attendance Pass",
-        description:
-            "Open your QR code and manual attendance code.",
-        href: "/dashboard/participant/attendance-pass",
-        icon: QrCode,
-    },
-    {
-        title: "Attendance History",
-        description:
-            "Review your attendance results and check-in records.",
-        href: "/dashboard/participant/attendance-history",
-        icon: History,
-    },
-    {
-        title: "Notifications",
-        description:
-            "Review invitations, updates, and attendance notices.",
-        href: "/dashboard/participant/notifications",
-        icon: Bell,
-    },
-    {
-        title: "My Profile",
-        description:
-            "Update your name and participant category.",
-        href: "/dashboard/participant/profile",
-        icon: UserRound,
-    },
 ];
 
 const initialDashboardData: ParticipantDashboardData = {
@@ -260,6 +214,12 @@ async function getAuthenticatedUser() {
 }
 
 export default function ParticipantDashboardPage() {
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
+    useEffect(() => {
+        const timer = window.setInterval(() => setCurrentTime(Date.now()), 30000);
+        return () => window.clearInterval(timer);
+    }, []);
+
     const [
         dashboardData,
         setDashboardData,
@@ -1032,8 +992,7 @@ export default function ParticipantDashboardPage() {
      */
     const dashboardCounts =
         useMemo(() => {
-            const currentTime =
-                Date.now();
+
 
             const activePasses =
                 dashboardData.registrations.filter(
@@ -1088,558 +1047,75 @@ export default function ParticipantDashboardPage() {
                         .attendanceRecords
                         .length,
             };
-        }, [dashboardData]);
+        }, [dashboardData, currentTime]);
 
-    const recentRegistrations =
-        useMemo(
-            () =>
-                dashboardData.registrations.slice(
-                    0,
-                    3,
-                ),
-            [
-                dashboardData.registrations,
-            ],
-        );
 
-    const nextEvent =
-        dashboardData.nextEvent;
-
-    const nextEventRegistered =
-        Boolean(nextEvent?.registered);
-
+    const { status: verificationStatus } = useParticipantVerification();
+    const nextEvent = dashboardData.registrations
+        .filter((item) => ACTIVE_PASS_STATUSES.includes(normalizeStatus(item.event.status))
+            && getTimeValue(item.event.end_at) >= currentTime
+            && normalizeStatus(item.assignment.municipal_status) !== "cancelled")
+        .sort((a, b) => getTimeValue(a.event.start_at) - getTimeValue(b.event.start_at))[0];
+    const verified = verificationStatus === "verified";
+    const button = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition";
     return (
         <main className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl space-y-6">
-                {/* HEADER */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="mx-auto max-w-6xl space-y-6">
+                <header className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                Participant Portal
-                            </p>
-
-                            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
-                                Participant Dashboard
-                            </h1>
-
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                View events,
-                                registrations,
-                                attendance passes,
-                                and attendance records
-                                for{" "}
-                                <span className="font-semibold text-slate-900">
-                                    {dashboardData.municipality ||
-                                        "your municipality"}
-                                </span>
-                                .
-                            </p>
-
-                            <Link
-                                href="/dashboard/participant/events"
-                                className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                            >
-                                Browse Available Events
-
-                                <ArrowRight
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
-                            </Link>
+                            <p className="text-sm text-slate-300">{dashboardData.municipality || "PagTipon Participant Portal"}</p>
+                            <h1 className="mt-2 text-3xl font-bold">Home</h1>
+                            <p className="mt-3 text-sm leading-6 text-slate-300">Find an event, register, and show your attendance pass at the venue.</p>
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                void fetchDashboardData(
-                                    "refresh",
-                                )
-                            }
-                            disabled={
-                                refreshing
-                            }
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            <RefreshCw
-                                className={`size-4 ${refreshing
-                                        ? "animate-spin"
-                                        : ""
-                                    }`}
-                                aria-hidden="true"
-                            />
-
-                            {refreshing
-                                ? "Refreshing..."
-                                : "Refresh"}
+                        <button type="button" disabled={loading || refreshing} onClick={() => void fetchDashboardData("refresh")} className={button + " border border-slate-600 hover:bg-slate-800 disabled:opacity-50"}>
+                            <RefreshCw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} /> {refreshing ? "Refreshing…" : "Refresh"}
                         </button>
                     </div>
-                </section>
-
-                {/* ERROR */}
-                {errorMessage && (
-                    <div
-                        role="alert"
-                        className="rounded-xl border border-red-200 bg-red-50 p-4"
-                    >
-                        <p className="text-sm font-semibold text-red-800">
-                            Unable to load dashboard
-                        </p>
-
-                        <p className="mt-1 text-sm text-red-600">
-                            {errorMessage}
-                        </p>
-                    </div>
+                </header>
+                {errorMessage && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{errorMessage}</div>}
+                {verificationStatus === "unverified" && (
+                    <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                        <div><h2 className="font-semibold text-amber-950">Complete account verification</h2><p className="mt-1 text-sm text-amber-900">Submit your residency and category documents. Both need approval before you can register.</p></div>
+                        <Link href="/dashboard/participant/account?tab=verification" className={button + " bg-amber-900 text-white"}>View Verification <ArrowRight className="h-4 w-4" /></Link>
+                    </section>
                 )}
-
-                {/* SUMMARY */}
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <Link
-                        href="/dashboard/participant/events"
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Available Events
-                                </p>
-
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {loading
-                                        ? "—"
-                                        : dashboardCounts.available}
-                                </p>
-                            </div>
-
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                                <CalendarDays
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/dashboard/participant/registrations"
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Registrations
-                                </p>
-
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {loading
-                                        ? "—"
-                                        : dashboardCounts.registrations}
-                                </p>
-                            </div>
-
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-                                <TicketCheck
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/dashboard/participant/attendance-pass"
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Active Passes
-                                </p>
-
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {loading
-                                        ? "—"
-                                        : dashboardCounts.activePasses}
-                                </p>
-                            </div>
-
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
-                                <QrCode
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/dashboard/participant/attendance-history"
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Attendance
-                                </p>
-
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {loading
-                                        ? "—"
-                                        : `${dashboardCounts.presentAttendance}/${dashboardCounts.attendanceTotal}`}
-                                </p>
-
-                                <p className="mt-1 text-xs text-slate-400">
-                                    Present / Total
-                                </p>
-                            </div>
-
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-green-50 text-green-700">
-                                <CheckCircle2
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </Link>
-                </section>
-
-                {/* NEXT EVENT + RECENT REGISTRATIONS */}
-                <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-                    {/* NEXT EVENT */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-xl font-semibold text-slate-950">
-                                    Current / Next Event
-                                </h2>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                    Your current ongoing event or nearest upcoming event.
-                                </p>
-                            </div>
-
-                            <CalendarDays
-                                className="size-5 text-slate-400"
-                                aria-hidden="true"
-                            />
-                        </div>
-
-                        {loading ? (
-                            <div className="mt-5 rounded-xl bg-slate-50 p-8 text-center">
-                                <div className="mx-auto size-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-
-                                <p className="mt-3 text-sm text-slate-500">
-                                    Loading next event...
-                                </p>
-                            </div>
-                        ) : nextEvent ? (
-                            <div className="mt-5 rounded-2xl border border-slate-200 p-5">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-slate-950">
-                                            {
-                                                nextEvent
-                                                    .event
-                                                    .title
-                                            }
-                                        </h3>
-
-                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-                                            <span>
-                                                {
-                                                    nextEvent
-                                                        .assignment
-                                                        .municipality
-                                                }
-                                            </span>
-
-                                            <span className="inline-flex items-center gap-1.5">
-                                                <MapPin
-                                                    className="size-4"
-                                                    aria-hidden="true"
-                                                />
-
-                                                {nextEvent
-                                                    .venue
-                                                    ?.venue_name ||
-                                                    "Venue not assigned"}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2">
-                                        {nextEventRegistered && (
-                                            <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">
-                                                Registered
-                                            </span>
-                                        )}
-
-                                        <span
-                                            className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
-                                                nextEvent
-                                                    .event
-                                                    .status,
-                                            )}`}
-                                        >
-                                            {getEventStatusLabel(
-                                                nextEvent
-                                                    .event
-                                                    .status,
-                                            )}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <p className="mt-3 text-sm leading-6 text-slate-600">
-                                    {nextEvent.event
-                                        .description ||
-                                        "No event description provided."}
-                                </p>
-
-                                <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
-                                    <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                            Starts
-                                        </p>
-
-                                        <p className="mt-1 text-sm font-semibold text-slate-800">
-                                            {formatDateTime(
-                                                nextEvent
-                                                    .event
-                                                    .start_at,
-                                            )}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                            Ends
-                                        </p>
-
-                                        <p className="mt-1 text-sm font-semibold text-slate-800">
-                                            {formatDateTime(
-                                                nextEvent
-                                                    .event
-                                                    .end_at,
-                                            )}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {nextEvent.assignment
-                                    .local_instructions && (
-                                        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                Local Instructions
-                                            </p>
-
-                                            <p className="mt-1 text-sm leading-6 text-amber-900">
-                                                {
-                                                    nextEvent
-                                                        .assignment
-                                                        .local_instructions
-                                                }
-                                            </p>
-                                        </div>
-                                    )}
-
-                                <Link
-                                    href={
-                                        nextEventRegistered
-                                            ? "/dashboard/participant/attendance-pass"
-                                            : "/dashboard/participant/events"
-                                    }
-                                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                                >
-                                    {nextEventRegistered
-                                        ? "View Attendance Pass"
-                                        : "View Available Event"}
-
-                                    <ArrowRight
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
+                {loading ? <p role="status" className="py-12 text-center text-slate-600">Loading your events…</p> : (
+                    <>
+                        <div className="mobile-summary-grid grid gap-4 sm:grid-cols-3">
+                            {[{label: "Find Events", value: dashboardCounts.available, detail: "Open for registration", href: "events", icon: CalendarDays},
+                              {label: "My Events", value: dashboardCounts.activePasses, detail: "Upcoming and ongoing", href: "my-events", icon: ClipboardCheck},
+                              {label: "Attendance History", value: dashboardCounts.attendanceTotal, detail: "Review your records", href: "my-events?tab=history", icon: History}].map(({label, value, detail, href, icon: Icon}) => (
+                                <Link key={href} href={"/dashboard/participant/" + (href !== "events" && !verified ? "account?tab=verification" : href)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-violet-300">
+                                    <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-slate-800">{label}</h2><Icon className="h-5 w-5 text-violet-600" /></div>
+                                    <p className="mt-3 text-3xl font-bold text-slate-950">{value}</p><p className="mt-2 text-sm text-slate-500">{detail}</p>
                                 </Link>
-                            </div>
-                        ) : (
-                            <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                                <p className="font-semibold text-slate-800">
-                                    No current or upcoming event
-                                </p>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                    There are currently no
-                                    active registered or
-                                    available events.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* RECENT REGISTRATIONS */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <div>
-                            <h2 className="text-xl font-semibold text-slate-950">
-                                Recent Registrations
-                            </h2>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                                Your latest registered
-                                events.
-                            </p>
+                            ))}
                         </div>
+                        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                            <div className="flex items-center gap-3"><span className="rounded-xl bg-violet-50 p-3 text-violet-700"><TicketCheck className="h-6 w-6" /></span><h2 className="text-xl font-bold text-slate-950">My Next Event</h2></div>
+                            {nextEvent ? <div className="mt-6">
+                                <span className={"rounded-full px-3 py-1 text-xs font-semibold " + getEventStatusClasses(nextEvent.event.status)}>{getEventStatusLabel(nextEvent.event.status)}</span>
+                                <h3 className="mt-4 break-words text-2xl font-bold text-slate-950">{nextEvent.event.title}</h3>
+                                <div className="mt-5 grid gap-4 text-sm text-slate-700 sm:grid-cols-2">
+                                    <p className="flex items-start gap-2"><CalendarDays className="h-5 w-5 shrink-0 text-slate-400" />{formatDateTime(nextEvent.event.start_at)}</p>
+                                    <p className="flex items-start gap-2"><MapPin className="h-5 w-5 shrink-0 text-slate-400" />{nextEvent.venue?.venue_name || "Venue to be announced"}</p>
+                                </div>
+                                {nextEvent.assignment.local_instructions && <p className="mt-5 line-clamp-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{nextEvent.assignment.local_instructions}</p>}
+                                <div className="mt-6 flex flex-wrap gap-3">
+                                    {verified && <Link href={"/dashboard/participant/my-events?tab=pass&assignment=" + encodeURIComponent(nextEvent.assignment.id)} className={button + " bg-violet-600 text-white hover:bg-violet-700"}><QrCode className="h-5 w-5" />View QR Code</Link>}
+                                    <Link href="/dashboard/participant/my-events" className={button + " border border-slate-200 text-slate-700 hover:bg-slate-50"}>My Events</Link>
+                                </div>
+                                <p className="mt-4 text-sm text-slate-500">Show your QR code or manual code to Event Staff for time in and time out.</p>
+                            </div> : <div className="mt-6 rounded-xl bg-slate-50 p-6">
+                                <h3 className="font-semibold text-slate-900">Your next event starts here</h3>
+                                <p className="mt-2 text-sm text-slate-600">Browse events in your municipality and register for one you want to attend.</p>
+                                <Link href="/dashboard/participant/events" className={button + " mt-5 bg-violet-600 text-white hover:bg-violet-700"}>Find Events <ArrowRight className="h-4 w-4" /></Link>
+                            </div>}
+                        </section>
 
-                        {loading ? (
-                            <div className="mt-5 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
-                                Loading registrations...
-                            </div>
-                        ) : recentRegistrations.length >
-                            0 ? (
-                            <div className="mt-5 space-y-3">
-                                {recentRegistrations.map(
-                                    (item) => (
-                                        <div
-                                            key={
-                                                item.rsvp
-                                                    ?.id ||
-                                                item.assignment
-                                                    .id
-                                            }
-                                            className="rounded-xl border border-slate-200 p-4"
-                                        >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <p className="truncate font-semibold text-slate-900">
-                                                        {
-                                                            item
-                                                                .event
-                                                                .title
-                                                        }
-                                                    </p>
-
-                                                    <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                                                        <MapPin
-                                                            className="size-3.5 shrink-0"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <span className="truncate">
-                                                            {item
-                                                                .venue
-                                                                ?.venue_name ||
-                                                                "Venue not assigned"}
-                                                        </span>
-                                                    </div>
-
-                                                    <p className="mt-1 text-xs text-slate-500">
-                                                        Registered{" "}
-                                                        {formatDateTime(
-                                                            item
-                                                                .rsvp
-                                                                ?.registered_at ||
-                                                            null,
-                                                        )}
-                                                    </p>
-                                                </div>
-
-                                                <span
-                                                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClasses(
-                                                        item
-                                                            .event
-                                                            .status,
-                                                    )}`}
-                                                >
-                                                    {getEventStatusLabel(
-                                                        item
-                                                            .event
-                                                            .status,
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ),
-                                )}
-
-                                <Link
-                                    href="/dashboard/participant/registrations"
-                                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                                >
-                                    View All Registrations
-
-                                    <ArrowRight
-                                        className="size-4"
-                                        aria-hidden="true"
-                                    />
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-                                <p className="font-semibold text-slate-800">
-                                    No registrations
-                                </p>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                    Your registered events
-                                    will appear here.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </section>
-
-                {/* QUICK ACCESS */}
-                <section>
-                    <div>
-                        <h2 className="text-lg font-semibold text-slate-950">
-                            Quick Access
-                        </h2>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                            Select a participant service
-                            below.
-                        </p>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                        {participantActions.map(
-                            (item) => {
-                                const Icon =
-                                    item.icon;
-
-                                return (
-                                    <Link
-                                        key={
-                                            item.href
-                                        }
-                                        href={
-                                            item.href
-                                        }
-                                        className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-                                    >
-                                        <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-950 group-hover:text-white">
-                                            <Icon
-                                                className="size-5"
-                                                aria-hidden="true"
-                                            />
-                                        </div>
-
-                                        <h3 className="mt-4 font-semibold text-slate-950">
-                                            {
-                                                item.title
-                                            }
-                                        </h3>
-
-                                        <p className="mt-2 text-sm leading-6 text-slate-500">
-                                            {
-                                                item.description
-                                            }
-                                        </p>
-                                    </Link>
-                                );
-                            },
-                        )}
-                    </div>
-                </section>
+                    </>
+                )}
             </div>
         </main>
     );

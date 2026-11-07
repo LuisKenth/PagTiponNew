@@ -22,8 +22,7 @@ export default function PendingAdminsList({
         </h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Review municipal administrator applications before granting
-          access.
+          Review municipal administrator applications before granting access.
         </p>
       </div>
 
@@ -94,7 +93,7 @@ export default function PendingAdminsList({
                       disabled={isProcessing}
                       className="flex-1 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 lg:flex-none"
                     >
-                      {isProcessing ? "Processing..." : "Reject"}
+                      {isProcessing ? "Processing..." : "Deactivate"}
                     </button>
 
                     <button

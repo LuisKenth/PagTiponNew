@@ -90,23 +90,23 @@ export default function QRCodeBox({
     }
 
     return (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm sm:p-5">
             <div>
                 <p className="text-sm font-semibold text-slate-900">
                     Your Attendance QR Code
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Present this QR code to the event
-                    staff during check-in.
+                    Show this code to Event Staff for
+                    Time-in and Time-out.
                 </p>
             </div>
 
-            <div className="mx-auto mt-4 flex w-fit items-center justify-center rounded-xl border border-slate-200 bg-white p-3">
+            <div className="mx-auto mt-3 flex w-fit max-w-full items-center justify-center rounded-xl border border-slate-200 bg-white p-2 sm:mt-4 sm:p-3">
                 <img
                     src={qrUrl}
                     alt="Participant attendance QR code"
-                    className="size-44"
+                    className="block aspect-square h-auto w-44 max-w-full"
                 />
             </div>
 

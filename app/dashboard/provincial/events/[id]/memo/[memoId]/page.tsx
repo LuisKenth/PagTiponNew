@@ -1,4 +1,8 @@
 "use client";
+import ProvincialPageHeader, {
+  provincialHeaderButton,
+  provincialHeaderPrimaryButton,
+} from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -75,7 +79,7 @@ export default function ProvincialMemoViewerPage() {
             file_size,
             file_type,
             created_at
-          `
+          `,
         )
         .eq("id", memoId)
         .eq("event_id", eventId)
@@ -101,9 +105,7 @@ export default function ProvincialMemoViewerPage() {
   if (loading) {
     return (
       <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">
-          Loading official memo...
-        </p>
+        <p className="text-sm text-slate-500">Loading official memo...</p>
       </div>
     );
   }
@@ -121,18 +123,14 @@ export default function ProvincialMemoViewerPage() {
         </button>
 
         <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
-          <FileText
-            size={32}
-            className="mx-auto text-slate-300"
-          />
+          <FileText size={32} className="mx-auto text-slate-300" />
 
           <h1 className="mt-3 text-lg font-semibold text-slate-900">
             Memo not found
           </h1>
 
           <p className="mt-1 text-sm text-slate-500">
-            The selected official memo does not exist or cannot be
-            accessed.
+            The selected official memo does not exist or cannot be accessed.
           </p>
         </div>
       </div>
@@ -143,76 +141,50 @@ export default function ProvincialMemoViewerPage() {
 
   const isPdf = extension === "pdf";
 
-  const isImage = [
-    "png",
-    "jpg",
-    "jpeg",
-    "webp",
-  ].includes(extension);
+  const isImage = ["png", "jpg", "jpeg", "webp"].includes(extension);
 
-  const isDocument = [
-    "doc",
-    "docx",
-  ].includes(extension);
+  const isDocument = ["doc", "docx"].includes(extension);
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <button
-            type="button"
-            onClick={goBackToEvent}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-            aria-label="Back to event"
-          >
-            <ArrowLeft size={18} />
-          </button>
-
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Official Memo
-            </p>
-
-            <h1 className="mt-1 truncate text-xl font-bold text-slate-900">
-              {memo.file_name}
-            </h1>
-
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span>{extension.toUpperCase()}</span>
-
-              <span>•</span>
-
-              <span>
-                {formatFileSize(memo.file_size)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <a
-          href={memo.file_url}
-          download={memo.file_name}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-        >
-          <Download size={16} />
-          Download
-        </a>
-      </div>
-
+      <ProvincialPageHeader
+        icon={<FileText className="h-5 w-5" aria-hidden="true" />}
+        eyebrow="Official Memo"
+        title={memo.file_name}
+        description={
+          <>
+            {extension.toUpperCase()} · {formatFileSize(memo.file_size)}
+          </>
+        }
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={goBackToEvent}
+              className={provincialHeaderButton}
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to Event
+            </button>
+            <a
+              href={memo.file_url}
+              download={memo.file_name}
+              className={provincialHeaderPrimaryButton}
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Download
+            </a>
+          </>
+        }
+      />
       {/* PDF Viewer */}
       {isPdf && (
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">
-              <FileText
-                size={18}
-                className="text-slate-500"
-              />
+              <FileText size={18} className="text-slate-500" />
 
-              <h2 className="font-semibold text-slate-900">
-                Document Preview
-              </h2>
+              <h2 className="font-semibold text-slate-900">Document Preview</h2>
             </div>
           </div>
 
@@ -228,14 +200,9 @@ export default function ProvincialMemoViewerPage() {
       {isImage && (
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-4">
-            <ImageIcon
-              size={18}
-              className="text-slate-500"
-            />
+            <ImageIcon size={18} className="text-slate-500" />
 
-            <h2 className="font-semibold text-slate-900">
-              Image Preview
-            </h2>
+            <h2 className="font-semibold text-slate-900">Image Preview</h2>
           </div>
 
           <div className="flex min-h-[400px] items-center justify-center rounded-xl bg-slate-50 p-4">
@@ -260,9 +227,9 @@ export default function ProvincialMemoViewerPage() {
           </h2>
 
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
-            This document format cannot be previewed directly inside
-            the browser. Download the file to open it using Microsoft
-            Word or another compatible application.
+            This document format cannot be previewed directly inside the
+            browser. Download the file to open it using Microsoft Word or
+            another compatible application.
           </p>
 
           <a
@@ -279,10 +246,7 @@ export default function ProvincialMemoViewerPage() {
       {/* Unknown format */}
       {!isPdf && !isImage && !isDocument && (
         <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
-          <FileText
-            size={30}
-            className="mx-auto text-slate-300"
-          />
+          <FileText size={30} className="mx-auto text-slate-300" />
 
           <h2 className="mt-3 text-lg font-semibold text-slate-900">
             Preview unavailable

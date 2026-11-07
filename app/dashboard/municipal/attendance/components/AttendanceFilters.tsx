@@ -146,7 +146,7 @@ export default function AttendanceFilters({
                 Absent
               </option>
               <option value="pending">
-                Pending
+                Not Timed In Yet
               </option>
             </select>
           </div>
@@ -156,7 +156,7 @@ export default function AttendanceFilters({
               htmlFor="attendance-method"
               className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
             >
-              Check-in method
+              Time-in method
             </label>
 
             <select

@@ -68,7 +68,7 @@ export default function NotificationSummaryCards({
     ];
 
     return (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <section className="mobile-summary-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {cards.map((card) => {
                 const Icon = card.icon;
 

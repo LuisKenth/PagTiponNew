@@ -1,8 +1,11 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 import type { EventWithMunicipalities } from "../types";
 
 type EventActionsProps = {
+  extraActions?: (event: EventWithMunicipalities) => ReactNode;
+  onView?: (event: EventWithMunicipalities) => void;
   event: EventWithMunicipalities;
   automaticStatus: string;
 
@@ -16,6 +19,8 @@ type EventActionsProps = {
 };
 
 export default function EventActions({
+  extraActions,
+  onView,
   event,
   automaticStatus,
   deletingId,
@@ -25,8 +30,20 @@ export default function EventActions({
   onPublish,
   onCancel,
 }: EventActionsProps) {
+  if (onView)
+    return (
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => onView(event)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          View
+        </button>
+        {extraActions?.(event)}
+      </div>
+    );
   const isDraft = automaticStatus === "draft";
-  const isUpcoming = automaticStatus === "upcoming";
 
   /*
    * EDIT RULE
@@ -37,9 +54,7 @@ export default function EventActions({
    * Ongoing, Completed, Cancelled
    * → locked
    */
-  const canEdit =
-    automaticStatus === "draft" ||
-    automaticStatus === "upcoming";
+  const canEdit = automaticStatus === "draft" || automaticStatus === "upcoming";
 
   /*
    * CANCEL RULE
@@ -79,9 +94,7 @@ export default function EventActions({
           disabled={publishingId === event.id}
           className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {publishingId === event.id
-            ? "Publishing..."
-            : "Publish"}
+          {publishingId === event.id ? "Publishing..." : "Publish"}
         </button>
       )}
 
@@ -93,9 +106,7 @@ export default function EventActions({
           disabled={cancellingId === event.id}
           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {cancellingId === event.id
-            ? "Cancelling..."
-            : "Cancel"}
+          {cancellingId === event.id ? "Cancelling..." : "Cancel"}
         </button>
       )}
 
@@ -107,9 +118,7 @@ export default function EventActions({
           disabled={deletingId === event.id}
           className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {deletingId === event.id
-            ? "Deleting..."
-            : "Delete"}
+          {deletingId === event.id ? "Deleting..." : "Delete"}
         </button>
       )}
     </div>

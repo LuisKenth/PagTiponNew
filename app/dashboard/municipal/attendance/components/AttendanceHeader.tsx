@@ -89,7 +89,7 @@ export default function AttendanceHeader({
         </div>
       </div>
 
-      <div className="grid border-t border-slate-200 bg-slate-50 sm:grid-cols-2">
+      <div className="mobile-summary-grid grid border-t border-slate-200 bg-slate-50 sm:grid-cols-2">
         <div className="border-b border-slate-200 px-5 py-3 sm:border-b-0 sm:border-r">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
             Total Registered Participants

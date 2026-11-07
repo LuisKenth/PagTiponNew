@@ -67,7 +67,7 @@ export default function AttendanceOverview({
         <div className="mt-5 space-y-4">
           <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="mobile-summary-grid grid grid-cols-2 gap-3">
             <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
             <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
           </div>
@@ -115,7 +115,7 @@ export default function AttendanceOverview({
           </div>
 
           {/* MAIN NUMBERS */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mobile-summary-grid mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-blue-50 p-4">
               <p className="text-xs font-medium text-blue-700">
                 Registered

@@ -30,7 +30,7 @@ export default function EventAudienceSelector({
   const includesOthers = selectedCategories.includes("others");
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-4">
         <h2 className="text-base font-semibold text-slate-900">
           Participant audience
@@ -41,14 +41,16 @@ export default function EventAudienceSelector({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
+        <label
+          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${audienceType === "all" ? "border-indigo-300 bg-indigo-50/60" : "border-slate-200 hover:bg-slate-50"}`}
+        >
           <input
             type="radio"
             name="event-audience"
             value="all"
             checked={audienceType === "all"}
             onChange={() => onAudienceTypeChange("all")}
-            className="mt-1"
+            className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
           />
           <span>
             <span className="block font-medium text-slate-900">
@@ -60,21 +62,24 @@ export default function EventAudienceSelector({
           </span>
         </label>
 
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
+        <label
+          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${audienceType === "categories" ? "border-indigo-300 bg-indigo-50/60" : "border-slate-200 hover:bg-slate-50"}`}
+        >
           <input
             type="radio"
             name="event-audience"
             value="categories"
             checked={audienceType === "categories"}
             onChange={() => onAudienceTypeChange("categories")}
-            className="mt-1"
+            className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
           />
           <span>
             <span className="block font-medium text-slate-900">
               Specific participant categories
             </span>
             <span className="mt-1 block text-sm text-slate-600">
-              Only participants in the selected categories can view and register.
+              Only participants in the selected categories can view and
+              register.
             </span>
           </span>
         </label>
@@ -96,7 +101,7 @@ export default function EventAudienceSelector({
                   type="checkbox"
                   checked={selectedCategories.includes(category.value)}
                   onChange={() => onToggleCategory(category.value)}
-                  className="rounded border-slate-300"
+                  className="h-4 w-4 rounded border-slate-300 accent-indigo-600"
                 />
                 {category.label}
               </label>

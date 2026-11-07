@@ -1,11 +1,9 @@
-import type {
-  EventStatusFilter,
-  EventWithMunicipalities,
-} from "../types";
+import type { EventStatusFilter, EventWithMunicipalities } from "../types";
 
 import { getAutomaticEventStatus } from "../utils";
 
 type EventsStatusTabsProps = {
+  hideDraft?: boolean;
   events: EventWithMunicipalities[];
   currentTime: number;
   activeStatus: EventStatusFilter;
@@ -43,6 +41,7 @@ const tabs: {
 ];
 
 export default function EventsStatusTabs({
+  hideDraft = false,
   events,
   currentTime,
   activeStatus,
@@ -54,52 +53,47 @@ export default function EventsStatusTabs({
     }
 
     return events.filter(
-      (event) =>
-        getAutomaticEventStatus(
-          event,
-          currentTime
-        ) === status
+      (event) => getAutomaticEventStatus(event, currentTime) === status,
     ).length;
   };
 
   return (
     <div className="border-b border-slate-100 px-6">
       <div className="flex gap-1 overflow-x-auto">
-        {tabs.map((tab) => {
-          const isActive =
-            activeStatus === tab.value;
+        {tabs
+          .filter((tab) => !hideDraft || tab.value !== "draft")
+          .map((tab) => {
+            const isActive = activeStatus === tab.value;
 
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() =>
-                onStatusChange(tab.value)
-              }
-              className={`relative flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium transition ${
-                isActive
-                  ? "text-slate-900"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <span>{tab.label}</span>
-
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => onStatusChange(tab.value)}
+                className={`relative flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium transition ${
                   isActive
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600"
+                    ? "text-slate-900"
+                    : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                {getCount(tab.value)}
-              </span>
+                <span>{tab.label}</span>
 
-              {isActive && (
-                <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-slate-900" />
-              )}
-            </button>
-          );
-        })}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    isActive
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {getCount(tab.value)}
+                </span>
+
+                {isActive && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-slate-900" />
+                )}
+              </button>
+            );
+          })}
       </div>
     </div>
   );

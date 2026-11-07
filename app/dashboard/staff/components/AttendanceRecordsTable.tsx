@@ -78,7 +78,7 @@ export default function AttendanceRecordsTable({
             </p>
 
             <p className="mt-0.5 text-xs text-slate-500">
-              Participant Time In and Time Out records for the currently
+              Participant Time-in and Time-out records for the currently
               selected event.
             </p>
           </div>
@@ -116,11 +116,11 @@ export default function AttendanceRecordsTable({
                   </th>
 
                   <th scope="col" className="px-4 py-4">
-                    Time In
+                    Time-in
                   </th>
 
                   <th scope="col" className="px-4 py-4">
-                    Time Out
+                    Time-out
                   </th>
                 </tr>
               </thead>
@@ -186,7 +186,7 @@ export default function AttendanceRecordsTable({
                     <MethodBadge method={record.method} />
                   </RecordDetail>
 
-                  <RecordDetail label="Time In">
+                  <RecordDetail label="Time-in">
                     <AttendanceTime
                       value={record.checked_in_at}
                       type="check_in"
@@ -194,7 +194,7 @@ export default function AttendanceRecordsTable({
                     />
                   </RecordDetail>
 
-                  <RecordDetail label="Time Out">
+                  <RecordDetail label="Time-out">
                     <AttendanceTime
                       value={record.checked_out_at}
                       type="check_out"
@@ -316,7 +316,7 @@ function EmptyState() {
       </p>
 
       <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">
-        Successful participant Time In and Time Out records for the selected
+        Successful participant Time-in and Time-out records for the selected
         event will appear here.
       </p>
     </div>
@@ -521,7 +521,7 @@ function AttendanceTime({
   if (!value) {
     return (
       <span className="text-xs font-medium text-slate-400">
-        {isCheckIn ? "No Time In" : "No Time Out"}
+        {isCheckIn ? "No Time-in" : "No Time-out"}
       </span>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import CreateMunicipalAdmin from "./components/CreateMunicipalAdmin";
 
 import MunicipalAdminsList from "./components/MunicipalAdminsList";
 import MunicipalitiesHeader from "./components/MunicipalitiesHeader";
@@ -16,10 +17,10 @@ import useMunicipalityFilters from "./hooks/useMunicipalityFilters";
 import type { TabType } from "./types/municipality";
 
 export default function ProvincialMunicipalitiesPage() {
-  const [activeTab, setActiveTab] =
-    useState<TabType>("municipalities");
+  const [activeTab, setActiveTab] = useState<TabType>("municipalities");
 
   const {
+    admins,
     loading,
     processingId,
     approvedAdmins,
@@ -28,6 +29,7 @@ export default function ProvincialMunicipalitiesPage() {
     approvedMunicipalities,
     pendingMunicipalities,
     unassignedMunicipalities,
+    refreshMunicipalAdmins,
     handleApprove,
     handleReject,
   } = useMunicipalities();
@@ -45,6 +47,11 @@ export default function ProvincialMunicipalitiesPage() {
   return (
     <div className="space-y-6">
       <MunicipalitiesHeader />
+      <CreateMunicipalAdmin
+        onCreated={refreshMunicipalAdmins}
+        approvedAdmins={approvedAdmins}
+        loadingSlots={loading}
+      />
 
       <MunicipalitiesSummary
         approvedCount={approvedMunicipalities.length}
@@ -56,7 +63,7 @@ export default function ProvincialMunicipalitiesPage() {
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <MunicipalitiesTabs
           activeTab={activeTab}
-          approvedCount={approvedAdmins.length}
+          approvedCount={admins.length}
           pendingCount={pendingAdmins.length}
           totalMunicipalities={MUNICIPALITIES.length}
           onTabChange={setActiveTab}
@@ -82,13 +89,14 @@ export default function ProvincialMunicipalitiesPage() {
                 municipalities={filteredMunicipalities}
                 approvedCount={approvedMunicipalities.length}
                 pendingCount={pendingMunicipalities.length}
-                unassignedCount={
-                  unassignedMunicipalities.length
-                }
+                unassignedCount={unassignedMunicipalities.length}
               />
             </>
           ) : activeTab === "admins" ? (
-            <MunicipalAdminsList admins={approvedAdmins} />
+            <MunicipalAdminsList
+              admins={admins}
+              onChanged={refreshMunicipalAdmins}
+            />
           ) : (
             <PendingAdminsList
               admins={pendingAdmins}

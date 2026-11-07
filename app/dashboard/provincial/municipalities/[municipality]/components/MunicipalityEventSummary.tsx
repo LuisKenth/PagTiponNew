@@ -108,7 +108,7 @@ export default function MunicipalityEventSummary({
     ];
 
     return (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mobile-summary-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {cards.map((card) => {
                 const Icon = card.icon;
 

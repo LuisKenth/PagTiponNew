@@ -1,8 +1,5 @@
 export type VerificationStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | null;
+  "pending" | "approved" | "rejected" | "inactive" | null;
 
 export type MunicipalAdmin = {
   id: string;
@@ -15,14 +12,9 @@ export type MunicipalAdmin = {
 
 export type TabType = "municipalities" | "admins" | "pending";
 
-export type MunicipalityStatus =
-  | "approved"
-  | "pending"
-  | "unassigned";
+export type MunicipalityStatus = "approved" | "pending" | "unassigned";
 
-export type MunicipalityFilter =
-  | "all"
-  | MunicipalityStatus;
+export type MunicipalityFilter = "all" | MunicipalityStatus;
 
 export type MunicipalityOverviewItem = {
   name: string;

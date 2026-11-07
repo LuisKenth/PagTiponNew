@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { supabase } from "@/lib/supabase";
+import { updateAccountPassword } from "@/lib/accountAuth";
 
 type PasswordChangeCardProps = {
   email: string;
@@ -82,8 +83,8 @@ export default function PasswordChangeCard({
     useMemo<PasswordRequirement[]>(
       () => [
         {
-          label: "At least 8 characters",
-          met: newPassword.length >= 8,
+          label: "8–16 characters",
+          met: newPassword.length >= 8 && newPassword.length <= 16,
         },
         {
           label:
@@ -262,7 +263,7 @@ export default function PasswordChangeCard({
        * Update password.
        */
       const { error: updateError } =
-        await supabase.auth.updateUser({
+        await updateAccountPassword({
           password: newPassword,
         });
 

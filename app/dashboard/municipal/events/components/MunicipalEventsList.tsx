@@ -1,3 +1,4 @@
+import MunicipalEventTable from "../../components/MunicipalEventTable";
 import { FilterX, Search } from "lucide-react";
 
 import type {
@@ -37,7 +38,7 @@ export default function MunicipalEventsList({
       <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <h2 className="text-lg font-bold text-slate-900">
-            Municipal Event Assignments
+            Provincial Event Assignments
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
@@ -88,17 +89,19 @@ export default function MunicipalEventsList({
             )}
           </div>
         ) : (
-          <div className="space-y-4">
-            {events.map((item) => (
+          <MunicipalEventTable
+            items={events}
+            renderDetails={(item, close) => (
               <ReceivedEventCard
-                key={item.id}
                 item={item}
                 venues={venues}
-                onPrepare={onPrepare}
-                compact
+                onPrepare={(item) => {
+                  close();
+                  onPrepare(item);
+                }}
               />
-            ))}
-          </div>
+            )}
+          />
         )}
       </div>
     </>

@@ -27,7 +27,7 @@ export default function StaffAttendanceRecordsPage() {
 
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
           Review participant attendance status,
-          attendance method, Time In, and Time Out
+          attendance method, Time-in, and Time-out
           records for the selected event.
         </p>
       </header>
@@ -63,13 +63,13 @@ export default function StaffAttendanceRecordsPage() {
         dashboard.selectedAssignment && (
           <section
             aria-label="Attendance record summary"
-            className="grid gap-4 sm:grid-cols-3"
+            className="mobile-summary-grid grid gap-4 sm:grid-cols-3"
           >
             <SummaryCard
               icon={UserCheck}
               label="Present"
               value={dashboard.totalPresent}
-              description="Participants with a successful Time In."
+              description="Successful Time-in, including late arrivals."
               className="border-emerald-200 bg-emerald-50"
               iconClassName="bg-emerald-100 text-emerald-700"
               valueClassName="text-emerald-950"
@@ -79,7 +79,7 @@ export default function StaffAttendanceRecordsPage() {
               icon={LogIn}
               label="Currently Inside"
               value={dashboard.totalInside}
-              description="Checked in but no Time Out recorded yet."
+              description="Completed Time-in but no Time-out recorded yet."
               className="border-amber-200 bg-amber-50"
               iconClassName="bg-amber-100 text-amber-700"
               valueClassName="text-amber-950"
@@ -87,9 +87,9 @@ export default function StaffAttendanceRecordsPage() {
 
             <SummaryCard
               icon={LogOut}
-              label="Checked Out"
+              label="Time-out"
               value={dashboard.totalCheckedOut}
-              description="Participants with both Time In and Time Out."
+              description="Participants with both Time-in and Time-out."
               className="border-blue-200 bg-blue-50"
               iconClassName="bg-blue-100 text-blue-700"
               valueClassName="text-blue-950"

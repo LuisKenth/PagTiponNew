@@ -1,124 +1,97 @@
+"use client";
+import { useState } from "react";
 import type { MunicipalAdmin } from "../types/municipality";
 import { formatDate } from "../utils/municipalityUtils";
-
-type MunicipalAdminsListProps = {
-  admins: MunicipalAdmin[];
-};
+import MunicipalAdminActions, {
+  municipalAdminStatus,
+} from "./MunicipalAdminActions";
 
 export default function MunicipalAdminsList({
   admins,
-}: MunicipalAdminsListProps) {
+  onChanged,
+}: {
+  admins: MunicipalAdmin[];
+  onChanged: () => Promise<void>;
+}) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const query = search.trim().toLowerCase();
+  const matches = admins.filter(
+    (a) =>
+      (status === "all" || a.verification_status === status) &&
+      [a.full_name, a.email, a.municipality].some((v) =>
+        v?.toLowerCase().includes(query),
+      ),
+  );
   return (
-    <>
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold text-slate-900">
-          Municipal Administrators
-        </h2>
-
-        <p className="mt-1 text-sm text-slate-500">
-          Approved municipal administrator accounts.
-        </p>
+    <div>
+      <h2 className="text-lg font-semibold text-slate-900">
+        Municipal Administrators
+      </h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Manage active and inactive accounts. Only active admins use the 2 slots
+        per municipality. Deactivate an account before deleting it.
+      </p>
+      <div className="my-5 flex flex-col gap-3 sm:flex-row">
+        <input
+          aria-label="Search municipal admins"
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name, email, or municipality…"
+          className="min-w-0 flex-1 rounded-xl border border-slate-300 p-3 text-sm"
+        />
+        <select
+          aria-label="Filter admin status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="rounded-xl border border-slate-300 bg-white p-3 text-sm"
+        >
+          <option value="all">All statuses</option>
+          <option value="approved">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="pending">Pending</option>
+          <option value="rejected">Rejected</option>
+        </select>
       </div>
-
-      {admins.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center">
-          <p className="font-medium text-slate-900">
-            No approved municipal administrators
-          </p>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Approved accounts will appear here.
-          </p>
-        </div>
+      <p className="mb-4 text-sm text-slate-500">
+        Showing {matches.length} of {admins.length} administrators
+      </p>
+      {matches.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+          No matching administrators.
+        </p>
       ) : (
-        <>
-          <div className="space-y-3 md:hidden">
-            {admins.map((admin) => (
-              <div
-                key={admin.id}
-                className="rounded-xl border border-slate-200 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">
-                      {admin.full_name || "Unnamed Admin"}
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      {admin.municipality || "Not assigned"}
-                    </p>
-                  </div>
-
-                  <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
-                    Approved
-                  </span>
-                </div>
-
-                <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm">
-                  <p className="break-all text-slate-600">
-                    <span className="font-medium text-slate-800">
-                      Email:
-                    </span>{" "}
-                    {admin.email || "No email"}
-                  </p>
-
-                  <p className="text-slate-600">
-                    <span className="font-medium text-slate-800">
-                      Registered:
-                    </span>{" "}
-                    {formatDate(admin.created_at)}
-                  </p>
-                </div>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          {matches.map((admin) => (
+            <article
+              key={admin.id}
+              className="min-w-0 rounded-xl border border-slate-200 p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <h3 className="break-words font-semibold text-slate-900">
+                  {admin.full_name || "Unnamed Admin"}
+                </h3>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${admin.verification_status === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                >
+                  {municipalAdminStatus(admin.verification_status)}
+                </span>
               </div>
-            ))}
-          </div>
-
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase text-slate-500">
-                  <th className="py-3 pr-4">Administrator</th>
-                  <th className="py-3 pr-4">Municipality</th>
-                  <th className="py-3 pr-4">Email</th>
-                  <th className="py-3 pr-4">Status</th>
-                  <th className="py-3">Registered</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {admins.map((admin) => (
-                  <tr
-                    key={admin.id}
-                    className="border-b border-slate-100 last:border-b-0"
-                  >
-                    <td className="py-4 pr-4 font-semibold text-slate-900">
-                      {admin.full_name || "Unnamed Admin"}
-                    </td>
-
-                    <td className="py-4 pr-4 text-slate-600">
-                      {admin.municipality || "Not assigned"}
-                    </td>
-
-                    <td className="py-4 pr-4 text-slate-600">
-                      {admin.email || "No email"}
-                    </td>
-
-                    <td className="py-4 pr-4">
-                      <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
-                        Approved
-                      </span>
-                    </td>
-
-                    <td className="py-4 text-slate-500">
-                      {formatDate(admin.created_at)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+              <p className="mt-2 text-sm text-slate-600">
+                {admin.municipality || "Not assigned"}
+              </p>
+              <p className="mt-1 break-all text-sm text-slate-600">
+                {admin.email || "No email"}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Created {formatDate(admin.created_at)}
+              </p>
+              <MunicipalAdminActions admin={admin} onChanged={onChanged} />
+            </article>
+          ))}
+        </div>
       )}
-    </>
+    </div>
   );
 }

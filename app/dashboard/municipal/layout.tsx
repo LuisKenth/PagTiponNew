@@ -1,205 +1,22 @@
 "use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
-import { supabase } from "@/lib/supabase";
-import {
-  getDashboardPath,
-  type UserRole,
-} from "@/lib/routes";
-
+import type { ReactNode } from "react";
+import { useDashboardAccess } from "@/app/components/useDashboardAccess";
+import AccountAccessNotice from "@/app/components/AccountAccessNotice";
 import MunicipalSidebar from "./components/MunicipalSidebar";
 
-type VerificationStatus =
-  | "pending"
-  | "approved"
-  | "rejected";
-
-type Profile = {
-  role: UserRole;
-  verification_status: VerificationStatus;
-};
-
-export default function MunicipalDashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const router = useRouter();
-
-  const [checkingAccess, setCheckingAccess] =
-    useState(true);
-
-  const [allowed, setAllowed] =
-    useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function checkAccess() {
-      try {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-          if (mounted) {
-            setAllowed(false);
-          }
-
-          router.replace("/login");
-          return;
-        }
-
-        const {
-          data: profile,
-          error: profileError,
-        } = await supabase
-          .from("profiles")
-          .select(
-            "role, verification_status",
-          )
-          .eq("id", user.id)
-          .maybeSingle<Profile>();
-
-        if (profileError || !profile) {
-          console.error(
-            "Municipal access check error:",
-            profileError?.message,
-          );
-
-          await supabase.auth.signOut();
-
-          if (mounted) {
-            setAllowed(false);
-          }
-
-          router.replace("/login");
-          return;
-        }
-
-        if (
-          profile.role !== "municipal_admin"
-        ) {
-          if (mounted) {
-            setAllowed(false);
-          }
-
-          router.replace(
-            getDashboardPath(profile.role),
-          );
-
-          return;
-        }
-
-        if (
-          profile.verification_status ===
-          "pending"
-        ) {
-          await supabase.auth.signOut();
-
-          alert(
-            "Your municipal admin account is still pending provincial approval.",
-          );
-
-          if (mounted) {
-            setAllowed(false);
-          }
-
-          router.replace("/login");
-          return;
-        }
-
-        if (
-          profile.verification_status ===
-          "rejected"
-        ) {
-          await supabase.auth.signOut();
-
-          alert(
-            "Your municipal admin application has been rejected.",
-          );
-
-          if (mounted) {
-            setAllowed(false);
-          }
-
-          router.replace("/login");
-          return;
-        }
-
-        if (
-          profile.verification_status !==
-          "approved"
-        ) {
-          await supabase.auth.signOut();
-
-          if (mounted) {
-            setAllowed(false);
-          }
-
-          router.replace("/login");
-          return;
-        }
-
-        if (mounted) {
-          setAllowed(true);
-        }
-      } catch (error) {
-        console.error(
-          "Municipal route protection error:",
-          error,
-        );
-
-        await supabase.auth.signOut();
-
-        if (mounted) {
-          setAllowed(false);
-        }
-
-        router.replace("/login");
-      } finally {
-        if (mounted) {
-          setCheckingAccess(false);
-        }
-      }
-    }
-
-    void checkAccess();
-
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
-
-  if (checkingAccess) {
+export default function Layout({ children }: { children: ReactNode }) {
+  const gate = useDashboardAccess("municipal_admin");
+  if (gate.status !== "allowed")
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="flex w-full max-w-sm flex-col items-center rounded-2xl border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950" />
-
-          <h1 className="mt-5 text-base font-bold text-slate-900">
-            PagTipon Municipal Portal
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Checking your account access...
-          </p>
-        </div>
-      </div>
+      <AccountAccessNotice
+        status={gate.status}
+        message={gate.message}
+        onRetry={gate.retry}
+      />
     );
-  }
-
-  if (!allowed) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
       <MunicipalSidebar />
-
       <div className="min-w-0">
         <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 xl:p-10">
           {children}

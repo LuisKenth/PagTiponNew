@@ -190,7 +190,7 @@ export default function EventParticipantsPage() {
   return (
     <div className="space-y-6">
       <Link
-        href="/dashboard/municipal/registrations"
+        href="/dashboard/municipal/registrations/events"
         className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950"
       >
         <ArrowLeft className="h-4 w-4" />

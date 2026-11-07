@@ -255,7 +255,7 @@ export default function MunicipalPreparationsPage() {
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                   Manage municipal event preparation, assign local venues,
                   provide participant instructions, and control registration
-                  before provincial events begin.
+                  before provincial and municipal events begin.
                 </p>
 
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">

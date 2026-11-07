@@ -170,8 +170,7 @@ Deno.serve(
         await userClient.auth.getUser();
 
       if (
-        userError ||
-        !user
+        userError || !user || user.app_metadata?.must_change_password === true
       ) {
         return jsonResponse(
           {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
 import { MUNICIPALITIES } from "@/lib/municipalities";
@@ -44,7 +44,26 @@ const EMAIL_TRACKING_STORAGE_KEY = "pagtipon_pending_event_email_id";
 const EMAIL_TRACKING_EVENT = "pagtipon:event-email-tracking";
 
 export default function CreateProvincialEventPage() {
+  return (
+    <Suspense fallback={<p role="status">Loading event form…</p>}>
+      <CreateEventRoute />
+    </Suspense>
+  );
+}
+function CreateEventRoute() {
+  const requested = useSearchParams().get("id");
+  return <CreateEventForm key={requested ?? ""} requested={requested} />;
+}
+function CreateEventForm({ requested }: { requested: string | null }) {
   const router = useRouter();
+  const [draftId, setDraftId] = useState<string | null>(requested);
+  const [draftLoading, setDraftLoading] = useState(Boolean(requested));
+  const [draftError, setDraftError] = useState("");
+  const [savedMemos, setSavedMemos] = useState<
+    { file_name: string; file_url: string }[]
+  >([]);
+  const revision = useRef<string | null>(null);
+  const saving = useRef(false);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -58,6 +77,78 @@ export default function CreateProvincialEventPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [audienceCategoryOther, setAudienceCategoryOther] = useState("");
   const [submitAction, setSubmitAction] = useState<SubmitAction>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!requested) return;
+    void (async () => {
+      try {
+        const [eventResult, assignments, memos] = await Promise.all([
+          supabase
+            .from("events")
+            .select("*")
+            .eq("id", requested)
+            .eq("event_origin", "provincial")
+            .eq("status", "draft")
+            .single(),
+          supabase
+            .from("event_municipalities")
+            .select("municipality")
+            .eq("event_id", requested),
+          supabase
+            .from("event_memos")
+            .select("file_name,file_url")
+            .eq("event_id", requested),
+        ]);
+        if (eventResult.error || assignments.error || memos.error)
+          throw new Error(
+            "Unable to load this draft. Check your connection and access, then try again.",
+          );
+        if (!active) return;
+        const e = eventResult.data;
+        const local = (value: string | null) => {
+          if (!value) return "";
+          const date = new Date(value);
+          return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16);
+        };
+        setTitle(e.title || "");
+        setDescription(e.description || "");
+        setStartAt(local(e.start_at));
+        setEndAt(local(e.end_at));
+        setAudienceType(e.audience_type);
+        setSelectedCategories(e.audience_categories || []);
+        setAudienceCategoryOther(e.audience_category_other || "");
+        setSelectedMunicipalities(
+          (assignments.data || []).map((a) => a.municipality),
+        );
+        setSavedMemos(
+          memos.data?.length
+            ? memos.data
+            : e.memo_url
+              ? [
+                  {
+                    file_name: e.memo_filename || "Official memo",
+                    file_url: e.memo_url,
+                  },
+                ]
+              : [],
+        );
+        revision.current = e.updated_at;
+      } catch (e) {
+        if (active)
+          setDraftError(
+            e instanceof Error ? e.message : "Unable to load draft.",
+          );
+      } finally {
+        if (active) setDraftLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [requested]);
 
   const toggleMunicipality = (municipality: string) => {
     setSelectedMunicipalities((previous) =>
@@ -180,10 +271,43 @@ export default function CreateProvincialEventPage() {
   };
 
   const createMunicipalityAssignments = async (eventId: string) => {
-    if (selectedMunicipalities.length === 0) {
+    if (selectedMunicipalities.length === 0 && !draftId) {
       return;
     }
 
+    if (draftId) {
+      const { data: existing, error } = await supabase
+        .from("event_municipalities")
+        .select("id,municipality")
+        .eq("event_id", eventId);
+      if (error) throw error;
+      const removed = (existing || [])
+        .filter((a) => !selectedMunicipalities.includes(a.municipality))
+        .map((a) => a.id);
+      if (removed.length) {
+        const { error } = await supabase
+          .from("event_municipalities")
+          .delete()
+          .in("id", removed)
+          .eq("event_id", eventId);
+        if (error) throw error;
+      }
+      const added = selectedMunicipalities.filter(
+        (m) => !(existing || []).some((a) => a.municipality === m),
+      );
+      if (added.length) {
+        const { error } = await supabase.from("event_municipalities").insert(
+          added.map((municipality) => ({
+            event_id: eventId,
+            municipality,
+            municipal_status: "pending",
+            preparation_status: "pending",
+          })),
+        );
+        if (error) throw error;
+      }
+      return;
+    }
     const municipalityRows = selectedMunicipalities.map((municipality) => ({
       event_id: eventId,
       municipality,
@@ -217,15 +341,8 @@ export default function CreateProvincialEventPage() {
   };
 
   const handleCreateEvent = async (statusToSave: "draft" | "published") => {
-    if (!audienceType) {
-      alert("Please choose an event audience before saving.");
+    if (saving.current || submitAction !== null || draftLoading || draftError)
       return;
-    }
-
-    if (audienceType === "categories" && selectedCategories.length === 0) {
-      alert("Please select at least one participant category.");
-      return;
-    }
 
     if (!title.trim()) {
       alert("Please enter event title.");
@@ -233,6 +350,16 @@ export default function CreateProvincialEventPage() {
     }
 
     if (statusToSave === "published") {
+      if (!audienceType) {
+        alert("Please choose an event audience before publishing.");
+        return;
+      }
+
+      if (audienceType === "categories" && selectedCategories.length === 0) {
+        alert("Please select at least one participant category.");
+        return;
+      }
+
       if (!description.trim()) {
         alert("Please enter event description before publishing.");
         return;
@@ -270,7 +397,7 @@ export default function CreateProvincialEventPage() {
         return;
       }
 
-      if (memoFiles.length === 0) {
+      if (memoFiles.length + savedMemos.length === 0) {
         alert("Please upload at least one official memo before publishing.");
         return;
       }
@@ -299,6 +426,7 @@ export default function CreateProvincialEventPage() {
       }
     }
 
+    saving.current = true;
     setSubmitAction(statusToSave);
 
     try {
@@ -311,39 +439,60 @@ export default function CreateProvincialEventPage() {
         throw new Error("User not found. Please login again.");
       }
 
-      const { data: eventData, error: eventError } = await supabase
-        .from("events")
-        .insert({
-          title: title.trim(),
-          description: description.trim() || null,
-          start_at: convertToISO(startAt, "start date and time"),
-          end_at: convertToISO(endAt, "end date and time"),
-          memo_url: null,
-          memo_filename: null,
-          memo_uploaded_at: null,
-          created_by: user.id,
-          status: statusToSave,
-          audience_type: audienceType,
-          audience_categories:
-            audienceType === "categories" ? selectedCategories : [],
-          audience_category_other:
-            audienceType === "categories" &&
-            selectedCategories.includes("others") &&
-            audienceCategoryOther.trim()
-              ? audienceCategoryOther.trim()
-              : null,
-        })
-        .select("id")
+      const payload = {
+        title: title.trim(),
+        description: description.trim() || null,
+        start_at: convertToISO(startAt, "start date and time"),
+        end_at: convertToISO(endAt, "end date and time"),
+        status: "draft",
+        audience_type: audienceType,
+        audience_categories:
+          audienceType === "categories" ? selectedCategories : [],
+        audience_category_other:
+          audienceType === "categories" &&
+          selectedCategories.includes("others") &&
+          audienceCategoryOther.trim()
+            ? audienceCategoryOther.trim()
+            : null,
+      };
+      let query;
+      if (draftId) {
+        query = supabase
+          .from("events")
+          .update(payload)
+          .eq("id", draftId)
+          .eq("status", "draft")
+          .eq("event_origin", "provincial");
+        if (revision.current) query = query.eq("updated_at", revision.current);
+      } else {
+        query = supabase
+          .from("events")
+          .insert({ ...payload, created_by: user.id });
+      }
+      const { data: eventData, error: eventError } = await query
+        .select("id,updated_at")
         .single();
-
       if (eventError) {
         throw eventError;
       }
 
+      setDraftId(eventData.id);
+      revision.current = eventData.updated_at;
       await Promise.all([
         processMemos(user.id, eventData.id),
         createMunicipalityAssignments(eventData.id),
       ]);
+
+      if (statusToSave === "published") {
+        const { error } = await supabase
+          .from("events")
+          .update({ status: "published" })
+          .eq("id", eventData.id)
+          .eq("status", "draft")
+          .select("id")
+          .single();
+        if (error) throw error;
+      }
 
       let emailResult: EventEmailResult | null = null;
       let emailNotificationFailed = false;
@@ -374,10 +523,7 @@ export default function CreateProvincialEventPage() {
               emailResult?.background === true &&
               emailResult?.tracking === true
             ) {
-              sessionStorage.setItem(
-                EMAIL_TRACKING_STORAGE_KEY,
-                eventData.id,
-              );
+              sessionStorage.setItem(EMAIL_TRACKING_STORAGE_KEY, eventData.id);
 
               window.dispatchEvent(
                 new CustomEvent(EMAIL_TRACKING_EVENT, {
@@ -433,6 +579,7 @@ export default function CreateProvincialEventPage() {
       console.error("Create event error:", message);
       alert(message);
     } finally {
+      saving.current = false;
       setSubmitAction(null);
     }
   };
@@ -442,58 +589,148 @@ export default function CreateProvincialEventPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 pb-24">
-      <CreateEventHeader onBack={goBackToEvents} />
-
-      <form onSubmit={(event) => event.preventDefault()} className="space-y-5">
-        <EventDetailsSection
-          title={title}
-          description={description}
-          onTitleChange={setTitle}
-          onDescriptionChange={setDescription}
-        />
-
-        <EventAudienceSelector
-          audienceType={audienceType}
-          selectedCategories={selectedCategories}
-          audienceCategoryOther={audienceCategoryOther}
-          onAudienceTypeChange={changeAudienceType}
-          onToggleCategory={toggleAudienceCategory}
-          onAudienceCategoryOtherChange={setAudienceCategoryOther}
-        />
-
-        <EventScheduleSection
-          startAt={startAt}
-          endAt={endAt}
-          onStartAtChange={setStartAt}
-          onEndAtChange={setEndAt}
-        />
-
-        <MemoUploadSection
-          memoFiles={memoFiles}
-          onMemoFilesChange={setMemoFiles}
-        />
-
-        <MunicipalitySelector
-          municipalities={MUNICIPALITIES}
-          selectedMunicipalities={selectedMunicipalities}
-          onToggleMunicipality={toggleMunicipality}
-          onToggleAll={toggleAllMunicipalities}
-        />
-
-        <CreateEventActions
-          submitAction={submitAction}
-          title={title}
-          description={description}
-          startAt={startAt}
-          endAt={endAt}
-          memoCount={memoFiles.length}
-          municipalityCount={selectedMunicipalities.length}
-          onCancel={goBackToEvents}
-          onSaveDraft={() => handleCreateEvent("draft")}
-          onPublish={() => handleCreateEvent("published")}
-        />
-      </form>
+    <div className="mx-auto w-full max-w-[1400px] space-y-6 pb-8">
+      <CreateEventHeader
+        editing={Boolean(draftId)}
+        onBack={goBackToEvents}
+        disabled={submitAction !== null}
+      />
+      {draftLoading ? (
+        <p role="status">Loading event form…</p>
+      ) : draftError ? (
+        <div role="alert" className="rounded-xl bg-red-50 p-5 text-red-800">
+          {draftError}
+          <button
+            type="button"
+            className="ml-3 underline"
+            onClick={() => window.location.reload()}
+          >
+            Try again
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={(event) => event.preventDefault()}>
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <fieldset
+              disabled={submitAction !== null}
+              className="min-w-0 space-y-5 disabled:opacity-70"
+            >
+              <legend className="sr-only">Event information</legend>
+              <EventDetailsSection
+                title={title}
+                description={description}
+                onTitleChange={setTitle}
+                onDescriptionChange={setDescription}
+              />
+              <EventScheduleSection
+                startAt={startAt}
+                endAt={endAt}
+                onStartAtChange={setStartAt}
+                onEndAtChange={setEndAt}
+              />
+              <EventAudienceSelector
+                audienceType={audienceType}
+                selectedCategories={selectedCategories}
+                audienceCategoryOther={audienceCategoryOther}
+                onAudienceTypeChange={changeAudienceType}
+                onToggleCategory={toggleAudienceCategory}
+                onAudienceCategoryOtherChange={setAudienceCategoryOther}
+              />
+              <MunicipalitySelector
+                municipalities={MUNICIPALITIES}
+                selectedMunicipalities={selectedMunicipalities}
+                onToggleMunicipality={toggleMunicipality}
+                onToggleAll={toggleAllMunicipalities}
+              />
+              {savedMemos.length > 0 && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <h2 className="font-semibold">Saved Official Memos</h2>
+                  <ul className="mt-3 space-y-2">
+                    {savedMemos.map((memo, index) => (
+                      <li key={index}>
+                        <a
+                          className="text-sm text-indigo-700 underline"
+                          href={memo.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {memo.file_name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Saved memos are retained. You can add more below.
+                  </p>
+                </section>
+              )}
+              <MemoUploadSection
+                memoFiles={memoFiles}
+                onMemoFilesChange={setMemoFiles}
+              />
+            </fieldset>
+            <aside
+              aria-label="Event review"
+              className="min-w-0 space-y-4 xl:sticky xl:top-6"
+            >
+              <section className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+                  Event at a glance
+                </p>
+                <h2 className="mt-3 break-words text-lg font-bold text-slate-900">
+                  {title.trim() || "Your new event"}
+                </h2>
+                <dl className="mt-4 space-y-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-slate-500">Audience</dt>
+                    <dd className="mt-1 break-words text-slate-800">
+                      {audienceType === "all"
+                        ? "Open to all participants"
+                        : audienceType === "categories"
+                          ? selectedCategories.length
+                            ? selectedCategories.join(", ")
+                            : "Select participant categories"
+                          : "Not selected"}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Municipalities</dt>
+                    <dd className="font-semibold text-slate-800">
+                      {selectedMunicipalities.length} / {MUNICIPALITIES.length}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Official memos</dt>
+                    <dd className="font-semibold text-slate-800">
+                      {memoFiles.length + savedMemos.length}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+              <CreateEventActions
+                draftSaveLabel={
+                  draftId ? "Save Draft Changes" : "Save as Draft"
+                }
+                submitAction={submitAction}
+                title={title}
+                description={description}
+                startAt={startAt}
+                endAt={endAt}
+                memoCount={memoFiles.length + savedMemos.length}
+                municipalityCount={selectedMunicipalities.length}
+                audienceComplete={
+                  audienceType === "all" ||
+                  (audienceType === "categories" &&
+                    selectedCategories.length > 0)
+                }
+                onCancel={goBackToEvents}
+                onSaveDraft={() => handleCreateEvent("draft")}
+                onPublish={() => handleCreateEvent("published")}
+              />
+            </aside>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -57,7 +57,7 @@ export default function MunicipalEventsHeader({
               </p>
 
               <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-                Received Events
+                Provincial Events
               </h1>
 
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
@@ -94,7 +94,7 @@ export default function MunicipalEventsHeader({
       </div>
 
       {/* Summary statistics */}
-      <div className="grid grid-cols-2 border-t border-slate-200 bg-slate-50 sm:grid-cols-4">
+      <div className="mobile-summary-grid grid grid-cols-2 border-t border-slate-200 bg-slate-50 sm:grid-cols-4">
         <div className="border-b border-r border-slate-200 p-4 sm:border-b-0 sm:p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200">
@@ -103,7 +103,7 @@ export default function MunicipalEventsHeader({
 
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                Total Received
+                Total Provincial Events
               </p>
 
               <p className="mt-1 text-xl font-bold text-slate-950">

@@ -28,15 +28,15 @@ export default function ProvincialNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <NotificationsHeader
-          unreadCount={unreadCount}
-          refreshing={refreshing}
-          markingAll={markingAll}
-          onRefresh={refreshNotifications}
-          onMarkAllAsRead={markAllAsRead}
-        />
+      <NotificationsHeader
+        unreadCount={unreadCount}
+        refreshing={refreshing}
+        markingAll={markingAll}
+        onRefresh={refreshNotifications}
+        onMarkAllAsRead={markAllAsRead}
+      />
 
+      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
         <NotificationStats
           totalCount={notifications.length}
           unreadCount={unreadCount}

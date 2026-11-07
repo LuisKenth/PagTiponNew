@@ -56,7 +56,7 @@ export default function MunicipalNotificationStats({
 
   return (
     <div
-      className="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-3"
+      className="mobile-summary-grid grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-3"
       aria-label="Notification summary"
     >
       {stats.map((stat, index) => {

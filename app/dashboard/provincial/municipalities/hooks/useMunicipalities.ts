@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { manageMunicipalAdmin } from "../utils/manageMunicipalAdmin";
 import { supabase } from "@/lib/supabase";
 
 import { MUNICIPALITIES } from "../constants/municipalities";
@@ -29,7 +30,7 @@ export default function useMunicipalities() {
         municipality,
         verification_status,
         created_at
-      `
+      `,
       )
       .eq("role", "municipal_admin")
       .order("created_at", { ascending: false });
@@ -47,23 +48,18 @@ export default function useMunicipalities() {
   }, []);
 
   useEffect(() => {
-    fetchMunicipalAdmins();
+    const timeout = window.setTimeout(() => { void fetchMunicipalAdmins(); }, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchMunicipalAdmins]);
 
   const approvedAdmins = useMemo(
-    () =>
-      admins.filter(
-        (admin) => admin.verification_status === "approved"
-      ),
-    [admins]
+    () => admins.filter((admin) => admin.verification_status === "approved"),
+    [admins],
   );
 
   const pendingAdmins = useMemo(
-    () =>
-      admins.filter(
-        (admin) => admin.verification_status === "pending"
-      ),
-    [admins]
+    () => admins.filter((admin) => admin.verification_status === "pending"),
+    [admins],
   );
 
   const municipalityOverview = useMemo<MunicipalityOverviewItem[]>(() => {
@@ -72,12 +68,12 @@ export default function useMunicipalities() {
 
       const approved = approvedAdmins.filter(
         (admin) =>
-          normalizeMunicipality(admin.municipality) === municipalityKey
+          normalizeMunicipality(admin.municipality) === municipalityKey,
       );
 
       const pending = pendingAdmins.filter(
         (admin) =>
-          normalizeMunicipality(admin.municipality) === municipalityKey
+          normalizeMunicipality(admin.municipality) === municipalityKey,
       );
 
       let status: MunicipalityStatus = "unassigned";
@@ -100,104 +96,72 @@ export default function useMunicipalities() {
   const approvedMunicipalities = useMemo(
     () =>
       municipalityOverview.filter(
-        (municipality) => municipality.status === "approved"
+        (municipality) => municipality.status === "approved",
       ),
-    [municipalityOverview]
+    [municipalityOverview],
   );
 
   const pendingMunicipalities = useMemo(
     () =>
       municipalityOverview.filter(
-        (municipality) => municipality.status === "pending"
+        (municipality) => municipality.status === "pending",
       ),
-    [municipalityOverview]
+    [municipalityOverview],
   );
 
   const unassignedMunicipalities = useMemo(
     () =>
       municipalityOverview.filter(
-        (municipality) => municipality.status === "unassigned"
+        (municipality) => municipality.status === "unassigned",
       ),
-    [municipalityOverview]
+    [municipalityOverview],
   );
 
   const handleApprove = async (admin: MunicipalAdmin) => {
-    const confirmed = window.confirm(
-      `Approve ${admin.full_name || "this municipal admin"}${
-        admin.municipality ? ` for ${admin.municipality}` : ""
-      }?`
-    );
-
-    if (!confirmed) return;
-
-    setProcessingId(admin.id);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ verification_status: "approved" })
-      .eq("id", admin.id)
-      .eq("role", "municipal_admin");
-
-    if (error) {
-      console.error("Approval error:", error.message);
-      alert(`Failed to approve account: ${error.message}`);
-      setProcessingId(null);
-      return;
-    }
-
-    setAdmins((currentAdmins) =>
-      currentAdmins.map((item) =>
-        item.id === admin.id
-          ? { ...item, verification_status: "approved" }
-          : item
+    if (
+      !window.confirm(
+        `Approve and activate ${admin.full_name || "this admin"}? This uses one of the municipality’s 2 admin slots.`,
       )
-    );
-
-    setProcessingId(null);
-    alert(
-      `${admin.full_name || "Municipal admin"} has been approved successfully.`
-    );
+    )
+      return;
+    setProcessingId(admin.id);
+    try {
+      const message = await manageMunicipalAdmin(admin.id, "activate");
+      await fetchMunicipalAdmins();
+      window.alert(message);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Unable to approve account.",
+      );
+    } finally {
+      setProcessingId(null);
+    }
   };
-
   const handleReject = async (admin: MunicipalAdmin) => {
-    const confirmed = window.confirm(
-      `Reject the application of ${
-        admin.full_name || "this municipal admin"
-      }?`
-    );
-
-    if (!confirmed) return;
-
-    setProcessingId(admin.id);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ verification_status: "rejected" })
-      .eq("id", admin.id)
-      .eq("role", "municipal_admin");
-
-    if (error) {
-      console.error("Rejection error:", error.message);
-      alert(`Failed to reject account: ${error.message}`);
-      setProcessingId(null);
-      return;
-    }
-
-    setAdmins((currentAdmins) =>
-      currentAdmins.map((item) =>
-        item.id === admin.id
-          ? { ...item, verification_status: "rejected" }
-          : item
+    if (
+      !window.confirm(
+        `Deactivate ${admin.full_name || "this admin"} and deny municipal portal access?`,
       )
-    );
-
-    setProcessingId(null);
-    alert(
-      `${admin.full_name || "Municipal admin"}'s application has been rejected.`
-    );
+    )
+      return;
+    setProcessingId(admin.id);
+    try {
+      const message = await manageMunicipalAdmin(admin.id, "deactivate");
+      await fetchMunicipalAdmins();
+      window.alert(message);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to deactivate account.",
+      );
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   return {
+    admins,
     loading,
     processingId,
     approvedAdmins,

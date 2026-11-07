@@ -10,7 +10,7 @@ export default function DashboardStats({
   stats,
 }: DashboardStatsProps) {
   return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="mobile-summary-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
         <div className="flex items-start justify-between">
           <div>

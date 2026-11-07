@@ -1,11 +1,8 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState, useMemo } from "react";
 
-import { useRouter } from "next/navigation";
+import EventPreparationDialog from "../components/EventPreparationDialog";
 
 import useMunicipalDashboard from "../hooks/useMunicipalDashboard";
 
@@ -21,29 +18,23 @@ import {
   isRegistrationOpen,
 } from "./utils/municipalEventsUtils";
 
-import type {
-  ReceivedEvent,
-} from "../types/municipalDashboard";
+import type { ReceivedEvent } from "../types/municipalDashboard";
 
 export default function MunicipalEventsPage() {
-  const router = useRouter();
+  const [preparationId, setPreparationId] = useState<string | null>(null);
 
-  /*
-   * Municipal Events is now a browse/review page.
-   *
-   * Preparation editing is intentionally removed
-   * from this page. All preparation management
-   * happens only in:
-   *
-   * /dashboard/municipal/preparations
-   */
   const {
     municipality,
-    receivedEvents,
+    receivedEvents: allEvents,
     loading,
     venues,
     refreshEvents,
   } = useMunicipalDashboard();
+
+  const receivedEvents = useMemo(
+    () => allEvents.filter((item) => item.event?.event_origin === "provincial"),
+    [allEvents],
+  );
 
   const {
     searchTerm,
@@ -70,12 +61,9 @@ export default function MunicipalEventsPage() {
     changePageSize,
     goToPreviousPage,
     goToNextPage,
-  } = useMunicipalEventsPage(
-    receivedEvents,
-  );
+  } = useMunicipalEventsPage(receivedEvents);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   /*
    * Periodically refresh received events so
@@ -83,15 +71,12 @@ export default function MunicipalEventsPage() {
    * cron job can appear without a full page reload.
    */
   useEffect(() => {
-    const intervalId =
-      window.setInterval(() => {
-        void refreshEvents();
-      }, 60_000);
+    const intervalId = window.setInterval(() => {
+      void refreshEvents();
+    }, 60_000);
 
     return () => {
-      window.clearInterval(
-        intervalId,
-      );
+      window.clearInterval(intervalId);
     };
   }, [refreshEvents]);
 
@@ -103,40 +88,12 @@ export default function MunicipalEventsPage() {
    * incorrectly counted as registration open.
    */
   const registrationOpenCount =
-    receivedEvents.filter(
-      isRegistrationOpen,
-    ).length;
+    receivedEvents.filter(isRegistrationOpen).length;
 
-  const cancelledCount =
-    receivedEvents.filter(
-      isCancelledEvent,
-    ).length;
+  const cancelledCount = receivedEvents.filter(isCancelledEvent).length;
 
-  /*
-   * Navigate to the authoritative Event
-   * Preparation page.
-   *
-   * Upcoming events will be editable there.
-   * Ongoing/completed/cancelled events will
-   * open as view-only.
-   */
-  function openPreparationPage(
-    item: ReceivedEvent,
-  ) {
-    const assignmentId =
-      String(
-        item.id ?? "",
-      ).trim();
-
-    if (!assignmentId) {
-      return;
-    }
-
-    router.push(
-      `/dashboard/municipal/preparations?assignmentId=${encodeURIComponent(
-        assignmentId,
-      )}`,
-    );
+  function openPreparationPage(item: ReceivedEvent) {
+    if (item.id) setPreparationId(String(item.id));
   }
 
   async function handleRefresh() {
@@ -155,61 +112,38 @@ export default function MunicipalEventsPage() {
 
   return (
     <div className="space-y-6">
+      {preparationId && (
+        <EventPreparationDialog
+          assignmentId={preparationId}
+          onClose={() => setPreparationId(null)}
+          onUpdated={() => void refreshEvents()}
+        />
+      )}
       <MunicipalEventsHeader
         municipality={municipality}
-        totalReceived={
-          receivedEvents.length
-        }
-        filteredCount={
-          filteredEvents.length
-        }
-        registrationOpenCount={
-          registrationOpenCount
-        }
-        cancelledCount={
-          cancelledCount
-        }
+        totalReceived={receivedEvents.length}
+        filteredCount={filteredEvents.length}
+        registrationOpenCount={registrationOpenCount}
+        cancelledCount={cancelledCount}
         loading={loading}
         refreshing={refreshing}
-        onRefresh={() =>
-          void handleRefresh()
-        }
+        onRefresh={() => void handleRefresh()}
       />
 
       <MunicipalEventsFilters
         searchTerm={searchTerm}
         statusFilter={statusFilter}
-        eventStatusFilter={
-          eventStatusFilter
-        }
-        registrationFilter={
-          registrationFilter
-        }
+        eventStatusFilter={eventStatusFilter}
+        registrationFilter={registrationFilter}
         sortOption={sortOption}
-        resultCount={
-          filteredEvents.length
-        }
-        hasActiveFilters={
-          hasActiveFilters
-        }
-        onSearchChange={
-          setSearchTerm
-        }
-        onStatusFilterChange={
-          setStatusFilter
-        }
-        onEventStatusFilterChange={
-          setEventStatusFilter
-        }
-        onRegistrationFilterChange={
-          setRegistrationFilter
-        }
-        onSortChange={
-          setSortOption
-        }
-        onClearFilters={
-          clearFilters
-        }
+        resultCount={filteredEvents.length}
+        hasActiveFilters={hasActiveFilters}
+        onSearchChange={setSearchTerm}
+        onStatusFilterChange={setStatusFilter}
+        onEventStatusFilterChange={setEventStatusFilter}
+        onRegistrationFilterChange={setRegistrationFilter}
+        onSortChange={setSortOption}
+        onClearFilters={clearFilters}
       />
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -217,53 +151,25 @@ export default function MunicipalEventsPage() {
           events={paginatedEvents}
           venues={venues}
           loading={loading}
-          firstVisibleItem={
-            firstVisibleItem
-          }
-          lastVisibleItem={
-            lastVisibleItem
-          }
-          totalFilteredEvents={
-            filteredEvents.length
-          }
-          hasActiveFilters={
-            hasActiveFilters
-          }
-          onPrepare={
-            openPreparationPage
-          }
-          onClearFilters={
-            clearFilters
-          }
+          firstVisibleItem={firstVisibleItem}
+          lastVisibleItem={lastVisibleItem}
+          totalFilteredEvents={filteredEvents.length}
+          hasActiveFilters={hasActiveFilters}
+          onPrepare={openPreparationPage}
+          onClearFilters={clearFilters}
         />
 
         {!loading && (
           <MunicipalEventsPagination
-            currentPage={
-              currentPage
-            }
-            totalPages={
-              totalPages
-            }
+            currentPage={currentPage}
+            totalPages={totalPages}
             pageSize={pageSize}
-            totalItems={
-              filteredEvents.length
-            }
-            firstVisibleItem={
-              firstVisibleItem
-            }
-            lastVisibleItem={
-              lastVisibleItem
-            }
-            onPageSizeChange={
-              changePageSize
-            }
-            onPreviousPage={
-              goToPreviousPage
-            }
-            onNextPage={
-              goToNextPage
-            }
+            totalItems={filteredEvents.length}
+            firstVisibleItem={firstVisibleItem}
+            lastVisibleItem={lastVisibleItem}
+            onPageSizeChange={changePageSize}
+            onPreviousPage={goToPreviousPage}
+            onNextPage={goToNextPage}
           />
         )}
       </section>

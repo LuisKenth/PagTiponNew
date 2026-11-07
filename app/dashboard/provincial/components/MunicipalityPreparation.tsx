@@ -186,7 +186,7 @@ export default function MunicipalityPreparation({
 
       {/* SUMMARY */}
       {!loading && eventMunicipalities.length > 0 && (
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="mobile-summary-grid mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <div className="rounded-xl bg-slate-50 p-4">
             <p className="text-xs font-medium text-slate-500">
               Assignments

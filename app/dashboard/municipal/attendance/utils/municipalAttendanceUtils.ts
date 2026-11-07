@@ -259,7 +259,7 @@ export function getAttendanceStatusLabel(
       return "Absent";
 
     default:
-      return "Pending";
+      return "Not Timed In Yet";
   }
 }
 

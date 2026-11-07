@@ -1,262 +1,187 @@
 "use client";
+import VenueLocationButton from "@/app/components/VenueLocationButton";
 
 import {
-    CalendarCheck2,
-    CalendarDays,
-    CheckCircle2,
-    Clock3,
-    History,
-    RefreshCw,
-    TicketCheck,
-    XCircle,
+  CalendarCheck2,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  History,
+  RefreshCw,
+  TicketCheck,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
 type RSVPRow = {
-    id: string;
-    event_municipality_id: string;
-    user_id: string;
-    municipality: string;
-    status: string | null;
-    registered_at: string | null;
+  id: string;
+  event_municipality_id: string;
+  user_id: string;
+  municipality: string;
+  status: string | null;
+  registered_at: string | null;
 };
 
 type EventAssignmentRow = {
-    id: string;
-    event_id: string;
-    municipality: string;
-    municipal_status: string | null;
-    registration_open: boolean | null;
-    local_instructions: string | null;
+  id: string;
+  event_id: string;
+  municipality: string;
+  municipal_status: string | null;
+  registration_open: boolean | null;
+  local_instructions: string | null;
 };
 
 type EventRow = {
-    id: string;
-    title: string;
-    description: string | null;
-    start_at: string | null;
-    end_at: string | null;
-    status: string | null;
-    created_at: string;
+  event_origin?: string;
+  owner_municipality?: string | null;
+  id: string;
+  title: string;
+  description: string | null;
+  start_at: string | null;
+  end_at: string | null;
+  status: string | null;
+  created_at: string;
 };
 
 type RegistrationItem = {
-    rsvp: RSVPRow;
-    assignment: EventAssignmentRow;
-    event: EventRow;
+  rsvp: RSVPRow;
+  assignment: EventAssignmentRow;
+  event: EventRow;
 };
 
-type RegistrationFilter =
-    | "all"
-    | "active"
-    | "completed"
-    | "cancelled";
+type RegistrationFilter = "all" | "active" | "completed" | "cancelled";
 
 const REGISTRATIONS_PER_PAGE = 5;
 
-function normalizeStatus(
-    value: string | null | undefined,
-) {
-    return value?.trim().toLowerCase() ?? "";
+function normalizeStatus(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
-function formatDateTime(
-    dateValue: string | null,
-) {
-    if (!dateValue) {
-        return "Not set";
-    }
+function formatDateTime(dateValue: string | null) {
+  if (!dateValue) {
+    return "Not set";
+  }
 
-    return new Date(
-        dateValue,
-    ).toLocaleString("en-PH", {
-        dateStyle: "medium",
-        timeStyle: "short",
-    });
+  return new Date(dateValue).toLocaleString("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
-function isActiveEventStatus(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
+function isActiveEventStatus(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
 
-    return [
-        "published",
-        "upcoming",
-        "ongoing",
-    ].includes(normalizedStatus);
+  return ["published", "upcoming", "ongoing"].includes(normalizedStatus);
 }
 
-function isCancelledRegistration(
-    item: RegistrationItem,
-) {
-    return (
-        normalizeStatus(
-            item.rsvp.status,
-        ) === "cancelled" ||
-        normalizeStatus(
-            item.event.status,
-        ) === "cancelled"
-    );
+function isCancelledRegistration(item: RegistrationItem) {
+  return (
+    normalizeStatus(item.rsvp.status) === "cancelled" ||
+    normalizeStatus(item.event.status) === "cancelled"
+  );
 }
 
-function isActiveRegistration(
-    item: RegistrationItem,
-) {
-    return (
-        normalizeStatus(
-            item.rsvp.status,
-        ) === "registered" &&
-        isActiveEventStatus(
-            item.event.status,
-        )
-    );
+function isActiveRegistration(item: RegistrationItem) {
+  return (
+    normalizeStatus(item.rsvp.status) === "registered" &&
+    isActiveEventStatus(item.event.status)
+  );
 }
 
-function isCompletedRegistration(
-    item: RegistrationItem,
-) {
-    return (
-        !isCancelledRegistration(item) &&
-        normalizeStatus(
-            item.event.status,
-        ) === "completed"
-    );
+function isCompletedRegistration(item: RegistrationItem) {
+  return (
+    !isCancelledRegistration(item) &&
+    normalizeStatus(item.event.status) === "completed"
+  );
 }
 
-function getEventStatusLabel(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
+function getEventStatusLabel(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
 
-    if (normalizedStatus === "published") {
-        return "Scheduled";
-    }
+  if (normalizedStatus === "published") {
+    return "Scheduled";
+  }
 
-    if (normalizedStatus === "upcoming") {
-        return "Upcoming";
-    }
+  if (normalizedStatus === "upcoming") {
+    return "Upcoming";
+  }
 
-    if (normalizedStatus === "ongoing") {
-        return "Ongoing";
-    }
+  if (normalizedStatus === "ongoing") {
+    return "Ongoing";
+  }
 
-    if (normalizedStatus === "completed") {
-        return "Completed";
-    }
+  if (normalizedStatus === "completed") {
+    return "Completed";
+  }
 
-    if (normalizedStatus === "cancelled") {
-        return "Cancelled";
-    }
+  if (normalizedStatus === "cancelled") {
+    return "Cancelled";
+  }
 
-    return status || "Unknown";
+  return status || "Unknown";
 }
 
-function getEventStatusClasses(
-    status: string | null,
-) {
-    const normalizedStatus =
-        normalizeStatus(status);
+function getEventStatusClasses(status: string | null) {
+  const normalizedStatus = normalizeStatus(status);
 
-    if (normalizedStatus === "ongoing") {
-        return "bg-green-100 text-green-700";
-    }
+  if (normalizedStatus === "ongoing") {
+    return "bg-green-100 text-green-700";
+  }
 
-    if (
-        normalizedStatus === "published" ||
-        normalizedStatus === "upcoming"
-    ) {
-        return "bg-blue-100 text-blue-700";
-    }
+  if (normalizedStatus === "published" || normalizedStatus === "upcoming") {
+    return "bg-blue-100 text-blue-700";
+  }
 
-    if (normalizedStatus === "completed") {
-        return "bg-slate-100 text-slate-700";
-    }
+  if (normalizedStatus === "completed") {
+    return "bg-slate-100 text-slate-700";
+  }
 
-    if (normalizedStatus === "cancelled") {
-        return "bg-red-100 text-red-700";
-    }
+  if (normalizedStatus === "cancelled") {
+    return "bg-red-100 text-red-700";
+  }
 
-    return "bg-slate-100 text-slate-600";
+  return "bg-slate-100 text-slate-600";
 }
 
 export default function ParticipantRegistrationsPage() {
-    const [
-        registrations,
-        setRegistrations,
-    ] = useState<RegistrationItem[]>([]);
+  const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
 
-    const [loading, setLoading] =
-        useState(true);
+  const [loading, setLoading] = useState(true);
 
-    const [refreshing, setRefreshing] =
-        useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-    const [
-        errorMessage,
-        setErrorMessage,
-    ] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
-    const [
-        activeFilter,
-        setActiveFilter,
-    ] =
-        useState<RegistrationFilter>(
-            "all",
-        );
+  const [activeFilter, setActiveFilter] = useState<RegistrationFilter>("all");
 
-    const [
-        currentPage,
-        setCurrentPage,
-    ] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
 
-    const fetchRegistrations =
-        useCallback(
-            async (
-                refreshOnly = false,
-            ) => {
-                if (refreshOnly) {
-                    setRefreshing(true);
-                } else {
-                    setLoading(true);
-                }
+  const fetchRegistrations = useCallback(async (refreshOnly = false) => {
+    if (refreshOnly) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
-                setErrorMessage("");
+    setErrorMessage("");
 
-                try {
-                    const {
-                        data: { user },
-                        error: userError,
-                    } =
-                        await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-                    if (
-                        userError ||
-                        !user
-                    ) {
-                        throw new Error(
-                            userError?.message ||
-                                "Participant user not found.",
-                        );
-                    }
+      if (userError || !user) {
+        throw new Error(userError?.message || "Participant user not found.");
+      }
 
-                    const {
-                        data: rsvpRows,
-                        error: rsvpError,
-                    } = await supabase
-                        .from("rsvps")
-                        .select(
-                            `
+      const { data: rsvpRows, error: rsvpError } = await supabase
+        .from("rsvps")
+        .select(
+          `
                                 id,
                                 event_municipality_id,
                                 user_id,
@@ -264,57 +189,32 @@ export default function ParticipantRegistrationsPage() {
                                 status,
                                 registered_at
                             `,
-                        )
-                        .eq(
-                            "user_id",
-                            user.id,
-                        )
-                        .in("status", [
-                            "registered",
-                            "cancelled",
-                        ])
-                        .order(
-                            "registered_at",
-                            {
-                                ascending:
-                                    false,
-                            },
-                        );
+        )
+        .eq("user_id", user.id)
+        .in("status", ["registered", "cancelled"])
+        .order("registered_at", {
+          ascending: false,
+        });
 
-                    if (rsvpError) {
-                        throw rsvpError;
-                    }
+      if (rsvpError) {
+        throw rsvpError;
+      }
 
-                    const registeredRsvps =
-                        (rsvpRows ||
-                            []) as RSVPRow[];
+      const registeredRsvps = (rsvpRows || []) as RSVPRow[];
 
-                    if (
-                        registeredRsvps.length ===
-                        0
-                    ) {
-                        setRegistrations(
-                            [],
-                        );
-                        return;
-                    }
+      if (registeredRsvps.length === 0) {
+        setRegistrations([]);
+        return;
+      }
 
-                    const assignmentIds =
-                        registeredRsvps.map(
-                            (rsvp) =>
-                                rsvp.event_municipality_id,
-                        );
+      const assignmentIds = registeredRsvps.map(
+        (rsvp) => rsvp.event_municipality_id,
+      );
 
-                    const {
-                        data: assignmentRows,
-                        error:
-                            assignmentError,
-                    } = await supabase
-                        .from(
-                            "event_municipalities",
-                        )
-                        .select(
-                            `
+      const { data: assignmentRows, error: assignmentError } = await supabase
+        .from("event_municipalities")
+        .select(
+          `
                                 id,
                                 event_id,
                                 municipality,
@@ -322,1038 +222,515 @@ export default function ParticipantRegistrationsPage() {
                                 registration_open,
                                 local_instructions
                             `,
-                        )
-                        .in(
-                            "id",
-                            assignmentIds,
-                        );
+        )
+        .in("id", assignmentIds);
 
-                    if (
-                        assignmentError
-                    ) {
-                        throw assignmentError;
-                    }
+      if (assignmentError) {
+        throw assignmentError;
+      }
 
-                    const assignments =
-                        (assignmentRows ||
-                            []) as EventAssignmentRow[];
+      const assignments = (assignmentRows || []) as EventAssignmentRow[];
 
-                    if (
-                        assignments.length ===
-                        0
-                    ) {
-                        setRegistrations(
-                            [],
-                        );
-                        return;
-                    }
+      if (assignments.length === 0) {
+        setRegistrations([]);
+        return;
+      }
 
-                    const eventIds =
-                        Array.from(
-                            new Set(
-                                assignments.map(
-                                    (
-                                        assignment,
-                                    ) =>
-                                        assignment.event_id,
-                                ),
-                            ),
-                        );
+      const eventIds = Array.from(
+        new Set(assignments.map((assignment) => assignment.event_id)),
+      );
 
-                    const {
-                        data: eventRows,
-                        error: eventError,
-                    } = await supabase
-                        .from("events")
-                        .select(
-                            `
+      const { data: eventRows, error: eventError } = await supabase
+        .from("events")
+        .select(
+          `
                                 id,
                                 title,
+                                event_origin,
+                                owner_municipality,
                                 description,
                                 start_at,
                                 end_at,
                                 status,
                                 created_at
                             `,
-                        )
-                        .in(
-                            "id",
-                            eventIds,
-                        );
+        )
+        .in("id", eventIds);
 
-                    if (eventError) {
-                        throw eventError;
-                    }
+      if (eventError) {
+        throw eventError;
+      }
 
-                    const events =
-                        (eventRows ||
-                            []) as EventRow[];
+      const events = (eventRows || []) as EventRow[];
 
-                    const mappedRegistrations =
-                        registeredRsvps
-                            .map(
-                                (rsvp) => {
-                                    const assignment =
-                                        assignments.find(
-                                            (
-                                                item,
-                                            ) =>
-                                                String(
-                                                    item.id,
-                                                ) ===
-                                                String(
-                                                    rsvp.event_municipality_id,
-                                                ),
-                                        );
+      const mappedRegistrations = registeredRsvps
+        .map((rsvp) => {
+          const assignment = assignments.find(
+            (item) => String(item.id) === String(rsvp.event_municipality_id),
+          );
 
-                                    if (
-                                        !assignment
-                                    ) {
-                                        return null;
-                                    }
+          if (!assignment) {
+            return null;
+          }
 
-                                    const event =
-                                        events.find(
-                                            (
-                                                item,
-                                            ) =>
-                                                String(
-                                                    item.id,
-                                                ) ===
-                                                String(
-                                                    assignment.event_id,
-                                                ),
-                                        );
+          const event = events.find(
+            (item) => String(item.id) === String(assignment.event_id),
+          );
 
-                                    if (
-                                        !event
-                                    ) {
-                                        return null;
-                                    }
+          if (!event) {
+            return null;
+          }
 
-                                    return {
-                                        rsvp,
-                                        assignment,
-                                        event,
-                                    };
-                                },
-                            )
-                            .filter(
-                                (
-                                    item,
-                                ): item is RegistrationItem =>
-                                    item !==
-                                    null,
-                            )
-                            .sort(
-                                (
-                                    first,
-                                    second,
-                                ) => {
-                                    const firstActive =
-                                        isActiveRegistration(
-                                            first,
-                                        );
+          return {
+            rsvp,
+            assignment,
+            event,
+          };
+        })
+        .filter((item): item is RegistrationItem => item !== null)
+        .sort((first, second) => {
+          const firstActive = isActiveRegistration(first);
 
-                                    const secondActive =
-                                        isActiveRegistration(
-                                            second,
-                                        );
+          const secondActive = isActiveRegistration(second);
 
-                                    if (
-                                        firstActive &&
-                                        !secondActive
-                                    ) {
-                                        return -1;
-                                    }
+          if (firstActive && !secondActive) {
+            return -1;
+          }
 
-                                    if (
-                                        !firstActive &&
-                                        secondActive
-                                    ) {
-                                        return 1;
-                                    }
+          if (!firstActive && secondActive) {
+            return 1;
+          }
 
-                                    const firstDate =
-                                        first
-                                            .event
-                                            .start_at
-                                            ? new Date(
-                                                  first.event.start_at,
-                                              ).getTime()
-                                            : 0;
+          const firstDate = first.event.start_at
+            ? new Date(first.event.start_at).getTime()
+            : 0;
 
-                                    const secondDate =
-                                        second
-                                            .event
-                                            .start_at
-                                            ? new Date(
-                                                  second.event.start_at,
-                                              ).getTime()
-                                            : 0;
+          const secondDate = second.event.start_at
+            ? new Date(second.event.start_at).getTime()
+            : 0;
 
-                                    if (
-                                        firstActive &&
-                                        secondActive
-                                    ) {
-                                        return (
-                                            firstDate -
-                                            secondDate
-                                        );
-                                    }
+          if (firstActive && secondActive) {
+            return firstDate - secondDate;
+          }
 
-                                    return (
-                                        secondDate -
-                                        firstDate
-                                    );
-                                },
-                            );
+          return secondDate - firstDate;
+        });
 
-                    setRegistrations(
-                        mappedRegistrations,
-                    );
-                } catch (error) {
-                    console.error(
-                        "Participant registrations fetch error:",
-                        error,
-                    );
+      setRegistrations(mappedRegistrations);
+    } catch (error) {
+      console.error("Participant registrations fetch error:", error);
 
-                    setRegistrations(
-                        [],
-                    );
+      setRegistrations([]);
 
-                    setErrorMessage(
-                        error instanceof
-                            Error
-                            ? error.message
-                            : "Unable to load your registrations.",
-                    );
-                } finally {
-                    setLoading(false);
-                    setRefreshing(
-                        false,
-                    );
-                }
-            },
-        [],
-    );
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to load your registrations.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-    useEffect(() => {
-        void fetchRegistrations();
-    }, [fetchRegistrations]);
+  useEffect(() => {
+    void fetchRegistrations();
+  }, [fetchRegistrations]);
 
-    const registrationCounts =
-        useMemo(() => {
-            return {
-                total:
-                    registrations.length,
+  const registrationCounts = useMemo(() => {
+    return {
+      total: registrations.length,
 
-                active:
-                    registrations.filter(
-                        isActiveRegistration,
-                    ).length,
+      active: registrations.filter(isActiveRegistration).length,
 
-                completed:
-                    registrations.filter(
-                        isCompletedRegistration,
-                    ).length,
+      completed: registrations.filter(isCompletedRegistration).length,
 
-                cancelled:
-                    registrations.filter(
-                        isCancelledRegistration,
-                    ).length,
-            };
-        }, [registrations]);
-
-    const filteredRegistrations =
-        useMemo(() => {
-            if (
-                activeFilter ===
-                "active"
-            ) {
-                return registrations.filter(
-                    isActiveRegistration,
-                );
-            }
-
-            if (
-                activeFilter ===
-                "completed"
-            ) {
-                return registrations.filter(
-                    isCompletedRegistration,
-                );
-            }
-
-            if (
-                activeFilter ===
-                "cancelled"
-            ) {
-                return registrations.filter(
-                    isCancelledRegistration,
-                );
-            }
-
-            return registrations;
-        }, [
-            activeFilter,
-            registrations,
-        ]);
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(
-            filteredRegistrations.length /
-                REGISTRATIONS_PER_PAGE,
-        ),
-    );
-
-    const paginatedRegistrations =
-        useMemo(() => {
-            const startIndex =
-                (currentPage - 1) *
-                REGISTRATIONS_PER_PAGE;
-
-            const endIndex =
-                startIndex +
-                REGISTRATIONS_PER_PAGE;
-
-            return filteredRegistrations.slice(
-                startIndex,
-                endIndex,
-            );
-        }, [
-            currentPage,
-            filteredRegistrations,
-        ]);
-
-    const firstVisibleRegistration =
-        filteredRegistrations.length ===
-        0
-            ? 0
-            : (currentPage - 1) *
-                  REGISTRATIONS_PER_PAGE +
-              1;
-
-    const lastVisibleRegistration =
-        Math.min(
-            currentPage *
-                REGISTRATIONS_PER_PAGE,
-            filteredRegistrations.length,
-        );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [activeFilter]);
-
-    useEffect(() => {
-        if (
-            currentPage >
-            totalPages
-        ) {
-            setCurrentPage(
-                totalPages,
-            );
-        }
-    }, [
-        currentPage,
-        totalPages,
-    ]);
-
-    const goToPreviousPage = () => {
-        setCurrentPage((page) =>
-            Math.max(
-                1,
-                page - 1,
-            ),
-        );
+      cancelled: registrations.filter(isCancelledRegistration).length,
     };
+  }, [registrations]);
 
-    const goToNextPage = () => {
-        setCurrentPage((page) =>
-            Math.min(
-                totalPages,
-                page + 1,
-            ),
-        );
-    };
+  const filteredRegistrations = useMemo(() => {
+    if (activeFilter === "active") {
+      return registrations.filter(isActiveRegistration);
+    }
 
-    const goToPage = (
-        pageNumber: number,
-    ) => {
-        setCurrentPage(
-            pageNumber,
-        );
-    };
+    if (activeFilter === "completed") {
+      return registrations.filter(isCompletedRegistration);
+    }
 
-    const filters: {
-        value: RegistrationFilter;
-        label: string;
-        count: number;
-    }[] = [
-        {
-            value: "all",
-            label: "All",
-            count:
-                registrationCounts.total,
-        },
-        {
-            value: "active",
-            label: "Active",
-            count:
-                registrationCounts.active,
-        },
-        {
-            value: "completed",
-            label: "Completed",
-            count:
-                registrationCounts.completed,
-        },
-        {
-            value: "cancelled",
-            label: "Cancelled",
-            count:
-                registrationCounts.cancelled,
-        },
-    ];
+    if (activeFilter === "cancelled") {
+      return registrations.filter(isCancelledRegistration);
+    }
 
-    return (
-        <main className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl space-y-6">
-                {/* PAGE HEADER */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                Participant
-                                Events
-                            </p>
+    return registrations;
+  }, [activeFilter, registrations]);
 
-                            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
-                                My
-                                Registrations
-                            </h1>
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredRegistrations.length / REGISTRATIONS_PER_PAGE),
+  );
 
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                Review your
-                                active,
-                                completed, and
-                                cancelled event
-                                registrations.
-                            </p>
-                        </div>
+  const paginatedRegistrations = useMemo(() => {
+    const startIndex = (currentPage - 1) * REGISTRATIONS_PER_PAGE;
 
-                        <button
-                            type="button"
-                            onClick={() =>
-                                void fetchRegistrations(
-                                    true,
-                                )
-                            }
-                            disabled={
-                                refreshing
-                            }
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            <RefreshCw
-                                className={`size-4 ${
-                                    refreshing
-                                        ? "animate-spin"
-                                        : ""
-                                }`}
-                                aria-hidden="true"
-                            />
+    const endIndex = startIndex + REGISTRATIONS_PER_PAGE;
 
-                            {refreshing
-                                ? "Refreshing..."
-                                : "Refresh"}
-                        </button>
-                    </div>
-                </section>
+    return filteredRegistrations.slice(startIndex, endIndex);
+  }, [currentPage, filteredRegistrations]);
 
-                {/* SUMMARY CARDS */}
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Total
-                                    Registrations
-                                </p>
+  const firstVisibleRegistration =
+    filteredRegistrations.length === 0
+      ? 0
+      : (currentPage - 1) * REGISTRATIONS_PER_PAGE + 1;
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        registrationCounts.total
-                                    }
-                                </p>
-                            </div>
+  const lastVisibleRegistration = Math.min(
+    currentPage * REGISTRATIONS_PER_PAGE,
+    filteredRegistrations.length,
+  );
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                                <TicketCheck
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Active
-                                    Events
-                                </p>
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        registrationCounts.active
-                                    }
-                                </p>
-                            </div>
+  const goToPreviousPage = () => {
+    setCurrentPage((page) => Math.max(1, page - 1));
+  };
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                                <CalendarDays
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
+  const goToNextPage = () => {
+    setCurrentPage((page) => Math.min(totalPages, page + 1));
+  };
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Completed
-                                </p>
+  const goToPage = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        registrationCounts.completed
-                                    }
-                                </p>
-                            </div>
+  const filters: {
+    value: RegistrationFilter;
+    label: string;
+    count: number;
+  }[] = [
+    {
+      value: "all",
+      label: "All",
+      count: registrationCounts.total,
+    },
+    {
+      value: "active",
+      label: "Active",
+      count: registrationCounts.active,
+    },
+    {
+      value: "completed",
+      label: "Completed",
+      count: registrationCounts.completed,
+    },
+    {
+      value: "cancelled",
+      label: "Cancelled",
+      count: registrationCounts.cancelled,
+    },
+  ];
 
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-green-50 text-green-700">
-                                <CheckCircle2
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
+  return (
+    <main className="p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        {/* PAGE HEADER */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Participant Events
+              </p>
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">
-                                    Cancelled
-                                </p>
+              <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
+                My Events
+              </h1>
 
-                                <p className="mt-2 text-2xl font-bold text-slate-950">
-                                    {
-                                        registrationCounts.cancelled
-                                    }
-                                </p>
-                            </div>
-
-                            <div className="flex size-11 items-center justify-center rounded-xl bg-red-50 text-red-700">
-                                <XCircle
-                                    className="size-5"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* REGISTRATIONS */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <h2 className="text-xl font-semibold text-slate-950">
-                                Registered
-                                Events
-                            </h2>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                                View your
-                                registration
-                                details and
-                                available
-                                actions.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                            {filters.map(
-                                (filter) => {
-                                    const selected =
-                                        activeFilter ===
-                                        filter.value;
-
-                                    return (
-                                        <button
-                                            key={
-                                                filter.value
-                                            }
-                                            type="button"
-                                            onClick={() =>
-                                                setActiveFilter(
-                                                    filter.value,
-                                                )
-                                            }
-                                            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                                                selected
-                                                    ? "bg-slate-950 text-white"
-                                                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                                            }`}
-                                        >
-                                            {
-                                                filter.label
-                                            }{" "}
-                                            <span
-                                                className={
-                                                    selected
-                                                        ? "text-slate-300"
-                                                        : "text-slate-400"
-                                                }
-                                            >
-                                                {
-                                                    filter.count
-                                                }
-                                            </span>
-                                        </button>
-                                    );
-                                },
-                            )}
-                        </div>
-                    </div>
-
-                    {loading ? (
-                        <div
-                            aria-live="polite"
-                            className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-8 text-center"
-                        >
-                            <div className="mx-auto size-9 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-
-                            <p className="mt-4 text-sm font-medium text-slate-600">
-                                Loading your
-                                registrations...
-                            </p>
-                        </div>
-                    ) : errorMessage ? (
-                        <div
-                            role="alert"
-                            className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center"
-                        >
-                            <p className="font-semibold text-red-800">
-                                Unable to load
-                                registrations
-                            </p>
-
-                            <p className="mt-1 text-sm text-red-600">
-                                {
-                                    errorMessage
-                                }
-                            </p>
-
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    void fetchRegistrations()
-                                }
-                                className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    ) : registrations.length ===
-                      0 ? (
-                        <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-                            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
-                                <CalendarCheck2
-                                    className="size-7"
-                                    aria-hidden="true"
-                                />
-                            </div>
-
-                            <h3 className="mt-4 text-lg font-semibold text-slate-950">
-                                No registrations
-                                yet
-                            </h3>
-
-                            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                                Register for
-                                an available
-                                event to see
-                                it on this
-                                page.
-                            </p>
-
-                            <Link
-                                href="/dashboard/participant/events"
-                                className="mt-5 inline-flex items-center justify-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                            >
-                                Browse
-                                Available Events
-                            </Link>
-                        </div>
-                    ) : filteredRegistrations.length ===
-                      0 ? (
-                        <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                            <p className="font-semibold text-slate-800">
-                                No matching
-                                registrations
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                                There are no
-                                registrations
-                                under the
-                                selected
-                                filter.
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            {/* LIST */}
-                            <div className="mt-6 space-y-4">
-                                {paginatedRegistrations.map(
-                                    (
-                                        item,
-                                    ) => {
-                                        const active =
-                                            isActiveRegistration(
-                                                item,
-                                            );
-
-                                        const cancelled =
-                                            isCancelledRegistration(
-                                                item,
-                                            );
-
-                                        const completed =
-                                            isCompletedRegistration(
-                                                item,
-                                            );
-
-                                        const rsvpCancelled =
-                                            normalizeStatus(
-                                                item
-                                                    .rsvp
-                                                    .status,
-                                            ) ===
-                                            "cancelled";
-
-                                        return (
-                                            <article
-                                                key={
-                                                    item
-                                                        .rsvp
-                                                        .id
-                                                }
-                                                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                                            >
-                                                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                                                    {/* EVENT INFORMATION */}
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <h3 className="text-lg font-semibold text-slate-950">
-                                                                {
-                                                                    item
-                                                                        .event
-                                                                        .title
-                                                                }
-                                                            </h3>
-
-                                                            <span
-                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                                                    rsvpCancelled
-                                                                        ? "bg-red-100 text-red-700"
-                                                                        : "bg-violet-100 text-violet-700"
-                                                                }`}
-                                                            >
-                                                                {rsvpCancelled
-                                                                    ? "Registration Cancelled"
-                                                                    : "Registered"}
-                                                            </span>
-
-                                                            <span
-                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(
-                                                                    item
-                                                                        .event
-                                                                        .status,
-                                                                )}`}
-                                                            >
-                                                                {getEventStatusLabel(
-                                                                    item
-                                                                        .event
-                                                                        .status,
-                                                                )}
-                                                            </span>
-                                                        </div>
-
-                                                        <p className="mt-2 text-sm font-medium text-slate-500">
-                                                            {
-                                                                item
-                                                                    .assignment
-                                                                    .municipality
-                                                            }
-                                                        </p>
-
-                                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                                            {item
-                                                                .event
-                                                                .description ||
-                                                                "No event description provided."}
-                                                        </p>
-
-                                                        {item
-                                                            .assignment
-                                                            .local_instructions && (
-                                                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                                    Local
-                                                                    Instructions
-                                                                </p>
-
-                                                                <p className="mt-1 text-sm leading-6 text-amber-900">
-                                                                    {
-                                                                        item
-                                                                            .assignment
-                                                                            .local_instructions
-                                                                    }
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* SCHEDULE */}
-                                                    <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[390px]">
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                Starts
-                                                            </p>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .event
-                                                                        .start_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                Ends
-                                                            </p>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .event
-                                                                        .end_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="flex items-start gap-2 border-t border-slate-200 pt-3 sm:col-span-2">
-                                                            <Clock3
-                                                                className="mt-0.5 size-4 shrink-0 text-slate-400"
-                                                                aria-hidden="true"
-                                                            />
-
-                                                            <div>
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                    Registered
-                                                                    On
-                                                                </p>
-
-                                                                <p className="mt-1 text-sm font-medium text-slate-700">
-                                                                    {formatDateTime(
-                                                                        item
-                                                                            .rsvp
-                                                                            .registered_at,
-                                                                    )}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* ACTION */}
-                                                    <div className="shrink-0 xl:w-[210px]">
-                                                        {active && (
-                                                            <Link
-                                                                href="/dashboard/participant/attendance-pass"
-                                                                className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
-                                                            >
-                                                                View
-                                                                Attendance
-                                                                Pass
-                                                            </Link>
-                                                        )}
-
-                                                        {completed && (
-                                                            <Link
-                                                                href="/dashboard/participant/attendance-history"
-                                                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
-                                                            >
-                                                                <History
-                                                                    className="size-4"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                View
-                                                                Attendance
-                                                                Result
-                                                            </Link>
-                                                        )}
-
-                                                        {cancelled && (
-                                                            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                                                                <p className="text-sm font-semibold text-red-800">
-                                                                    Event
-                                                                    Cancelled
-                                                                </p>
-
-                                                                <p className="mt-1 text-xs leading-5 text-red-600">
-                                                                    This
-                                                                    registration
-                                                                    is kept
-                                                                    for your
-                                                                    records.
-                                                                </p>
-                                                            </div>
-                                                        )}
-
-                                                        {!active &&
-                                                            !completed &&
-                                                            !cancelled && (
-                                                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                                                                    No
-                                                                    participant
-                                                                    action is
-                                                                    currently
-                                                                    available.
-                                                                </div>
-                                                            )}
-                                                    </div>
-                                                </div>
-                                            </article>
-                                        );
-                                    },
-                                )}
-                            </div>
-
-                            {/* PAGINATION */}
-                            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-sm text-slate-500">
-                                    Showing{" "}
-                                    <span className="font-semibold text-slate-700">
-                                        {
-                                            firstVisibleRegistration
-                                        }
-                                    </span>
-                                    {" - "}
-                                    <span className="font-semibold text-slate-700">
-                                        {
-                                            lastVisibleRegistration
-                                        }
-                                    </span>{" "}
-                                    of{" "}
-                                    <span className="font-semibold text-slate-700">
-                                        {
-                                            filteredRegistrations.length
-                                        }
-                                    </span>{" "}
-                                    registrations
-                                </p>
-
-                                {totalPages >
-                                    1 && (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                goToPreviousPage
-                                            }
-                                            disabled={
-                                                currentPage ===
-                                                1
-                                            }
-                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                        >
-                                            Previous
-                                        </button>
-
-                                        {Array.from(
-                                            {
-                                                length:
-                                                    totalPages,
-                                            },
-                                            (
-                                                _,
-                                                index,
-                                            ) => {
-                                                const pageNumber =
-                                                    index +
-                                                    1;
-
-                                                return (
-                                                    <button
-                                                        key={
-                                                            pageNumber
-                                                        }
-                                                        type="button"
-                                                        onClick={() =>
-                                                            goToPage(
-                                                                pageNumber,
-                                                            )
-                                                        }
-                                                        aria-current={
-                                                            currentPage ===
-                                                            pageNumber
-                                                                ? "page"
-                                                                : undefined
-                                                        }
-                                                        className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                                                            currentPage ===
-                                                            pageNumber
-                                                                ? "bg-slate-950 text-white"
-                                                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                                        }`}
-                                                    >
-                                                        {
-                                                            pageNumber
-                                                        }
-                                                    </button>
-                                                );
-                                            },
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                goToNextPage
-                                            }
-                                            disabled={
-                                                currentPage ===
-                                                totalPages
-                                            }
-                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                        >
-                                            Next
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </section>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Review your active, completed, and cancelled event
+                registrations.
+              </p>
             </div>
-        </main>
-    );
+
+            <button
+              type="button"
+              onClick={() => void fetchRegistrations(true)}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+        </section>
+
+        {/* REGISTRATIONS */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-950">
+                Registered Events
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                View your registration details and available actions.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => {
+                const selected = activeFilter === filter.value;
+
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setActiveFilter(filter.value)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      selected
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                    }`}
+                  >
+                    {filter.label}{" "}
+                    <span
+                      className={selected ? "text-slate-300" : "text-slate-400"}
+                    >
+                      {filter.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {loading ? (
+            <div
+              aria-live="polite"
+              className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-8 text-center"
+            >
+              <div className="mx-auto size-9 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
+
+              <p className="mt-4 text-sm font-medium text-slate-600">
+                Loading your registrations...
+              </p>
+            </div>
+          ) : errorMessage ? (
+            <div
+              role="alert"
+              className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center"
+            >
+              <p className="font-semibold text-red-800">
+                Unable to load registrations
+              </p>
+
+              <p className="mt-1 text-sm text-red-600">{errorMessage}</p>
+
+              <button
+                type="button"
+                onClick={() => void fetchRegistrations()}
+                className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : registrations.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                <CalendarCheck2 className="size-7" aria-hidden="true" />
+              </div>
+
+              <h3 className="mt-4 text-lg font-semibold text-slate-950">
+                No registrations yet
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+                Register for an available event to see it on this page.
+              </p>
+
+              <Link
+                href="/dashboard/participant/events"
+                className="mt-5 inline-flex items-center justify-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Browse Available Events
+              </Link>
+            </div>
+          ) : filteredRegistrations.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <p className="font-semibold text-slate-800">
+                No matching registrations
+              </p>
+
+              <p className="mt-1 text-sm text-slate-500">
+                There are no registrations under the selected filter.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* LIST */}
+              <div className="mt-4 space-y-4">
+                {paginatedRegistrations.map((item) => {
+                  const active = isActiveRegistration(item);
+
+                  const cancelled = isCancelledRegistration(item);
+
+                  const completed = isCompletedRegistration(item);
+
+                  const rsvpCancelled =
+                    normalizeStatus(item.rsvp.status) === "cancelled";
+
+                  return (
+                    <article
+                      key={item.rsvp.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 hover:shadow-md sm:p-5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClasses(item.event.status)}`}>{getEventStatusLabel(item.event.status)}</span>
+                          {rsvpCancelled && <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">Registration Cancelled</span>}
+                          <span className="text-xs text-slate-500">{item.event.event_origin === "municipal" ? "Municipal" : "Provincial"} · {item.assignment.municipality}</span>
+                        </div>
+                        <h3 className="mt-3 break-words text-lg font-bold leading-6 text-slate-950 sm:text-xl">{item.event.title}</h3>
+                        <dl className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm">
+                          <div className="min-w-0"><dt className="text-xs text-slate-500">Starts</dt><dd className="mt-1 font-semibold text-slate-800">{formatDateTime(item.event.start_at)}</dd></div>
+                          <div className="min-w-0"><dt className="text-xs text-slate-500">Ends</dt><dd className="mt-1 font-semibold text-slate-800">{formatDateTime(item.event.end_at)}</dd></div>
+                        </dl>
+                        <div className="mt-4">
+                          {active && (
+                            <Link
+                              href={`/dashboard/participant/my-events?tab=pass&assignment=${encodeURIComponent(item.rsvp.event_municipality_id)}`}
+                              className="flex w-full items-center justify-center min-h-12 rounded-xl bg-violet-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-violet-700"
+                            >
+                              View QR Code
+                            </Link>
+                          )}
+
+                          {completed && (
+                            <Link
+                              href="/dashboard/participant/my-events?tab=history"
+                              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
+                            >
+                              <History className="size-4" aria-hidden="true" />
+                              View Attendance Result
+                            </Link>
+                          )}
+
+                          {cancelled && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                              <p className="text-sm font-semibold text-red-800">
+                                Event Cancelled
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-red-600">
+                                This registration is kept for your records.
+                              </p>
+                            </div>
+                          )}
+
+                          {!active && !completed && !cancelled && (
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                              No participant action is currently available.
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-3">
+                          <VenueLocationButton eventMunicipalityId={item.rsvp.event_municipality_id} label="Venue & Directions" />
+                        </div>
+                        <details className="group mt-3 border-t border-slate-100 pt-1">
+                          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-700 focus-visible:outline-violet-600">Event Details</summary>
+                          <div className="space-y-4 pb-2 text-sm leading-6 text-slate-600">
+                            <div><h4 className="font-semibold text-slate-900">About this event</h4><p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.event.description || "No description provided."}</p></div>
+                            {item.assignment.local_instructions && <div className="rounded-xl bg-amber-50 p-3 text-amber-900"><h4 className="font-semibold">Participant Instructions</h4><p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.assignment.local_instructions}</p></div>}
+                            <p className="text-xs text-slate-500">Registered on {formatDateTime(item.rsvp.registered_at)}</p>
+                          </div>
+                        </details>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              {/* PAGINATION */}
+              <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-semibold text-slate-700">
+                    {firstVisibleRegistration}
+                  </span>
+                  {" - "}
+                  <span className="font-semibold text-slate-700">
+                    {lastVisibleRegistration}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-slate-700">
+                    {filteredRegistrations.length}
+                  </span>{" "}
+                  registrations
+                </p>
+
+                {totalPages > 1 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={goToPreviousPage}
+                      disabled={currentPage === 1}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+
+                    {Array.from(
+                      {
+                        length: totalPages,
+                      },
+                      (_, index) => {
+                        const pageNumber = index + 1;
+
+                        return (
+                          <button
+                            key={pageNumber}
+                            type="button"
+                            onClick={() => goToPage(pageNumber)}
+                            aria-current={
+                              currentPage === pageNumber ? "page" : undefined
+                            }
+                            className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                              currentPage === pageNumber
+                                ? "bg-slate-950 text-white"
+                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        );
+                      },
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }

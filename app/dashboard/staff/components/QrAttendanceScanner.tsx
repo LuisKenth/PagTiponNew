@@ -48,6 +48,7 @@ type QrAttendanceScannerProps = {
     text: string,
     tone?: DashboardMessageType["tone"],
   ) => void;
+  compact?: boolean;
 };
 
 /*
@@ -94,6 +95,7 @@ export default function QrAttendanceScanner({
   message,
   onProcessToken,
   onShowMessage,
+  compact = false,
 }: QrAttendanceScannerProps) {
   /*
    * =====================================================
@@ -180,13 +182,13 @@ export default function QrAttendanceScanner({
 
   const operationLabel =
     isCheckInMode
-      ? "Check In"
-      : "Check Out";
+      ? "Time-in"
+      : "Time-out";
 
   const operationVerb =
     isCheckInMode
-      ? "check in"
-      : "check out";
+      ? "time-in"
+      : "time-out";
 
   /*
    * =====================================================
@@ -304,7 +306,7 @@ export default function QrAttendanceScanner({
    * =====================================================
    *
    * If Event Control closes the currently active
-   * Check-In / Check-Out session, automatically
+   * Time-in / Time-out session, automatically
    * stop the scanner.
    */
 
@@ -359,7 +361,7 @@ export default function QrAttendanceScanner({
    * ATTENDANCE MODE CHANGE
    * =====================================================
    *
-   * Moving from Check In -> Check Out or vice versa
+   * Moving from Time-in -> Time-out or vice versa
    * must stop the old scanner session.
    *
    * Again, this runs only when attendanceMode itself
@@ -891,11 +893,11 @@ export default function QrAttendanceScanner({
                 />
               </div>
 
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              {!compact && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                 {isCheckInMode
-                  ? "Scan the participant QR code to record Time In. Attendance check-in must be open for the selected event."
-                  : "Scan the same participant QR code to record Time Out. Only participants with a successful Time In can be checked out."}
-              </p>
+                  ? "Scan the participant QR code to record Time-in. Attendance time-in must be open for the selected event."
+                  : "Scan the same participant QR code to record Time-out. Only participants with a successful Time-in can be completed Time-out."}
+              </p>}
             </div>
           </div>
 
@@ -915,7 +917,7 @@ export default function QrAttendanceScanner({
 
       <div className="p-5 sm:p-6">
         {/* Current operation */}
-        <div
+        {!compact && <div
           className={`mb-5 flex items-start gap-3 rounded-xl border p-4 ${
             isCheckInMode
               ? "border-emerald-200 bg-emerald-50"
@@ -947,11 +949,11 @@ export default function QrAttendanceScanner({
               }`}
             >
               {isCheckInMode
-                ? "The next valid QR scan will record the participant's Time In."
-                : "The next valid QR scan will record the participant's Time Out."}
+                ? "The next valid QR scan will record the participant's Time-in."
+                : "The next valid QR scan will record the participant's Time-out."}
             </p>
           </div>
-        </div>
+        </div>}
 
         {/* Scanner controls */}
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -1011,8 +1013,8 @@ export default function QrAttendanceScanner({
               <p className="mt-1 text-sm leading-6">
                 {blockedMessage ||
                   (isCheckInMode
-                    ? "Select an event and open attendance check-in to enable QR scanning."
-                    : "Select an eligible event to enable participant check-out.")}
+                    ? "Select an event and open attendance time-in to enable QR scanning."
+                    : "Select an eligible event to enable participant time-out.")}
               </p>
             </div>
           </div>
@@ -1022,7 +1024,7 @@ export default function QrAttendanceScanner({
         <div className="relative mt-5 overflow-hidden rounded-2xl border border-slate-300 bg-slate-950 shadow-inner">
           <div
             id="qr-reader"
-            className="min-h-[320px] w-full sm:min-h-[380px] [&_img]:hidden [&_video]:!h-[320px] [&_video]:!w-full [&_video]:!object-cover sm:[&_video]:!h-[380px]"
+            className={compact ? "min-h-[245px] w-full sm:min-h-[290px] [&_img]:hidden [&_video]:!h-[245px] [&_video]:!w-full [&_video]:!object-cover sm:[&_video]:!h-[290px]" : "min-h-[320px] w-full sm:min-h-[380px] [&_img]:hidden [&_video]:!h-[320px] [&_video]:!w-full [&_video]:!object-cover sm:[&_video]:!h-[380px]"}
           />
 
           {!scannerStarted &&
@@ -1231,7 +1233,7 @@ function OperationBadge({
       <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
         <LogOut className="h-3.5 w-3.5" />
 
-        Check Out
+        Time-out
       </span>
     );
   }
@@ -1240,7 +1242,7 @@ function OperationBadge({
     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
       <LogIn className="h-3.5 w-3.5" />
 
-      Check In
+      Time-in
     </span>
   );
 }

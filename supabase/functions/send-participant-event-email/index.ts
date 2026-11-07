@@ -191,7 +191,7 @@ Deno.serve(async (req: Request) => {
       error: userError,
     } = await userClient.auth.getUser();
 
-    if (userError || !user) {
+    if (userError || !user || user.app_metadata?.must_change_password === true) {
       return jsonResponse(
         {
           error: "Unauthorized user.",

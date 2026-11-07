@@ -107,7 +107,7 @@ export default function VenuesHeader({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 border-t border-slate-200 bg-slate-50/70 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mobile-summary-grid grid grid-cols-1 border-t border-slate-200 bg-slate-50/70 sm:grid-cols-2 xl:grid-cols-4">
         <div className="border-b border-slate-200 p-4 sm:border-r sm:p-5 xl:border-b-0">
           <div className="flex min-h-12 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm">

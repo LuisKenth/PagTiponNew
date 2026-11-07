@@ -27,7 +27,7 @@ export default function PreparedPendingSummary({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mobile-summary-grid mt-5 grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-green-200 bg-green-50 p-5">
           <div className="flex items-start justify-between gap-4">
             <div>

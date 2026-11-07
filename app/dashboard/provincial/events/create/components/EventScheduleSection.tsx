@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 type EventScheduleSectionProps = {
+  scope?: "provincial" | "municipal";
   startAt: string;
   endAt: string;
   onStartAtChange: (value: string) => void;
@@ -69,6 +70,7 @@ function toDateTimeLocalValue(date: Date) {
 }
 
 export default function EventScheduleSection({
+  scope = "provincial",
   startAt,
   endAt,
   onStartAtChange,
@@ -101,13 +103,10 @@ export default function EventScheduleSection({
     startDate !== null && !Number.isNaN(startDate.getTime());
   const validEndDate = endDate !== null && !Number.isNaN(endDate.getTime());
 
-  const startIsPast =
-    validStartDate && startDate.getTime() <= now.getTime();
+  const startIsPast = validStartDate && startDate.getTime() <= now.getTime();
 
   const endBeforeOrEqualStart =
-    validStartDate &&
-    validEndDate &&
-    endDate.getTime() <= startDate.getTime();
+    validStartDate && validEndDate && endDate.getTime() <= startDate.getTime();
 
   const invalidSchedule = Boolean(startIsPast || endBeforeOrEqualStart);
 
@@ -124,14 +123,14 @@ export default function EventScheduleSection({
       {/* Header */}
       <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
             <CalendarDays size={19} />
           </div>
 
           <div>
             <h2 className="font-semibold text-slate-900">Event Schedule</h2>
             <p className="text-sm text-slate-500">
-              Set when the provincial event will start and end.
+              Set when the {scope} event will start and end.
             </p>
           </div>
         </div>
@@ -183,7 +182,7 @@ export default function EventScheduleSection({
               value={startAt}
               min={minimumStartTime}
               onChange={(e) => onStartAtChange(e.target.value)}
-              className={`min-h-14 w-full rounded-xl border bg-white py-4 pl-11 pr-4 text-base font-medium text-slate-800 outline-none transition focus:ring-4 ${
+              className={`min-h-14 w-full rounded-xl border bg-white py-4 pl-11 pr-4 text-base font-medium text-slate-800 outline-none transition focus:ring-1 ${
                 startIsPast
                   ? "border-red-300 focus:border-red-400 focus:ring-red-50"
                   : "border-slate-300 focus:border-slate-500 focus:ring-slate-100"
@@ -229,7 +228,7 @@ export default function EventScheduleSection({
               value={endAt}
               min={minimumEndTime}
               onChange={(e) => onEndAtChange(e.target.value)}
-              className={`min-h-14 w-full rounded-xl border bg-white py-4 pl-11 pr-4 text-base font-medium text-slate-800 outline-none transition focus:ring-4 ${
+              className={`min-h-14 w-full rounded-xl border bg-white py-4 pl-11 pr-4 text-base font-medium text-slate-800 outline-none transition focus:ring-1 ${
                 endBeforeOrEqualStart
                   ? "border-red-300 focus:border-red-400 focus:ring-red-50"
                   : "border-slate-300 focus:border-slate-500 focus:ring-slate-100"
@@ -289,8 +288,8 @@ export default function EventScheduleSection({
               Event start time has already passed
             </p>
             <p className="mt-1 text-xs leading-5 text-red-600">
-              Select a new start date and time later than the current time before
-              publishing this event.
+              Select a new start date and time later than the current time
+              before publishing this event.
             </p>
           </div>
         </div>

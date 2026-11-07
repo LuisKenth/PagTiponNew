@@ -1,0 +1,40 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const db=new PGlite();
+await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create role supabase_auth_admin;create schema auth;create schema storage;create schema extensions;
+create table auth.users(id uuid primary key,email text,raw_app_meta_data jsonb default '{}',raw_user_meta_data jsonb default '{}',banned_until timestamptz);
+create table auth.mfa_factors(id uuid primary key,user_id uuid references auth.users on delete cascade,status text,factor_type text);
+create table storage.objects(id uuid,name text,bucket_id text,owner_id text,created_at timestamptz);
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.uid',true),'')::uuid$$;
+create function auth.role() returns text language sql stable as $$select coalesce(nullif(current_setting('request.role',true),''),'service_role')$$;
+create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt',true),''),'{}')::jsonb$$;`);
+let schema=readFileSync(root+'supabase/current_public_schema.sql','utf8');
+// Local fixture has mock Supabase schemas; production file itself is left unchanged.
+await db.exec(schema);
+await db.exec('set check_function_bodies=true;set row_security=on;');
+await db.exec(readFileSync(root+'supabase/migrations/20261031090000_super_admin_role.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031090100_super_admin_management.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031100000_super_admin_portal.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031120000_provincial_admin_limit.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261031130000_delete_inactive_provincial_admin.sql','utf8'));
+await db.exec(readFileSync(root+'supabase/migrations/20261101020000_authenticator_recovery_request.sql','utf8'));
+
+await db.exec(readFileSync(root+'supabase/migrations/20261101040000_title_only_event_drafts.sql','utf8'));
+const uid='00000000-0000-4000-8000-000000000123';
+await db.query(`insert into auth.users(id,email,raw_app_meta_data,raw_user_meta_data) values($1,'province@example.com','{"provisioned_role":"provincial_admin"}','{"full_name":"Draft Test"}')`,[uid]);
+const id=(await db.query(`insert into public.events(title,status,created_by,audience_type) values('TITLE ONLY','draft',$1,null) returning id`,[uid])).rows[0].id;
+const row=(await db.query('select * from public.events where id=$1',[id])).rows[0];
+if(row.start_at!==null||row.end_at!==null||row.audience_type!==null)throw Error('Draft values fabricated');
+console.log('PASS title-only draft stores null dates and unselected audience');
+async function denied(sql,label){try{await db.exec(sql)}catch(error){if(error.code!=='23514')throw error;console.log('PASS '+label);return}throw Error('Unexpected success '+label)}
+await denied(`update public.events set status='published' where id='${id}'`,'incomplete draft cannot publish');
+await denied(`insert into public.events(title,status) values('   ','draft')`,'blank title rejected');
+await db.query(`update public.events set audience_type='categories',audience_categories='{}' where id=$1`,[id]);
+console.log('PASS partial audience can be saved in draft');
+await denied(`update public.events set status='published',description='Description',start_at=now()+interval '1 day',end_at=now()+interval '2 days' where id='${id}'`,'empty category selection cannot publish');
+await db.query(`update public.events set description='Description',audience_type='all',start_at=now()+interval '1 day',end_at=now()+interval '2 days',status='published' where id=$1`,[id]);
+console.log('PASS completed draft can publish after required details are supplied');
+await denied(`insert into public.events(title,status,start_at,end_at,audience_type,audience_categories,description) values('Bad order','published',now()+interval '2 days',now()+interval '1 day','all','{}','Description')`,'invalid schedule still rejected');
+await db.close();

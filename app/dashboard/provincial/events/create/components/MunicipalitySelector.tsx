@@ -30,16 +30,16 @@ export default function MunicipalitySelector({
     }
 
     return municipalities.filter((municipality) =>
-      municipality.toLowerCase().includes(query)
+      municipality.toLowerCase().includes(query),
     );
   }, [municipalities, search]);
 
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       {/* Header */}
       <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
             <MapPin size={19} />
           </div>
 
@@ -57,10 +57,11 @@ export default function MunicipalitySelector({
         <button
           type="button"
           onClick={onToggleAll}
-          className={`self-start rounded-lg px-3 py-2 text-xs font-semibold transition sm:self-auto ${allSelected
-            ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            : "bg-slate-900 text-white hover:bg-slate-800"
-            }`}
+          className={`self-start rounded-lg px-3 py-2 text-xs font-semibold transition sm:self-auto ${
+            allSelected
+              ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              : "bg-indigo-600 text-white hover:bg-indigo-700"
+          }`}
         >
           {allSelected ? "Unselect All" : "Select All"}
         </button>
@@ -101,8 +102,9 @@ export default function MunicipalitySelector({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search municipality"
             placeholder="Search municipality..."
-            className="h-full w-full rounded-xl border border-slate-200 bg-white pl-12 pr-11 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+            className="h-full w-full rounded-xl border border-slate-200 bg-white pl-12 pr-11 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
           />
 
           {search && (
@@ -123,42 +125,37 @@ export default function MunicipalitySelector({
         {filteredMunicipalities.length > 0 ? (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {filteredMunicipalities.map((municipality) => {
-              const selected =
-                selectedMunicipalities.includes(municipality);
+              const selected = selectedMunicipalities.includes(municipality);
 
               return (
                 <label
                   key={municipality}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${selected
-                    ? "border-slate-300 bg-white shadow-sm"
-                    : "border-transparent hover:border-slate-200 hover:bg-white"
-                    }`}
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${
+                    selected
+                      ? "border-indigo-200 bg-indigo-50 shadow-sm"
+                      : "border-transparent hover:border-slate-200 hover:bg-white"
+                  }`}
                 >
                   <input
                     type="checkbox"
                     checked={selected}
-                    onChange={() =>
-                      onToggleMunicipality(municipality)
-                    }
-                    className="sr-only"
+                    onChange={() => onToggleMunicipality(municipality)}
+                    className="peer sr-only"
                   />
 
                   <div
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${selected
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-300 bg-white"
-                      }`}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 peer-focus-visible:ring-offset-2 ${
+                      selected
+                        ? "border-indigo-600 bg-indigo-600 text-white"
+                        : "border-slate-300 bg-white"
+                    }`}
                   >
-                    {selected && (
-                      <Check size={13} strokeWidth={3} />
-                    )}
+                    {selected && <Check size={13} strokeWidth={3} />}
                   </div>
 
                   <span
                     className={
-                      selected
-                        ? "font-medium text-slate-900"
-                        : "text-slate-600"
+                      selected ? "font-medium text-slate-900" : "text-slate-600"
                     }
                   >
                     {municipality}
@@ -170,10 +167,7 @@ export default function MunicipalitySelector({
         ) : (
           <div className="flex min-h-[130px] items-center justify-center text-center">
             <div>
-              <MapPin
-                size={24}
-                className="mx-auto text-slate-300"
-              />
+              <MapPin size={24} className="mx-auto text-slate-300" />
 
               <p className="mt-2 text-sm font-medium text-slate-600">
                 No municipality found
@@ -201,22 +195,18 @@ export default function MunicipalitySelector({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {selectedMunicipalities
-              .slice(0, 6)
-              .map((municipality) => (
-                <button
-                  key={municipality}
-                  type="button"
-                  onClick={() =>
-                    onToggleMunicipality(municipality)
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
-                >
-                  {municipality}
+            {selectedMunicipalities.slice(0, 6).map((municipality) => (
+              <button
+                key={municipality}
+                type="button"
+                onClick={() => onToggleMunicipality(municipality)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
+              >
+                {municipality}
 
-                  <X size={12} className="text-slate-400" />
-                </button>
-              ))}
+                <X size={12} className="text-slate-400" />
+              </button>
+            ))}
 
             {selectedMunicipalities.length > 6 && (
               <span className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
@@ -230,9 +220,9 @@ export default function MunicipalitySelector({
       {/* Information */}
       <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
         <p className="text-xs leading-5 text-slate-500">
-          Select at least one municipality before publishing the
-          event. Municipality selection may remain incomplete while
-          saving the event as a draft.
+          Select at least one municipality before publishing the event.
+          Municipality selection may remain incomplete while saving the event as
+          a draft.
         </p>
       </div>
     </section>

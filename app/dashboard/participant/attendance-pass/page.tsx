@@ -16,12 +16,14 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from "react";
 
 import { supabase } from "@/lib/supabase";
 
 import QRCodeBox from "../components/QRCodeBox";
+import DownloadAttendancePass from "../components/DownloadAttendancePass";
 
 /*
  * =========================================================
@@ -212,9 +214,9 @@ function getStatusClasses(
  * OR
  *
  * 2. Event is completed, participant already has a
- *    successful Check-In, but still has no Check-Out.
+ *    successful Time In, but still has no Time Out.
  *
- * Once Check-Out is completed, the completed event pass
+ * Once Time Out is completed, the completed event pass
  * no longer needs to remain active.
  */
 function shouldKeepAttendancePass(
@@ -260,7 +262,7 @@ function shouldKeepAttendancePass(
  * relevant to the participant.
  *
  * We intentionally do NOT use the old 30-minute rule.
- * Event Staff controls when Check-In is opened.
+ * Event Staff controls when Time In is opened.
  */
 function getAttendancePassState(
     pass: AttendancePass,
@@ -292,8 +294,8 @@ function getAttendancePassState(
             .check_out_closed_at;
 
     /*
-     * Successful Check-In already exists.
-     * Participant is now waiting for Check-Out.
+     * Successful Time In already exists.
+     * Participant is now waiting for Time Out.
      */
     if (
         hasCheckedIn &&
@@ -337,33 +339,33 @@ function getAttendanceStateLabel(
         state ===
         "waiting_for_check_in"
     ) {
-        return "Waiting for Check-In";
+        return "Waiting for Time In";
     }
 
     if (state === "check_in_open") {
-        return "Check-In Open";
+        return "Time In Open";
     }
 
     if (
         state === "check_in_closed"
     ) {
-        return "Check-In Closed";
+        return "Time In Closed";
     }
 
     if (
         state ===
         "waiting_for_check_out"
     ) {
-        return "Check-Out Required";
+        return "Time Out Required";
     }
 
     if (
         state === "check_out_open"
     ) {
-        return "Check-Out Open";
+        return "Time Out Open";
     }
 
-    return "Check-Out Closed";
+    return "Time Out Closed";
 }
 
 function getAttendanceStateClasses(
@@ -490,34 +492,34 @@ function getAttendanceStateDescription(
     currentTime: number,
 ) {
     if (state === "check_in_open") {
-        return "Check-In is currently open. Present your QR code or manual attendance code to Event Staff to record your Time In.";
+        return "Time In is currently open. Present your QR code or manual attendance code to Event Staff to record your Time In.";
     }
 
     if (
         state ===
         "waiting_for_check_in"
     ) {
-        return "Event Staff has not opened Check-In yet. Keep this attendance pass ready.";
+        return "Event Staff has not opened Time In yet. Keep this attendance pass ready.";
     }
 
     if (
         state === "check_in_closed"
     ) {
-        return "Check-In is currently closed. Contact Event Staff if you believe your attendance has not been recorded correctly.";
+        return "Time In is currently closed. Contact Event Staff if you believe your attendance has not been recorded correctly.";
     }
 
     if (
         state ===
         "check_out_open"
     ) {
-        return "Check-Out is open. Present the same QR code or manual attendance code to Event Staff to record your Time Out.";
+        return "Time Out is open. Present the same QR code or manual attendance code to Event Staff to record your Time Out.";
     }
 
     if (
         state ===
         "check_out_closed"
     ) {
-        return "Your Check-In is recorded, but Check-Out is currently closed. Event Staff may reopen Check-Out so your Time Out can still be recorded.";
+        return "Your Time In is recorded, but Time Out is currently closed. Event Staff may reopen Time Out so your Time Out can still be recorded.";
     }
 
     if (
@@ -530,10 +532,10 @@ function getAttendanceStateDescription(
                 currentTime,
             )
         ) {
-            return "Your Check-In is recorded and the event has ended. Keep this pass available and wait for Event Staff to open Check-Out.";
+            return "Your Time In is recorded and the event has ended. Keep this pass available and wait for Event Staff to open Time Out.";
         }
 
-        return "Your Check-In is recorded. Keep this attendance pass because you will use the same QR code or manual attendance code again during Check-Out.";
+        return "Your Time In is recorded. Keep this attendance pass because you will use the same QR code or manual attendance code again during Time Out.";
     }
 
     return "";
@@ -546,6 +548,10 @@ function getAttendanceStateDescription(
  */
 
 export default function ParticipantAttendancePassPage() {
+    const [participantName, setParticipantName] = useState("");
+    const [registrationConfirmed, setRegistrationConfirmed] = useState("");
+    const focusedPassRef = useRef("");
+
     const [
         attendancePasses,
         setAttendancePasses,
@@ -658,6 +664,9 @@ export default function ParticipantAttendancePassPage() {
 
                     const user =
                         session.user;
+                    const { data: participantProfile } = await supabase
+                        .from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+                    setParticipantName(participantProfile?.full_name || user.user_metadata?.full_name || "Participant");
 
                     /*
                      * Load participant registrations.
@@ -791,7 +800,7 @@ export default function ParticipantAttendancePassPage() {
                      * Load participant attendance records.
                      *
                      * This is important because completed events
-                     * must remain visible until Check-Out is
+                     * must remain visible until Time Out is
                      * successfully recorded.
                      */
                     const {
@@ -1225,6 +1234,37 @@ export default function ParticipantAttendancePassPage() {
      * =====================================================
      */
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const assignmentId = params.get("assignment");
+        if (!assignmentId || attendancePasses.length === 0) return;
+        const index = attendancePasses.findIndex((pass) => pass.assignment.id === assignmentId);
+        if (index < 0) return;
+        const timer = window.setTimeout(() => {
+            setCurrentPage(Math.floor(index / PASSES_PER_PAGE) + 1);
+            setExpandedRsvpId(attendancePasses[index].rsvp.id);
+            if (params.get("registered") === "1") {
+                setRegistrationConfirmed(assignmentId);
+            }
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [attendancePasses]);
+
+    useEffect(() => {
+        if (!expandedRsvpId) return;
+        const assignmentId = new URLSearchParams(window.location.search).get("assignment");
+        if (!assignmentId) return;
+        const pass = attendancePasses.find((item) => item.assignment.id === assignmentId);
+        if (!pass || pass.rsvp.id !== expandedRsvpId || focusedPassRef.current === pass.rsvp.id) return;
+        const frame = window.requestAnimationFrame(() => {
+            const element = document.getElementById("attendance-pass-" + pass.rsvp.id);
+            if (!element) return;
+            focusedPassRef.current = pass.rsvp.id;
+            element.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [expandedRsvpId, currentPage, attendancePasses]);
+
     const totalPages =
         Math.max(
             1,
@@ -1348,10 +1388,10 @@ export default function ParticipantAttendancePassPage() {
      */
 
     return (
-        <main className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl space-y-6">
+        <main className="p-3 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
                 {/* HEADER */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -1369,8 +1409,8 @@ export default function ParticipantAttendancePassPage() {
                                 attendance code
                                 assigned to your
                                 event registration
-                                for Check-In and
-                                Check-Out.
+                                for Time In and
+                                Time Out.
                             </p>
                         </div>
 
@@ -1464,8 +1504,8 @@ export default function ParticipantAttendancePassPage() {
                             no event that
                             requires an active
                             Attendance Pass.
-                            Completed Check-In
-                            and Check-Out
+                            Completed Time In
+                            and Time Out
                             records can be
                             reviewed in your
                             Attendance History.
@@ -1480,7 +1520,7 @@ export default function ParticipantAttendancePassPage() {
                         </Link>
                     </section>
                 ) : (
-                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-6">
                         {/* SECTION HEADER */}
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
@@ -1493,8 +1533,8 @@ export default function ParticipantAttendancePassPage() {
                                     Keep your
                                     Attendance Pass
                                     available until
-                                    both Check-In
-                                    and Check-Out
+                                    both Time In
+                                    and Time Out
                                     are complete.
                                 </p>
                             </div>
@@ -1514,7 +1554,7 @@ export default function ParticipantAttendancePassPage() {
                         </div>
 
                         {/* LIST */}
-                        <div className="mt-6 space-y-4">
+                        <div className="mt-4 space-y-4 sm:mt-6">
                             {paginatedPasses.map(
                                 (item) => {
                                     const expanded =
@@ -1542,368 +1582,58 @@ export default function ParticipantAttendancePassPage() {
 
                                     return (
                                         <article
+                                            id={"attendance-pass-" + item.rsvp.id}
                                             key={
                                                 item
                                                     .rsvp
                                                     .id
                                             }
-                                            className={`overflow-hidden rounded-2xl border bg-white transition ${
+                                            className={`scroll-mt-6 overflow-hidden rounded-2xl border bg-white transition ${
                                                 expanded
                                                     ? "border-slate-300 shadow-md"
                                                     : "border-slate-200 shadow-sm hover:border-slate-300 hover:shadow-md"
                                             }`}
                                         >
-                                            {/* LIST ROW */}
-                                            <div className="p-5">
-                                                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                                                    {/* EVENT */}
-                                                    <div className="min-w-0 flex-1">
+                                            <header className="p-3 sm:p-6">
+                                                <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                                                    <div className="min-w-0 w-full sm:flex-1">
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <h3 className="text-lg font-semibold text-slate-950">
-                                                                {
-                                                                    item
-                                                                        .event
-                                                                        .title
-                                                                }
-                                                            </h3>
-
-                                                            <span
-                                                                className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                                                                    item
-                                                                        .event
-                                                                        .status,
-                                                                )}`}
-                                                            >
-                                                                {getStatusLabel(
-                                                                    item
-                                                                        .event
-                                                                        .status,
-                                                                )}
-                                                            </span>
+                                                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(item.event.status)}`}>{getStatusLabel(item.event.status)}</span>
+                                                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${stateStyles.badge}`}>{getAttendanceStateLabel(attendanceState)}</span>
                                                         </div>
-
-                                                        {/* MUNICIPALITY + VENUE */}
-                                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-                                                            <span className="font-medium">
-                                                                {
-                                                                    item
-                                                                        .assignment
-                                                                        .municipality
-                                                                }
-                                                            </span>
-
-                                                            <span className="inline-flex items-center gap-1.5">
-                                                                <MapPin
-                                                                    className="size-4 shrink-0"
-                                                                    aria-hidden="true"
-                                                                />
-
-                                                                <span className="font-medium">
-                                                                    {item
-                                                                        .venue
-                                                                        ?.venue_name ||
-                                                                        "Venue not assigned"}
-                                                                </span>
-                                                            </span>
-                                                        </div>
-
-                                                        <p className="mt-2 line-clamp-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                                            {item
-                                                                .event
-                                                                .description ||
-                                                                "No event description provided."}
-                                                        </p>
+                                                        <h3 className="mt-3 break-words text-lg font-bold sm:text-xl text-slate-950">{item.event.title}</h3>
+                                                        <p className="mt-2 flex items-start gap-2 text-sm text-slate-600"><MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />{item.venue?.venue_name || "Venue not assigned"} · {item.assignment.municipality}</p>
+                                                        <p className="mt-2 text-sm text-slate-600">{formatDateTime(item.event.start_at)} – {formatDateTime(item.event.end_at)}</p>
                                                     </div>
-
-                                                    {/* SCHEDULE */}
-                                                    <div className="grid shrink-0 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 xl:w-[390px]">
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                Starts
-                                                            </p>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .event
-                                                                        .start_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-
-                                                        <div>
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                Ends
-                                                            </p>
-
-                                                            <p className="mt-1 font-semibold text-slate-800">
-                                                                {formatDateTime(
-                                                                    item
-                                                                        .event
-                                                                        .end_at,
-                                                                )}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* ACTION */}
-                                                    <div className="flex shrink-0 flex-col gap-3 xl:w-[220px]">
-                                                        <span
-                                                            className={`inline-flex justify-center rounded-full px-3 py-1.5 text-xs font-semibold ${stateStyles.badge}`}
-                                                        >
-                                                            {getAttendanceStateLabel(
-                                                                attendanceState,
-                                                            )}
-                                                        </span>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                togglePass(
-                                                                    item
-                                                                        .rsvp
-                                                                        .id,
-                                                                )
-                                                            }
-                                                            aria-expanded={
-                                                                expanded
-                                                            }
-                                                            className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                                                                expanded
-                                                                    ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                                                    : "bg-slate-950 text-white hover:bg-slate-800"
-                                                            }`}
-                                                        >
-                                                            {expanded
-                                                                ? "Hide Pass"
-                                                                : "View Pass"}
-
-                                                            {expanded ? (
-                                                                <ChevronUp
-                                                                    className="size-4"
-                                                                    aria-hidden="true"
-                                                                />
-                                                            ) : (
-                                                                <ChevronDown
-                                                                    className="size-4"
-                                                                    aria-hidden="true"
-                                                                />
-                                                            )}
-                                                        </button>
-                                                    </div>
+                                                    <button type="button" onClick={() => togglePass(item.rsvp.id)} aria-expanded={expanded}
+                                                        aria-controls={"pass-content-" + item.rsvp.id}
+                                                        className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 sm:w-auto sm:px-4 sm:py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                                        <QrCode className="h-4 w-4" aria-hidden="true" />{expanded ? "Hide QR Code" : "Show QR Code"}
+                                                        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                    </button>
                                                 </div>
-                                            </div>
+                                            </header>
 
                                             {/* EXPANDED PASS */}
                                             {expanded && (
-                                                <div className="border-t border-slate-200 bg-slate-50/60 p-5 sm:p-6">
-                                                    {/* LOCAL INSTRUCTIONS */}
-                                                    {item
-                                                        .assignment
-                                                        .local_instructions && (
-                                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                                                                Local
-                                                                Instructions
-                                                            </p>
-
-                                                            <p className="mt-1 text-sm leading-6 text-amber-900">
-                                                                {
-                                                                    item
-                                                                        .assignment
-                                                                        .local_instructions
-                                                                }
-                                                            </p>
-                                                        </div>
+                                                <div id={"pass-content-" + item.rsvp.id} className="border-t border-slate-200 bg-slate-50/60 p-3 sm:p-6">
+                                                    {registrationConfirmed === item.assignment.id && (
+                                                        <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
+                                                            Registration successful. Your QR code and manual code are ready below.
+                                                        </p>
                                                     )}
-
-                                                    {/* EVENT VENUE */}
-                                                    <div
-                                                        className={`${
-                                                            item
-                                                                .assignment
-                                                                .local_instructions
-                                                                ? "mt-4"
-                                                                : ""
-                                                        } rounded-xl border border-slate-200 bg-white p-4`}
-                                                    >
-                                                        <div className="flex items-start gap-3">
-                                                            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                                                                <MapPin
-                                                                    className="size-5"
-                                                                    aria-hidden="true"
-                                                                />
-                                                            </div>
-
-                                                            <div>
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                                                                    Event
-                                                                    Venue
-                                                                </p>
-
-                                                                <p className="mt-1 font-semibold text-slate-900">
-                                                                    {item
-                                                                        .venue
-                                                                        ?.venue_name ||
-                                                                        "Venue not assigned"}
-                                                                </p>
-
-                                                                <p className="mt-1 text-sm text-slate-500">
-                                                                    {
-                                                                        item
-                                                                            .assignment
-                                                                            .municipality
-                                                                    }
-                                                                </p>
-                                                            </div>
-                                                        </div>
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <h4 className="text-lg font-bold text-slate-950">Your Attendance Code</h4>
+                                                        <p className="text-sm text-slate-500">Use the same code for Time-in and Time-out.</p>
                                                     </div>
-
-                                                    {/* ATTENDANCE STATUS */}
-                                                    <div
-                                                        className={`mt-4 rounded-xl border p-4 ${stateStyles.container}`}
-                                                    >
-                                                        <div className="flex items-start gap-3">
-                                                            <span
-                                                                className={`mt-1.5 size-2.5 shrink-0 rounded-full ${stateStyles.dot}`}
-                                                            />
-
-                                                            <div className="min-w-0">
-                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                    <Clock3
-                                                                        className={`size-4 ${stateStyles.title}`}
-                                                                        aria-hidden="true"
-                                                                    />
-
-                                                                    <p
-                                                                        className={`text-sm font-semibold ${stateStyles.title}`}
-                                                                    >
-                                                                        {getAttendanceStateLabel(
-                                                                            attendanceState,
-                                                                        )}
-                                                                    </p>
-                                                                </div>
-
-                                                                <p
-                                                                    className={`mt-1 text-sm leading-6 ${stateStyles.description}`}
-                                                                >
-                                                                    {getAttendanceStateDescription(
-                                                                        attendanceState,
-                                                                        item,
-                                                                        currentTime,
-                                                                    )}
-                                                                </p>
-
-                                                                {hasCheckedIn &&
-                                                                    item
-                                                                        .attendance
-                                                                        ?.checked_in_at && (
-                                                                        <p
-                                                                            className={`mt-2 text-xs ${stateStyles.description}`}
-                                                                        >
-                                                                            Time
-                                                                            In:{" "}
-                                                                            <span className="font-semibold">
-                                                                                {formatDateTime(
-                                                                                    item
-                                                                                        .attendance
-                                                                                        .checked_in_at,
-                                                                                )}
-                                                                            </span>
-                                                                        </p>
-                                                                    )}
-
-                                                                {attendanceState ===
-                                                                    "check_in_open" &&
-                                                                    item
-                                                                        .assignment
-                                                                        .check_in_opened_at && (
-                                                                        <p
-                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
-                                                                        >
-                                                                            Check-In
-                                                                            opened{" "}
-                                                                            {formatDateTime(
-                                                                                item
-                                                                                    .assignment
-                                                                                    .check_in_opened_at,
-                                                                            )}
-                                                                        </p>
-                                                                    )}
-
-                                                                {attendanceState ===
-                                                                    "check_out_open" &&
-                                                                    item
-                                                                        .assignment
-                                                                        .check_out_opened_at && (
-                                                                        <p
-                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
-                                                                        >
-                                                                            Check-Out
-                                                                            opened{" "}
-                                                                            {formatDateTime(
-                                                                                item
-                                                                                    .assignment
-                                                                                    .check_out_opened_at,
-                                                                            )}
-                                                                        </p>
-                                                                    )}
-
-                                                                {attendanceState ===
-                                                                    "check_out_closed" &&
-                                                                    item
-                                                                        .assignment
-                                                                        .check_out_closed_at && (
-                                                                        <p
-                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
-                                                                        >
-                                                                            Check-Out
-                                                                            closed{" "}
-                                                                            {formatDateTime(
-                                                                                item
-                                                                                    .assignment
-                                                                                    .check_out_closed_at,
-                                                                            )}
-                                                                        </p>
-                                                                    )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* PASS DETAILS HEADER */}
-                                                    <div className="mt-5 flex items-center gap-2">
-                                                        <CalendarDays
-                                                            className="size-5 text-slate-500"
-                                                            aria-hidden="true"
-                                                        />
-
-                                                        <div>
-                                                            <p className="font-semibold text-slate-950">
-                                                                Attendance
-                                                                Pass
-                                                            </p>
-
-                                                            <p className="text-xs text-slate-500">
-                                                                Present
-                                                                either
-                                                                code to
-                                                                authorized
-                                                                Event Staff
-                                                                for
-                                                                Check-In
-                                                                or
-                                                                Check-Out.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
                                                     {/* QR + MANUAL CODE */}
-                                                    <div className="mt-4 grid gap-5 lg:grid-cols-2">
+                                                    <div className="mt-3 grid min-w-0 items-start gap-3 sm:mt-4 sm:gap-5 md:grid-cols-2">
                                                         {/* QR */}
                                                         <div>
                                                             {item
                                                                 .rsvp
                                                                 .qr_token ? (
+                                                                <>
                                                                 <div
                                                                     role="button"
                                                                     tabIndex={0}
@@ -1925,7 +1655,7 @@ export default function ParticipantAttendancePassPage() {
                                                                             );
                                                                         }
                                                                     }}
-                                                                    className="cursor-zoom-in rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-300"
+                                                                    className="mx-auto w-full max-w-sm cursor-zoom-in rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-300"
                                                                 >
                                                                     <QRCodeBox
                                                                         qrToken={
@@ -1935,6 +1665,16 @@ export default function ParticipantAttendancePassPage() {
                                                                         }
                                                                     />
                                                                 </div>
+                                                                <DownloadAttendancePass
+                                                                    qrToken={item.rsvp.qr_token}
+                                                                    participantName={participantName}
+                                                                    eventTitle={item.event.title}
+                                                                    schedule={`${formatDateTime(item.event.start_at)} – ${formatDateTime(item.event.end_at)} (PH)`}
+                                                                    venue={item.venue?.venue_name || "Venue not assigned"}
+                                                                    municipality={item.assignment.municipality}
+                                                                    manualCode={item.rsvp.attendance_code}
+                                                                />
+                                                                </>
                                                             ) : (
                                                                 <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
                                                                     <QrCode
@@ -1955,9 +1695,9 @@ export default function ParticipantAttendancePassPage() {
                                                                         attendance
                                                                         code
                                                                         for
-                                                                        Check-In
+                                                                        Time In
                                                                         or
-                                                                        Check-Out.
+                                                                        Time Out.
                                                                     </p>
                                                                 </div>
                                                             )}
@@ -1981,9 +1721,9 @@ export default function ParticipantAttendancePassPage() {
                                                                         Event
                                                                         Staff
                                                                         for
-                                                                        Check-In
+                                                                        Time In
                                                                         or
-                                                                        Check-Out
+                                                                        Time Out
                                                                         when
                                                                         the
                                                                         QR
@@ -2062,6 +1802,127 @@ export default function ParticipantAttendancePassPage() {
                                                             </p>
                                                         </div>
                                                     </div>
+                                                    {/* ATTENDANCE STATUS */}
+                                                    <div
+                                                        className={`mt-4 rounded-xl border p-4 ${stateStyles.container}`}
+                                                    >
+                                                        <div className="flex items-start gap-3">
+                                                            <span
+                                                                className={`mt-1.5 size-2.5 shrink-0 rounded-full ${stateStyles.dot}`}
+                                                            />
+
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <Clock3
+                                                                        className={`size-4 ${stateStyles.title}`}
+                                                                        aria-hidden="true"
+                                                                    />
+
+                                                                    <p
+                                                                        className={`text-sm font-semibold ${stateStyles.title}`}
+                                                                    >
+                                                                        {getAttendanceStateLabel(
+                                                                            attendanceState,
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+
+                                                                <p
+                                                                    className={`mt-1 text-sm leading-6 ${stateStyles.description}`}
+                                                                >
+                                                                    {getAttendanceStateDescription(
+                                                                        attendanceState,
+                                                                        item,
+                                                                        currentTime,
+                                                                    )}
+                                                                </p>
+
+                                                                {hasCheckedIn &&
+                                                                    item
+                                                                        .attendance
+                                                                        ?.checked_in_at && (
+                                                                        <p
+                                                                            className={`mt-2 text-xs ${stateStyles.description}`}
+                                                                        >
+                                                                            Time
+                                                                            In:{" "}
+                                                                            <span className="font-semibold">
+                                                                                {formatDateTime(
+                                                                                    item
+                                                                                        .attendance
+                                                                                        .checked_in_at,
+                                                                                )}
+                                                                            </span>
+                                                                        </p>
+                                                                    )}
+
+                                                                {attendanceState ===
+                                                                    "check_in_open" &&
+                                                                    item
+                                                                        .assignment
+                                                                        .check_in_opened_at && (
+                                                                        <p
+                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
+                                                                        >
+                                                                            Time In
+                                                                            opened{" "}
+                                                                            {formatDateTime(
+                                                                                item
+                                                                                    .assignment
+                                                                                    .check_in_opened_at,
+                                                                            )}
+                                                                        </p>
+                                                                    )}
+
+                                                                {attendanceState ===
+                                                                    "check_out_open" &&
+                                                                    item
+                                                                        .assignment
+                                                                        .check_out_opened_at && (
+                                                                        <p
+                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
+                                                                        >
+                                                                            Time Out
+                                                                            opened{" "}
+                                                                            {formatDateTime(
+                                                                                item
+                                                                                    .assignment
+                                                                                    .check_out_opened_at,
+                                                                            )}
+                                                                        </p>
+                                                                    )}
+
+                                                                {attendanceState ===
+                                                                    "check_out_closed" &&
+                                                                    item
+                                                                        .assignment
+                                                                        .check_out_closed_at && (
+                                                                        <p
+                                                                            className={`mt-1 text-xs ${stateStyles.description}`}
+                                                                        >
+                                                                            Time Out
+                                                                            closed{" "}
+                                                                            {formatDateTime(
+                                                                                item
+                                                                                    .assignment
+                                                                                    .check_out_closed_at,
+                                                                            )}
+                                                                        </p>
+                                                                    )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <details className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+                                                        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Event Details & Instructions</summary>
+                                                        <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{item.event.description || "No event description provided."}</p>
+                                                        {item.assignment.local_instructions && (
+                                                            <div className="mt-4 rounded-lg bg-amber-50 p-4">
+                                                                <h4 className="text-sm font-semibold text-amber-900">Participant Instructions</h4>
+                                                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900 [overflow-wrap:anywhere]">{item.assignment.local_instructions}</p>
+                                                            </div>
+                                                        )}
+                                                    </details>
                                                 </div>
                                             )}
                                         </article>

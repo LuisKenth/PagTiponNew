@@ -3,6 +3,7 @@ export type DatabaseId = number | string;
 export type EventDetails = {
   id: DatabaseId;
   title: string;
+  description?: string | null;
   status: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -13,13 +14,20 @@ export type EventAssignment = {
   event_id: DatabaseId;
   municipality: string;
 
-  // Check-In control
+  // Local event preparation details
+  local_venue_id?: string | null;
+  local_instructions?: string | null;
+
+  // Resolved venue information
+  venue_name?: string | null;
+
+  // Time-in control
   check_in_opened_at: string | null;
   check_in_closed_at: string | null;
   check_in_opened_by: string | null;
   check_in_closed_by: string | null;
 
-  // Check-Out control
+  // Time-out control
   check_out_opened_at: string | null;
   check_out_closed_at: string | null;
   check_out_opened_by: string | null;
@@ -33,13 +41,20 @@ export type RawEventAssignment = {
   event_id: DatabaseId;
   municipality: string;
 
-  // Check-In control
+  // Local event preparation details
+  local_venue_id?: string | null;
+  local_instructions?: string | null;
+
+  // Resolved venue information
+  venue_name?: string | null;
+
+  // Time-in control
   check_in_opened_at: string | null;
   check_in_closed_at: string | null;
   check_in_opened_by: string | null;
   check_in_closed_by: string | null;
 
-  // Check-Out control
+  // Time-out control
   check_out_opened_at: string | null;
   check_out_closed_at: string | null;
   check_out_opened_by: string | null;
@@ -61,13 +76,9 @@ export type RSVP = {
   registered_at: string | null;
 };
 
-export type AttendanceMethod =
-  | "qr"
-  | "manual";
+export type AttendanceMethod = "qr" | "manual";
 
-export type AttendanceActionMode =
-  | "check_in"
-  | "check_out";
+export type AttendanceActionMode = "check_in" | "check_out";
 
 export type AttendanceRecord = {
   id: string;
@@ -78,11 +89,11 @@ export type AttendanceRecord = {
   status: string | null;
   method: string | null;
 
-  // Time In
+  // Time-in
   checked_in_at: string | null;
   checked_in_by: string | null;
 
-  // Time Out
+  // Time-out
   checked_out_at: string | null;
   checked_out_by: string | null;
 
@@ -90,10 +101,7 @@ export type AttendanceRecord = {
   participant_email?: string | null;
 };
 
-export type MessageTone =
-  | "info"
-  | "success"
-  | "error";
+export type MessageTone = "info" | "success" | "error";
 
 export type DashboardMessage = {
   text: string;
@@ -128,14 +136,12 @@ export type AttendanceControlRpcResult = {
 };
 
 /**
- * Keep the old name so existing Check-In
+ * Keep the old name so existing Time-in
  * code does not break.
  */
-export type CheckInRpcResult =
-  AttendanceControlRpcResult;
+export type CheckInRpcResult = AttendanceControlRpcResult;
 
-export type CheckOutRpcResult =
-  AttendanceControlRpcResult;
+export type CheckOutRpcResult = AttendanceControlRpcResult;
 
 /**
  * Result returned by:

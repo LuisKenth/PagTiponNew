@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MUNICIPAL_ADMIN_LIMIT } from "@/lib/municipalAdminLimit";
 import { ArrowRight } from "lucide-react";
 
 import type { MunicipalityOverviewItem } from "../types/municipality";
@@ -22,8 +23,7 @@ export default function MunicipalityCard({
   );
 
   const totalRelevantAdmins =
-    municipality.approvedAdmins.length +
-    municipality.pendingAdmins.length;
+    municipality.approvedAdmins.length + municipality.pendingAdmins.length;
 
   const municipalitySlug = toMunicipalitySlug(municipality.name);
 
@@ -34,6 +34,9 @@ export default function MunicipalityCard({
           {municipality.name}
         </h3>
 
+        <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+          {municipality.approvedAdmins.length}/{MUNICIPAL_ADMIN_LIMIT} approved
+        </span>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getMunicipalityStatusClass(
             municipality.status,
@@ -46,9 +49,7 @@ export default function MunicipalityCard({
       <div className="min-w-0">
         {displayedAdmin ? (
           <>
-            <p className="text-xs font-medium text-slate-400">
-              Administrator
-            </p>
+            <p className="text-xs font-medium text-slate-400">Administrator</p>
 
             <p className="mt-0.5 text-sm font-semibold text-slate-800">
               {displayedAdmin.full_name || "Unnamed Admin"}

@@ -178,7 +178,7 @@ export default function AttendanceTrend({
       ) : (
         <>
           {/* Small Summary */}
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="mobile-summary-grid mt-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-xs text-slate-500">
                 Events with Data

@@ -141,6 +141,7 @@ export default function PrepareEventModal({
   onClose,
   onSave,
 }: PrepareEventModalProps) {
+  const isMunicipalEvent = selectedEvent?.event?.event_origin === "municipal";
   const municipalStatus = String(selectedEvent?.municipal_status ?? "")
     .trim()
     .toLowerCase();
@@ -319,7 +320,9 @@ export default function PrepareEventModal({
                       ? "This event is already ongoing. Municipal preparation details are now read-only."
                       : isCompleted
                         ? "This event has been completed. Municipal preparation details are retained for reference only."
-                        : "Assign a local venue, update the preparation status, add instructions, and control participant registration."}
+                        : isMunicipalEvent
+                          ? "Assign a local venue, update preparation status, and control participant registration."
+                          : "Assign a local venue, update the preparation status, add instructions, and control participant registration."}
                 </p>
               </div>
             </div>
@@ -667,58 +670,65 @@ export default function PrepareEventModal({
             </section>
 
             {/* LOCAL INSTRUCTIONS */}
-            <section className="mt-5">
-              <label
-                htmlFor="municipal-local-instructions"
-                className="text-sm font-bold text-slate-900"
-              >
-                Local Instructions
-              </label>
-
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                {isLocked
-                  ? "Review the municipal instructions recorded before the event was locked."
-                  : "Add municipal reminders, requirements, or arrival instructions for participants."}
-              </p>
-
-              <textarea
-                id="municipal-local-instructions"
-                value={localInstructions}
-                disabled={controlsDisabled}
-                onChange={(event) => onInstructionsChange(event.target.value)}
-                rows={5}
-                placeholder={
-                  isLocked
-                    ? "Local instructions are locked because this event is no longer available for preparation changes."
-                    : "Example: Participants must arrive 30 minutes before the event and bring a valid ID."
-                }
-                className={`mt-3 w-full resize-none rounded-xl border px-4 py-3 text-sm leading-6 outline-none transition ${
-                  isLocked
-                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
-                    : "border-slate-300 bg-white text-slate-700 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                }`}
-              />
-
-              <div className="mt-1.5 flex items-center justify-between gap-3 text-xs">
-                <span
-                  className={
-                    isCancelled
-                      ? "text-red-600"
-                      : isLocked
-                        ? "text-slate-500"
-                        : "text-slate-400"
-                  }
+            {!isMunicipalEvent && (
+              <section className="mt-5">
+                <label
+                  htmlFor="municipal-local-instructions"
+                  className="text-sm font-bold text-slate-900"
                 >
-                  {isLocked
-                    ? "Instructions are retained for reference only."
-                    : "Keep the instructions clear and specific."}
-                </span>
+                  Local Instructions
+                </label>
 
-                <span className="shrink-0 text-slate-400">
-                  {localInstructions.length} characters
-                </span>
-              </div>
-            </section>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {isLocked
+                    ? "Review the municipal instructions recorded before the event was locked."
+                    : "Add municipal reminders, requirements, or arrival instructions for participants."}
+                </p>
+
+                <textarea
+                  id="municipal-local-instructions"
+                  value={localInstructions}
+                  maxLength={2000}
+                  aria-describedby="municipal-instruction-count"
+                  disabled={controlsDisabled}
+                  onChange={(event) => onInstructionsChange(event.target.value)}
+                  rows={5}
+                  placeholder={
+                    isLocked
+                      ? "Local instructions are locked because this event is no longer available for preparation changes."
+                      : "Example: Participants must arrive 30 minutes before the event and bring a valid ID."
+                  }
+                  className={`mt-3 w-full resize-none rounded-xl border px-4 py-3 text-sm leading-6 outline-none transition ${
+                    isLocked
+                      ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
+                      : "border-slate-300 bg-white text-slate-700 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  }`}
+                />
+
+                <div className="mt-1.5 flex items-center justify-between gap-3 text-xs">
+                  <span
+                    className={
+                      isCancelled
+                        ? "text-red-600"
+                        : isLocked
+                          ? "text-slate-500"
+                          : "text-slate-400"
+                    }
+                  >
+                    {isLocked
+                      ? "Instructions are retained for reference only."
+                      : "Keep the instructions clear and specific."}
+                  </span>
+
+                  <span
+                    id="municipal-instruction-count"
+                    className="shrink-0 text-slate-400"
+                  >
+                    {localInstructions.length} / 2,000 characters
+                  </span>
+                </div>
+              </section>
+            )}
 
             {/* REGISTRATION CONTROL */}
             <section className="mt-5">

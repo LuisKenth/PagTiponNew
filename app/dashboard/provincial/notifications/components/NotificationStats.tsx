@@ -10,7 +10,7 @@ export default function NotificationStats({
   const readCount = totalCount - unreadCount;
 
   return (
-    <div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="mobile-summary-grid grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <p className="text-sm font-medium text-slate-500">
           Total Notifications

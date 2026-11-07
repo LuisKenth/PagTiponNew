@@ -1,4 +1,5 @@
 "use client";
+import ProvincialPageHeader from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
+import { updateAccountPassword } from "@/lib/accountAuth";
 
 type ProvincialProfile = {
   full_name: string | null;
@@ -106,7 +108,7 @@ export default function ProvincialSettingsPage() {
     () => [
       {
         label: "Hindi bababa sa 8 character",
-        valid: newPassword.length >= 8,
+        valid: newPassword.length >= 8 && newPassword.length <= 16,
       },
       {
         label: "May malaking titik (A–Z)",
@@ -125,12 +127,11 @@ export default function ProvincialSettingsPage() {
         valid: /[^A-Za-z0-9]/.test(newPassword),
       },
     ],
-    [newPassword]
+    [newPassword],
   );
 
   const isPasswordValid = passwordChecks.every((check) => check.valid);
-  const hasNameChanged =
-    fullName.trim() !== (profile?.full_name ?? "").trim();
+  const hasNameChanged = fullName.trim() !== (profile?.full_name ?? "").trim();
 
   const roleLabel = (profile?.role ?? "provincial_admin")
     .split("_")
@@ -190,7 +191,7 @@ export default function ProvincialSettingsPage() {
     }
 
     setProfile((current) =>
-      current ? { ...current, full_name: nextName } : current
+      current ? { ...current, full_name: nextName } : current,
     );
     setFullName(nextName);
     setEditingName(false);
@@ -236,7 +237,7 @@ export default function ProvincialSettingsPage() {
       return;
     }
 
-    const { error: updateError } = await supabase.auth.updateUser({
+    const { error: updateError } = await updateAccountPassword({
       password: newPassword,
     });
 
@@ -258,7 +259,7 @@ export default function ProvincialSettingsPage() {
     label: string,
     value: string,
     onChange: (value: string) => void,
-    placeholder: string
+    placeholder: string,
   ) {
     const isVisible = visibleFields[field];
     const inputId = `password-${field}`;
@@ -319,28 +320,18 @@ export default function ProvincialSettingsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <header className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
-        <div className="flex items-start gap-4">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-            <SlidersHorizontal className="h-7 w-7" />
+      <ProvincialPageHeader
+        icon={<SlidersHorizontal className="h-5 w-5" aria-hidden="true" />}
+        eyebrow="Account & Security"
+        title="Provincial Settings"
+        description="Manage your provincial administrator profile and account security."
+        actions={
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            Protected account
           </span>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Provincial Settings
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Manage your provincial administrator profile and account
-              security.
-            </p>
-          </div>
-        </div>
-
-        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
-          <ShieldCheck className="h-4 w-4" />
-          Protected account
-        </span>
-      </header>
-
+        }
+      />
       <div className="grid items-start gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center gap-4 border-b border-slate-200 px-6 py-5">
@@ -501,7 +492,7 @@ export default function ProvincialSettingsPage() {
               "Current password",
               currentPassword,
               setCurrentPassword,
-              "Enter current password"
+              "Enter current password",
             )}
 
             {renderPasswordInput(
@@ -509,7 +500,7 @@ export default function ProvincialSettingsPage() {
               "New password",
               newPassword,
               setNewPassword,
-              "Enter new password"
+              "Enter new password",
             )}
 
             {newPassword && (
@@ -532,7 +523,7 @@ export default function ProvincialSettingsPage() {
               "Confirm new password",
               confirmPassword,
               setConfirmPassword,
-              "Enter confirm new password"
+              "Enter confirm new password",
             )}
 
             {confirmPassword && newPassword !== confirmPassword && (

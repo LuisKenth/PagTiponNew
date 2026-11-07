@@ -10,7 +10,7 @@ export default function MemoSummaryCards({
   loading = false,
 }: MemoSummaryCardsProps) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="mobile-summary-grid grid gap-4 sm:grid-cols-2">
       {/* TOTAL MEMOS */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-medium text-slate-500">

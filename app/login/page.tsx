@@ -17,15 +17,9 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
-import {
-  getDashboardPath,
-  type UserRole,
-} from "@/lib/routes";
+import { getDashboardPath, type UserRole } from "@/lib/routes";
 
-type VerificationStatus =
-  | "pending"
-  | "approved"
-  | "rejected";
+type VerificationStatus = "pending" | "approved" | "rejected";
 
 type Profile = {
   role: UserRole;
@@ -36,51 +30,38 @@ export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] =
-    useState("");
+  const [password, setPassword] = useState("");
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const validateForm = () => {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
-      setErrorMessage(
-        "Please enter your email address."
-      );
+      setErrorMessage("Please enter your email address.");
       return false;
     }
 
-    const emailPattern =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailPattern.test(trimmedEmail)) {
-      setErrorMessage(
-        "Please enter a valid email address."
-      );
+      setErrorMessage("Please enter a valid email address.");
       return false;
     }
 
     if (!password) {
-      setErrorMessage(
-        "Please enter your password."
-      );
+      setErrorMessage("Please enter your password.");
       return false;
     }
 
     return true;
   };
 
-  const handleLogin = async (
-    e: FormEvent<HTMLFormElement>
-  ) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (loading) return;
@@ -95,36 +76,26 @@ export default function LoginPage() {
 
     try {
       // 1. Authenticate the user.
-      const {
-        data: loginData,
-        error: loginError,
-      } =
+      const { data: loginData, error: loginError } =
         await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
 
       if (loginError) {
-        const loginErrorMessage =
-          loginError.message.toLowerCase();
+        const loginErrorMessage = loginError.message.toLowerCase();
 
-        if (
-          loginErrorMessage.includes(
-            "invalid login credentials"
-          )
-        ) {
+        if (loginErrorMessage.includes("invalid login credentials")) {
           setErrorMessage(
-            "Incorrect email or password. Please check your credentials and try again."
+            "Incorrect email or password. Please check your credentials and try again.",
           );
-        } else if (
-          loginErrorMessage.includes("banned")
-        ) {
+        } else if (loginErrorMessage.includes("banned")) {
           setErrorMessage(
-            "This account has been deactivated. Please contact your administrator for assistance."
+            "This account has been deactivated. Please contact your administrator for assistance.",
           );
         } else {
           setErrorMessage(
-            "Unable to sign in. Please try again or contact the system administrator."
+            "Unable to sign in. Please try again or contact the system administrator.",
           );
         }
 
@@ -136,36 +107,26 @@ export default function LoginPage() {
       if (!user) {
         await supabase.auth.signOut();
 
-        setErrorMessage(
-          "Unable to find your account."
-        );
+        setErrorMessage("Unable to find your account.");
 
         return;
       }
 
       // 2. Get the trusted role/status
       // from public.profiles.
-      const {
-        data: profile,
-        error: profileError,
-      } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select(
-          "role, verification_status"
-        )
+        .select("role, verification_status")
         .eq("id", user.id)
         .maybeSingle<Profile>();
 
       if (profileError) {
-        console.error(
-          "Profile error:",
-          profileError.message
-        );
+        console.error("Profile error:", profileError.message);
 
         await supabase.auth.signOut();
 
         setErrorMessage(
-          "Unable to verify your account. Please contact the system administrator."
+          "Unable to verify your account. Please contact the system administrator.",
         );
 
         return;
@@ -177,51 +138,44 @@ export default function LoginPage() {
         await supabase.auth.signOut();
 
         setErrorMessage(
-          "Your account profile could not be found. Please contact the system administrator."
+          "Your account profile could not be found. Please contact the system administrator.",
         );
 
         return;
       }
 
+      if (["super_admin", "provincial_admin"].includes(profile.role) && profile.verification_status !== "approved") {
+        await supabase.auth.signOut();
+        setErrorMessage("Your administrator account is inactive. Contact your authorized administrator.");
+        return;
+      }
       // 3. Municipal Admin approval check.
-      if (
-        profile.role ===
-        "municipal_admin"
-      ) {
-        if (
-          profile.verification_status ===
-          "pending"
-        ) {
+      if (profile.role === "municipal_admin") {
+        if (profile.verification_status === "pending") {
           await supabase.auth.signOut();
 
           setErrorMessage(
-            "Your municipal admin account is still pending provincial approval."
+            "Your municipal admin account is still pending provincial approval.",
           );
 
           return;
         }
 
-        if (
-          profile.verification_status ===
-          "rejected"
-        ) {
+        if (profile.verification_status === "rejected") {
           await supabase.auth.signOut();
 
           setErrorMessage(
-            "Your municipal admin application has been rejected. Please contact the provincial administrator for assistance."
+            "Your municipal admin application has been rejected. Please contact the provincial administrator for assistance.",
           );
 
           return;
         }
 
-        if (
-          profile.verification_status !==
-          "approved"
-        ) {
+        if (profile.verification_status !== "approved") {
           await supabase.auth.signOut();
 
           setErrorMessage(
-            "Your municipal admin account is not authorized to access the system."
+            "Your municipal admin account is not authorized to access the system.",
           );
 
           return;
@@ -229,35 +183,35 @@ export default function LoginPage() {
       }
 
       // 4. Safety check for rejected accounts.
-      if (
-        profile.verification_status ===
-        "rejected"
-      ) {
+      if (profile.verification_status === "rejected") {
         await supabase.auth.signOut();
 
-        setErrorMessage(
-          "Your account has been rejected."
-        );
+        setErrorMessage("Your account has been rejected.");
 
         return;
       }
 
       // 5. Redirect according to role.
-      router.push(
-        getDashboardPath(profile.role)
-      );
+      // Require Municipal Admins to replace their initial password.
+      if (
+        ["super_admin", "provincial_admin", "municipal_admin", "event_staff"].includes(profile.role) &&
+        user.app_metadata?.must_change_password === true
+      ) {
+        router.replace("/change-password");
+        router.refresh();
+        return;
+      }
 
+      // Continue to the appropriate dashboard.
+      router.replace(getDashboardPath(profile.role));
       router.refresh();
     } catch (error) {
-      console.error(
-        "Login error:",
-        error
-      );
+      console.error("Login error:", error);
 
       await supabase.auth.signOut();
 
       setErrorMessage(
-        "An unexpected error occurred while logging in. Please try again."
+        "An unexpected error occurred while logging in. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -270,8 +224,7 @@ export default function LoginPage() {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage:
-            "url('/images/pagtipon-bg.png')",
+          backgroundImage: "url('/images/pagtipon-bg.png')",
         }}
       />
 
@@ -290,21 +243,13 @@ export default function LoginPage() {
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Header */}
         <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
-          <Link
-            href="/"
-            className="flex items-center gap-3 text-white"
-          >
+          <Link href="/" className="flex items-center gap-3 text-white">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 backdrop-blur-md">
-              <CalendarCheck2
-                className="h-5 w-5"
-                aria-hidden="true"
-              />
+              <CalendarCheck2 className="h-5 w-5" aria-hidden="true" />
             </div>
 
             <div>
-              <p className="text-xl font-bold tracking-tight">
-                PagTipon
-              </p>
+              <p className="text-xl font-bold tracking-tight">PagTipon</p>
 
               <p className="hidden text-xs text-slate-300 sm:block">
                 Event Management System
@@ -317,12 +262,8 @@ export default function LoginPage() {
             className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/20"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">
-              Back to Home
-            </span>
-            <span className="sm:hidden">
-              Home
-            </span>
+            <span className="hidden sm:inline">Back to Home</span>
+            <span className="sm:hidden">Home</span>
           </Link>
         </header>
 
@@ -332,20 +273,16 @@ export default function LoginPage() {
           <div className="hidden max-w-2xl lg:block">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-slate-200 backdrop-blur-md">
               <MapPin className="h-4 w-4 text-emerald-400" />
-
               Province of Antique
             </div>
 
             <h1 className="text-5xl font-bold leading-tight tracking-tight text-white xl:text-6xl">
               Welcome back to
-              <span className="block text-emerald-400">
-                PagTipon.
-              </span>
+              <span className="block text-emerald-400">PagTipon.</span>
             </h1>
 
             <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
-              Sign in to access your event
-              management, municipal coordination,
+              Sign in to access your event management, municipal coordination,
               registration, and attendance tools.
             </p>
 
@@ -361,8 +298,7 @@ export default function LoginPage() {
                   </p>
 
                   <p className="text-xs text-slate-400">
-                    Role-based dashboards and
-                    authorization
+                    Role-based dashboards and authorization
                   </p>
                 </div>
               </div>
@@ -378,8 +314,7 @@ export default function LoginPage() {
                   </p>
 
                   <p className="text-xs text-slate-400">
-                    Provincial and municipal
-                    coordination in one system
+                    Provincial and municipal coordination in one system
                   </p>
                 </div>
               </div>
@@ -391,10 +326,7 @@ export default function LoginPage() {
             {/* Mobile Brand Intro */}
             <div className="mb-6 text-center lg:hidden">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-950/30">
-                <CalendarCheck2
-                  className="h-7 w-7"
-                  aria-hidden="true"
-                />
+                <CalendarCheck2 className="h-7 w-7" aria-hidden="true" />
               </div>
 
               <h1 className="mt-4 text-2xl font-bold text-white">
@@ -410,10 +342,7 @@ export default function LoginPage() {
             <div className="rounded-3xl border border-white/15 bg-white/95 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
               <div className="hidden lg:block">
                 <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-950/20">
-                  <LockKeyhole
-                    className="h-5 w-5"
-                    aria-hidden="true"
-                  />
+                  <LockKeyhole className="h-5 w-5" aria-hidden="true" />
                 </div>
 
                 <h2 className="text-2xl font-bold tracking-tight text-slate-950">
@@ -421,8 +350,7 @@ export default function LoginPage() {
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Enter your account credentials
-                  to continue.
+                  Enter your account credentials to continue.
                 </p>
               </div>
 
@@ -474,14 +402,10 @@ export default function LoginPage() {
                       value={email}
                       disabled={loading}
                       onChange={(e) => {
-                        setEmail(
-                          e.target.value
-                        );
+                        setEmail(e.target.value);
 
                         if (errorMessage) {
-                          setErrorMessage(
-                            null
-                          );
+                          setErrorMessage(null);
                         }
                       }}
                       className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
@@ -506,24 +430,16 @@ export default function LoginPage() {
 
                     <input
                       id="password"
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
+                      type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
                       autoComplete="off"
                       value={password}
                       disabled={loading}
                       onChange={(e) => {
-                        setPassword(
-                          e.target.value
-                        );
+                        setPassword(e.target.value);
 
                         if (errorMessage) {
-                          setErrorMessage(
-                            null
-                          );
+                          setErrorMessage(null);
                         }
                       }}
                       className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
@@ -532,33 +448,29 @@ export default function LoginPage() {
                     <button
                       type="button"
                       disabled={loading}
-                      onClick={() =>
-                        setShowPassword(
-                          (current) =>
-                            !current
-                        )
-                      }
+                      onClick={() => setShowPassword((current) => !current)}
                       aria-label={
-                        showPassword
-                          ? "Hide password"
-                          : "Show password"
+                        showPassword ? "Hide password" : "Show password"
                       }
                       className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {showPassword ? (
-                        <EyeOff
-                          className="h-5 w-5"
-                          aria-hidden="true"
-                        />
+                        <EyeOff className="h-5 w-5" aria-hidden="true" />
                       ) : (
-                        <Eye
-                          className="h-5 w-5"
-                          aria-hidden="true"
-                        />
+                        <Eye className="h-5 w-5" aria-hidden="true" />
                       )}
                     </button>
                   </div>
                 </div>
+
+                <div className="flex justify-end">
+  <Link
+    href="/forgot-password"
+    className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+  >
+    Forgot password?
+  </Link>
+</div>
 
                 {/* Submit Button */}
                 <button
@@ -572,7 +484,6 @@ export default function LoginPage() {
                         className="h-4 w-4 animate-spin"
                         aria-hidden="true"
                       />
-
                       Signing in...
                     </>
                   ) : (
@@ -584,8 +495,7 @@ export default function LoginPage() {
               {/* Signup Link */}
               <div className="mt-6 border-t border-slate-200 pt-6">
                 <p className="text-center text-sm text-slate-500">
-                  Don&apos;t have an
-                  account?{" "}
+                  Don&apos;t have an account?{" "}
                   <Link
                     href="/signup"
                     className="font-semibold text-emerald-600 transition hover:text-emerald-700 hover:underline"
@@ -597,8 +507,7 @@ export default function LoginPage() {
             </div>
 
             <p className="mt-5 text-center text-xs leading-5 text-slate-300">
-              Provincial and municipal event
-              coordination platform
+              Provincial and municipal event coordination platform
             </p>
           </div>
         </section>
@@ -606,15 +515,9 @@ export default function LoginPage() {
         {/* Footer */}
         <footer className="border-t border-white/10">
           <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-2 px-5 py-4 text-center text-xs text-slate-400 sm:flex-row sm:px-8 lg:px-10">
-            <p>
-              © {new Date().getFullYear()}{" "}
-              PagTipon. All rights reserved.
-            </p>
+            <p>© {new Date().getFullYear()} PagTipon. All rights reserved.</p>
 
-            <p>
-              Province of Antique Event
-              Management System
-            </p>
+            <p>Province of Antique Event Management System</p>
           </div>
         </footer>
       </div>

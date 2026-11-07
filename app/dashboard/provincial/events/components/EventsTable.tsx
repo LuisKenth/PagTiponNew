@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { EventWithMunicipalities } from "../types";
 
 import EventMobileCard from "./EventMobileCard";
@@ -5,6 +6,8 @@ import EventTableRow from "./EventTableRow";
 import EventsEmptyState from "./EventsEmptyState";
 
 type EventsTableProps = {
+  extraActions?: (event: EventWithMunicipalities) => ReactNode;
+  onView?: (event: EventWithMunicipalities) => void;
   events: EventWithMunicipalities[];
 
   loading: boolean;
@@ -24,6 +27,8 @@ type EventsTableProps = {
 };
 
 export default function EventsTable({
+  extraActions,
+  onView,
   events,
   loading,
   deletingId,
@@ -42,9 +47,7 @@ export default function EventsTable({
         <div className="text-center">
           <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
 
-          <p className="mt-3 text-sm text-slate-500">
-            Loading provincial events...
-          </p>
+          <p className="mt-3 text-sm text-slate-500">Loading events…</p>
         </div>
       </div>
     );
@@ -53,10 +56,7 @@ export default function EventsTable({
   /*
    * FILTER HAS NO RESULTS
    */
-  if (
-    events.length === 0 &&
-    isFiltered
-  ) {
+  if (events.length === 0 && isFiltered) {
     return (
       <div className="p-6">
         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
@@ -68,11 +68,7 @@ export default function EventsTable({
               strokeWidth="2"
               className="h-5 w-5 text-slate-400"
             >
-              <circle
-                cx="11"
-                cy="11"
-                r="8"
-              />
+              <circle cx="11" cy="11" r="8" />
 
               <path d="m21 21-4.35-4.35" />
             </svg>
@@ -83,8 +79,7 @@ export default function EventsTable({
           </h3>
 
           <p className="mt-1 text-sm text-slate-500">
-            Try changing your search
-            or filter selections.
+            Try changing your search or filter selections.
           </p>
 
           <button
@@ -105,7 +100,13 @@ export default function EventsTable({
   if (events.length === 0) {
     return (
       <div className="p-6">
-        <EventsEmptyState />
+        {onView ? (
+          <p className="py-8 text-center text-sm text-slate-500">
+            No municipal events found.
+          </p>
+        ) : (
+          <EventsEmptyState />
+        )}
       </div>
     );
   }
@@ -118,6 +119,8 @@ export default function EventsTable({
       <div className="space-y-3 p-4 md:hidden">
         {events.map((event) => (
           <EventMobileCard
+            onView={onView}
+            extraActions={extraActions}
             key={event.id}
             event={event}
             currentTime={currentTime}
@@ -138,39 +141,29 @@ export default function EventsTable({
         <table className="w-full border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <th className="py-3 pr-4 font-semibold">
-                Event Name
-              </th>
+              <th className="py-3 pr-4 font-semibold">Event Name</th>
+
+              <th className="py-3 pr-4 font-semibold">Schedule</th>
 
               <th className="py-3 pr-4 font-semibold">
-                Schedule
+                {onView ? "Municipality" : "Target Municipalities"}
               </th>
 
-              <th className="py-3 pr-4 font-semibold">
-                Target Municipalities
-              </th>
+              <th className="py-3 pr-4 font-semibold">Memo</th>
 
-              <th className="py-3 pr-4 font-semibold">
-                Memo
-              </th>
+              <th className="py-3 pr-4 font-semibold">Preparation</th>
 
-              <th className="py-3 pr-4 font-semibold">
-                Preparation
-              </th>
+              <th className="py-3 pr-4 font-semibold">Status</th>
 
-              <th className="py-3 pr-4 font-semibold">
-                Status
-              </th>
-
-              <th className="py-3 text-right font-semibold">
-                Actions
-              </th>
+              <th className="py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
 
           <tbody>
             {events.map((event) => (
               <EventTableRow
+                onView={onView}
+                extraActions={extraActions}
                 key={event.id}
                 event={event}
                 deletingId={deletingId}

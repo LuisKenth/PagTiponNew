@@ -1,8 +1,6 @@
+
 import {
-  CalendarClock,
-  CheckCircle2,
-  Clock3,
-  DoorOpen,
+  CalendarDays,
   LockKeyhole,
   LogIn,
   LogOut,
@@ -10,7 +8,6 @@ import {
   RefreshCw,
   RotateCcw,
   Square,
-  type LucideIcon,
 } from "lucide-react";
 
 import EventAssignmentPicker from "./EventAssignmentPicker";
@@ -20,53 +17,35 @@ import { formatDateTime } from "../utils";
 
 type EventAttendanceControlProps = {
   assignments: EventAssignment[];
-
   selectedId: string;
-
   selectedAssignment: EventAssignment | null;
-
   loading: boolean;
 
-  /*
-   * Check-In controls
-   */
+  // Time-in
   controlLoading: "open" | "close" | null;
-
   isCheckInOpen: boolean;
   wasCheckInOpened: boolean;
   wasCheckInClosed: boolean;
-
   canOpenCheckIn: boolean;
-
   checkInBlockedMessage: string;
 
-  /*
-   * Check-Out controls
-   */
+  // Time-out
   checkOutControlLoading: "open" | "close" | null;
-
   isCheckOutOpen: boolean;
   wasCheckOutOpened: boolean;
   wasCheckOutClosed: boolean;
-
   canOpenCheckOut: boolean;
   canCloseCheckOut: boolean;
-
   checkOutBlockedMessage: string;
+  isCheckOutExpired?: boolean;
+  checkOutDeadlineAt?: string | null;
 
-  /*
-   * Actions
-   */
+  // Actions
   onSelect: (id: string) => Promise<void>;
-
   onOpenCheckIn: () => Promise<void>;
-
   onCloseCheckIn: () => Promise<void>;
-
   onOpenCheckOut: () => Promise<void>;
-
   onCloseCheckOut: () => Promise<void>;
-
   onRefresh: () => Promise<void>;
 };
 
@@ -77,7 +56,6 @@ export default function EventAttendanceControl({
   loading,
 
   controlLoading,
-
   isCheckInOpen,
   wasCheckInOpened,
   wasCheckInClosed,
@@ -85,57 +63,139 @@ export default function EventAttendanceControl({
   checkInBlockedMessage,
 
   checkOutControlLoading,
-
   isCheckOutOpen,
   wasCheckOutOpened,
   wasCheckOutClosed,
-
   canOpenCheckOut,
   canCloseCheckOut,
-
   checkOutBlockedMessage,
+  isCheckOutExpired = false,
+  checkOutDeadlineAt = null,
 
   onSelect,
-
   onOpenCheckIn,
   onCloseCheckIn,
-
   onOpenCheckOut,
   onCloseCheckOut,
-
   onRefresh,
 }: EventAttendanceControlProps) {
   const controlsBusy =
-    Boolean(controlLoading) || Boolean(checkOutControlLoading);
+    controlLoading !== null ||
+    checkOutControlLoading !== null;
 
   /*
-   * Under the final attendance rules, only an ACTIVE
-   * Check-Out session should block Check-In before event end.
+   * TIME-IN STATUS
    *
-   * Historical closed Check-Out timestamps from older tests
-   * must not prevent late-participant Check-In from reopening.
+   * The existing context determines
+   * whether Time-in can be opened.
    */
-  const checkOutHasStarted = isCheckOutOpen;
+  const checkInStatus = isCheckInOpen
+    ? "Open"
+    : canOpenCheckIn
+      ? wasCheckInClosed
+        ? "Can Reopen"
+        : "Ready"
+      : wasCheckInClosed
+        ? "Closed"
+        : "Unavailable";
+
+  const checkInDescription = isCheckInOpen
+    ? "Time-in is active. Participants can be completed Time-in."
+    : canOpenCheckIn
+      ? wasCheckInClosed
+        ? "Time-in is closed. You may reopen it for late participants."
+        : "Ready to start recording participant Time-in."
+      : isCheckOutOpen
+        ? "Time-out is active. Time-in cannot be reopened."
+        : checkInBlockedMessage ||
+          "Time-in is currently unavailable.";
+
+  /*
+   * TIME-OUT STATUS
+   *
+   * The existing context enforces
+   * availability after event end.
+   *
+   * Historical Time-out timestamps
+   * do not automatically mean that
+   * the session is completed.
+   */
+  const checkOutStatus = isCheckOutExpired
+    ? wasCheckOutOpened ? "Closed" : "Expired"
+    : isCheckOutOpen
+      ? "Open"
+      : canOpenCheckOut
+        ? wasCheckOutClosed
+          ? "Can Reopen"
+          : "Ready"
+        : wasCheckOutClosed
+          ? "Closed"
+          : "Unavailable";
+
+  const checkOutDescription = isCheckOutExpired
+    ? wasCheckOutOpened
+      ? `The Time-out deadline${checkOutDeadlineAt ? ` (${formatDateTime(checkOutDeadlineAt)})` : ""} has passed. The session is closed and new Time-out records are blocked.`
+      : `The Time-out window${checkOutDeadlineAt ? ` (deadline: ${formatDateTime(checkOutDeadlineAt)})` : ""} has expired. New Time-out records are blocked.`
+    : isCheckOutOpen
+      ? canCloseCheckOut
+        ? "Time-out is active. Participants can be completed Time-out."
+        : "Time-out is active. Closing is currently restricted."
+      : canOpenCheckOut
+        ? wasCheckOutOpened
+          ? "You may reopen Time-out to continue recording Time-out."
+          : "The event has ended. You may now open Time-out."
+        : checkOutBlockedMessage ||
+          "Time-out is not available yet.";
+
+  const checkInBadgeClass = isCheckInOpen
+    ? "bg-emerald-100 text-emerald-700"
+    : wasCheckInClosed && !canOpenCheckIn
+      ? "bg-slate-100 text-slate-600"
+    : canOpenCheckIn
+      ? "bg-amber-100 text-amber-700"
+      : "bg-slate-100 text-slate-600";
+
+  const checkOutBadgeClass = isCheckOutExpired
+    ? "bg-slate-100 text-slate-600"
+    : isCheckOutOpen
+      ? "bg-blue-100 text-blue-700"
+    : canOpenCheckOut
+      ? "bg-amber-100 text-amber-700"
+      : "bg-slate-100 text-slate-600";
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* Event selector */}
-      <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-5 sm:px-6">
+      {/* SELECT EVENT */}
+      <div className="border-b border-slate-200 p-5 sm:p-6">
+        <div className="mb-4">
+          <h2 className="text-base font-bold text-slate-900">
+            Select Assigned Event
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Choose the event you want to manage.
+          </p>
+        </div>
+
         {loading ? (
-          <div className="flex min-h-14 items-center gap-3 text-sm text-slate-500">
+          <div
+            role="status"
+            className="flex items-center gap-2 py-5 text-sm text-slate-500"
+          >
             <RefreshCw className="h-4 w-4 animate-spin" />
             Loading assigned events...
           </div>
         ) : assignments.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
-            <CalendarClock className="mx-auto h-8 w-8 text-slate-400" />
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
+            <CalendarDays className="mx-auto h-8 w-8 text-slate-400" />
 
-            <p className="mt-3 text-sm font-semibold text-slate-700">
+            <h3 className="mt-3 font-semibold text-slate-900">
               No assigned events
-            </p>
+            </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              No provincial event is currently assigned to your municipality.
+              No events are currently assigned to your
+              Event Staff account.
             </p>
           </div>
         ) : (
@@ -149,760 +209,268 @@ export default function EventAttendanceControl({
         )}
       </div>
 
-      {!loading && assignments.length > 0 && selectedAssignment && (
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
-          {/* Event information */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <InfoCard
-              icon={CheckCircle2}
-              label="Event Status"
-              value={selectedAssignment.event.status || "Unknown"}
-              capitalize
-            />
-
-            <InfoCard
-              icon={CalendarClock}
-              label="Event Starts"
-              value={formatDateTime(selectedAssignment.event.start_at)}
-            />
-
-            <InfoCard
-              icon={Clock3}
-              label="Check-In Control"
-              value="Opened by Event Staff"
-            />
-
-            <InfoCard
-              icon={Clock3}
-              label="Event Ends"
-              value={formatDateTime(selectedAssignment.event.end_at)}
-            />
-          </div>
-
-          {/* Attendance workflow */}
-          <div className="mt-6">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                Attendance Workflow
-              </p>
-
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                Staff controls participant Time In and Time Out. Check-In may be
-                reopened for late participants until the scheduled event end
-                time. Check-Out becomes available only after the event ends.
-              </p>
+      {/* EVENT DETAILS AND CONTROLS */}
+      {!loading &&
+        assignments.length > 0 &&
+        selectedAssignment && (
+          <div className="space-y-4 p-4 sm:p-6">
+            {/* A compact schedule strip keeps scanner controls close to the event picker. */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                <span>Event: {formatDateTime(selectedAssignment.event.start_at)} – {formatDateTime(selectedAssignment.event.end_at)}</span>
+              </span>
+              {checkOutDeadlineAt && (
+                <span className="inline-flex items-center gap-2">
+                  <LockKeyhole className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                  Time-out deadline: {formatDateTime(checkOutDeadlineAt)}
+                </span>
+              )}
             </div>
 
-            <AttendanceWorkflow
-              assignment={selectedAssignment}
-              isCheckInOpen={isCheckInOpen}
-              wasCheckInClosed={wasCheckInClosed}
-              isCheckOutOpen={isCheckOutOpen}
-              wasCheckOutOpened={wasCheckOutOpened}
-              wasCheckOutClosed={wasCheckOutClosed}
-              canOpenCheckIn={canOpenCheckIn}
-              canOpenCheckOut={canOpenCheckOut}
-            />
-          </div>
+            {/* SESSION CONTROLS */}
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Attendance Sessions
+              </h3>
 
-          {/* Controls */}
-          <div className="mt-6 grid gap-5 xl:grid-cols-2">
-            {/* CHECK-IN */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 bg-emerald-50/60 px-5 py-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                    <LogIn className="h-5 w-5" />
-                  </div>
+              <p className="mt-1 text-sm text-slate-500">
+                Manage participant Time-in and Time-out.
+              </p>
 
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      Check-In Control
-                    </p>
+              <div className="mt-3 grid gap-4 lg:grid-cols-2">
+                {/* TIME-IN CARD */}
+                <section className="flex flex-col rounded-2xl border border-slate-200 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                        <LogIn className="h-5 w-5" />
+                      </div>
 
-                    <p className="mt-1 text-xs leading-5 text-slate-600">
-                      Controls participant Time In.
-                    </p>
-                  </div>
-                </div>
-              </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900">
+                          Time-in
+                        </h4>
 
-              <div className="space-y-4 p-5">
-                <CheckInStatus
-                  assignment={selectedAssignment}
-                  isOpen={isCheckInOpen}
-                  wasOpened={wasCheckInOpened}
-                  wasClosed={wasCheckInClosed}
-                  canOpen={canOpenCheckIn}
-                  checkOutHasStarted={checkOutHasStarted}
-                  blockedMessage={checkInBlockedMessage}
-                />
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {/* Open / Reopen Check-In */}
-                  {!isCheckInOpen && canOpenCheckIn && (
-                    <button
-                      type="button"
-                      onClick={() => void onOpenCheckIn()}
-                      disabled={controlsBusy}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {controlLoading === "open" ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : wasCheckInClosed ? (
-                        <RotateCcw className="h-4 w-4" />
-                      ) : (
-                        <Play className="h-4 w-4" />
-                      )}
-
-                      {controlLoading === "open"
-                        ? wasCheckInClosed
-                          ? "Reopening..."
-                          : "Opening..."
-                        : wasCheckInClosed
-                          ? "Reopen Check-In"
-                          : "Open Check-In"}
-                    </button>
-                  )}
-
-                  {/* Close Check-In */}
-                  {isCheckInOpen && (
-                    <button
-                      type="button"
-                      onClick={() => void onCloseCheckIn()}
-                      disabled={controlsBusy}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {controlLoading === "close" ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
-
-                      {controlLoading === "close"
-                        ? "Closing..."
-                        : "Close Check-In"}
-                    </button>
-                  )}
-
-                  {/* Locked when Check-In can no longer be opened */}
-                  {!isCheckInOpen && !canOpenCheckIn && (
-                    <div className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-500">
-                      <LockKeyhole className="h-4 w-4" />
-                      Check-In Locked
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Participant Time-in
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
-            </section>
 
-            {/* CHECK-OUT */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 bg-blue-50/60 px-5 py-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-                    <LogOut className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      Check-Out Control
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-slate-600">
-                      Controls participant Time Out.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 p-5">
-                <CheckOutStatus
-                  assignment={selectedAssignment}
-                  isOpen={isCheckOutOpen}
-                  wasOpened={wasCheckOutOpened}
-                  wasClosed={wasCheckOutClosed}
-                  canOpen={canOpenCheckOut}
-                  blockedMessage={checkOutBlockedMessage}
-                />
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {!isCheckOutOpen && (
-                    <button
-                      type="button"
-                      onClick={() => void onOpenCheckOut()}
-                      disabled={!canOpenCheckOut || controlsBusy}
-                      className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed ${
-                        canOpenCheckOut
-                          ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-100 disabled:opacity-50"
-                          : "border border-slate-200 bg-slate-100 text-slate-500"
-                      }`}
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${checkInBadgeClass}`}
                     >
-                      {checkOutControlLoading === "open" ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : !canOpenCheckOut ? (
+                      {checkInStatus}
+                    </span>
+                  </div>
+
+                  <p
+                    aria-live="polite"
+                    className="mt-4 min-h-12 text-sm leading-6 text-slate-600"
+                  >
+                    {checkInDescription}
+                  </p>
+
+                  {isCheckInOpen &&
+                    selectedAssignment.check_in_opened_at && (
+                      <p className="mb-3 text-xs text-slate-500">
+                        Opened:{" "}
+                        {formatDateTime(
+                          selectedAssignment.check_in_opened_at,
+                        )}
+                      </p>
+                    )}
+
+                  <div className="mt-auto pt-3">
+                    {isCheckInOpen ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void onCloseCheckIn()
+                        }
+                        disabled={controlsBusy}
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {controlLoading === "close" ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+
+                        {controlLoading === "close"
+                          ? "Closing..."
+                          : "Close Time-in"}
+                      </button>
+                    ) : canOpenCheckIn ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void onOpenCheckIn()
+                        }
+                        disabled={controlsBusy}
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {controlLoading === "open" ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : wasCheckInClosed ? (
+                          <RotateCcw className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
+                        )}
+
+                        {controlLoading === "open"
+                          ? "Opening..."
+                          : wasCheckInClosed
+                            ? "Reopen Time-in"
+                            : "Open Time-in"}
+                      </button>
+                    ) : (
+                      <div className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500">
                         <LockKeyhole className="h-4 w-4" />
-                      ) : wasCheckOutClosed ? (
-                        <RotateCcw className="h-4 w-4" />
-                      ) : (
-                        <DoorOpen className="h-4 w-4" />
-                      )}
+                        Time-in Unavailable
+                      </div>
+                    )}
+                  </div>
+                </section>
 
-                      {checkOutControlLoading === "open"
-                        ? wasCheckOutClosed
-                          ? "Reopening..."
-                          : "Opening..."
-                        : !canOpenCheckOut
-                          ? "Check-Out Not Available Yet"
-                          : wasCheckOutClosed
-                            ? "Reopen Check-Out"
-                            : "Open Check-Out"}
-                    </button>
-                  )}
+                {/* TIME-OUT CARD */}
+                <section className="flex flex-col rounded-2xl border border-slate-200 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                        <LogOut className="h-5 w-5" />
+                      </div>
 
-                  {isCheckOutOpen && (
-                    <button
-                      type="button"
-                      onClick={() => void onCloseCheckOut()}
-                      disabled={!canCloseCheckOut || controlsBusy}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      <div>
+                        <h4 className="font-bold text-slate-900">
+                          Time-out
+                        </h4>
+
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Participant Time-out
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${checkOutBadgeClass}`}
                     >
-                      {checkOutControlLoading === "close" ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
+                      {checkOutStatus}
+                    </span>
+                  </div>
 
-                      {checkOutControlLoading === "close"
-                        ? "Closing..."
-                        : "Close Check-Out"}
-                    </button>
-                  )}
-                </div>
+                  <p
+                    aria-live="polite"
+                    className="mt-4 min-h-12 text-sm leading-6 text-slate-600"
+                  >
+                    {checkOutDescription}
+                  </p>
+
+                  {isCheckOutOpen &&
+                    selectedAssignment.check_out_opened_at && (
+                      <p className="mb-3 text-xs text-slate-500">
+                        Opened:{" "}
+                        {formatDateTime(
+                          selectedAssignment.check_out_opened_at,
+                        )}
+                      </p>
+                    )}
+
+                  <div className="mt-auto pt-3">
+                    {isCheckOutExpired ? (
+                      <div
+                        role="status"
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600"
+                      >
+                        <LockKeyhole className="h-4 w-4" />
+                        {wasCheckOutOpened ? "Time-out Closed" : "Time-out Window Expired"}
+                      </div>
+                    ) : isCheckOutOpen ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void onCloseCheckOut()
+                        }
+                        disabled={
+                          !canCloseCheckOut ||
+                          controlsBusy
+                        }
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {checkOutControlLoading === "close" ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+
+                        {checkOutControlLoading === "close"
+                          ? "Closing..."
+                          : "Close Time-out"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void onOpenCheckOut()
+                        }
+                        disabled={
+                          !canOpenCheckOut ||
+                          controlsBusy
+                        }
+                        className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed ${
+                          canOpenCheckOut
+                            ? "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {checkOutControlLoading === "open" ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : !canOpenCheckOut ? (
+                          <LockKeyhole className="h-4 w-4" />
+                        ) : wasCheckOutClosed ? (
+                          <RotateCcw className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
+                        )}
+
+                        {checkOutControlLoading === "open"
+                          ? "Opening..."
+                          : !canOpenCheckOut
+                            ? "Time-out Unavailable"
+                            : wasCheckOutClosed
+                              ? "Reopen Time-out"
+                              : "Open Time-out"}
+                      </button>
+                    )}
+                  </div>
+                </section>
               </div>
-            </section>
-          </div>
+            </div>
 
-          {/* Refresh */}
-          <div className="mt-5 flex justify-end border-t border-slate-200 pt-5">
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              disabled={controlsBusy}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${controlsBusy ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
+            {/* REFRESH */}
+            <div className="flex justify-end border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => void onRefresh()}
+                disabled={controlsBusy}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh Session
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      {/* NO EVENT SELECTED */}
+      {!loading &&
+        assignments.length > 0 &&
+        !selectedAssignment && (
+          <div className="px-5 py-8 text-center text-sm text-slate-500">
+            Select an event above to view its attendance controls.
+          </div>
+        )}
     </section>
-  );
-}
-
-/*
- * =========================================================
- * ATTENDANCE WORKFLOW
- * =========================================================
- */
-
-type AttendanceWorkflowProps = {
-  assignment: EventAssignment;
-
-  isCheckInOpen: boolean;
-
-  wasCheckInClosed: boolean;
-
-  isCheckOutOpen: boolean;
-
-  wasCheckOutOpened: boolean;
-
-  wasCheckOutClosed: boolean;
-
-  canOpenCheckIn: boolean;
-
-  canOpenCheckOut: boolean;
-};
-
-function AttendanceWorkflow({
-  assignment,
-  isCheckInOpen,
-  wasCheckInClosed,
-  isCheckOutOpen,
-  wasCheckOutOpened,
-  wasCheckOutClosed,
-  canOpenCheckIn,
-  canOpenCheckOut,
-}: AttendanceWorkflowProps) {
-  const eventEndTime = assignment.event.end_at
-    ? new Date(assignment.event.end_at).getTime()
-    : null;
-
-  const checkOutClosedTime = assignment.check_out_closed_at
-    ? new Date(assignment.check_out_closed_at).getTime()
-    : null;
-
-  const hasValidEventEnd = eventEndTime !== null && !Number.isNaN(eventEndTime);
-
-  const eventHasEnded = hasValidEventEnd && Date.now() >= eventEndTime;
-
-  /*
-   * A legacy Check-Out close recorded before the scheduled
-   * event end must not make the workflow look completed.
-   *
-   * A valid completed Check-Out session must have been
-   * closed at or after the scheduled event end.
-   */
-  const validCheckOutCompletion = Boolean(
-    eventHasEnded &&
-    wasCheckOutClosed &&
-    checkOutClosedTime !== null &&
-    !Number.isNaN(checkOutClosedTime) &&
-    eventEndTime !== null &&
-    checkOutClosedTime >= eventEndTime,
-  );
-
-  /*
-   * Check-In is considered complete for the workflow only
-   * after the event has ended and the Check-In session had
-   * already been closed.
-   *
-   * While the event is still ongoing, a closed Check-In is
-   * shown as reopenable for late participants.
-   */
-  const checkInComplete = Boolean(eventHasEnded && wasCheckInClosed);
-
-  let checkInDescription = "Waiting";
-
-  if (isCheckInOpen && !eventHasEnded) {
-    checkInDescription = "Open";
-  } else if (checkInComplete) {
-    checkInDescription = "Completed";
-  } else if (wasCheckInClosed && canOpenCheckIn) {
-    checkInDescription = "Closed • Can reopen";
-  } else if (wasCheckInClosed) {
-    checkInDescription = "Closed";
-  }
-
-  let checkOutDescription = "Waiting for Check-In";
-
-  /*
-   * Before the scheduled event end, Check-Out must never
-   * appear Ready or Completed even if legacy timestamps are
-   * present from an older test.
-   */
-  if (!eventHasEnded) {
-    checkOutDescription = "Available after event ends";
-  } else if (isCheckOutOpen) {
-    checkOutDescription = "Open";
-  } else if (validCheckOutCompletion) {
-    checkOutDescription = "Completed";
-  } else if (canOpenCheckOut) {
-    checkOutDescription = wasCheckOutOpened ? "Ready to reopen" : "Ready";
-  } else if (wasCheckInClosed) {
-    checkOutDescription = "Waiting to open";
-  }
-
-  const attendanceComplete = validCheckOutCompletion;
-
-  return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-      <WorkflowStep
-        number="1"
-        title="Check-In"
-        description={checkInDescription}
-        active={isCheckInOpen && !eventHasEnded}
-        complete={checkInComplete}
-      />
-
-      <WorkflowStep
-        number="2"
-        title="Check-Out"
-        description={checkOutDescription}
-        active={isCheckOutOpen && eventHasEnded}
-        complete={validCheckOutCompletion}
-      />
-
-      <WorkflowStep
-        number="3"
-        title="Attendance Complete"
-        description={attendanceComplete ? "Session finished" : "Waiting"}
-        active={false}
-        complete={attendanceComplete}
-      />
-    </div>
-  );
-}
-
-type WorkflowStepProps = {
-  number: string;
-
-  title: string;
-
-  description: string;
-
-  active: boolean;
-
-  complete: boolean;
-};
-
-function WorkflowStep({
-  number,
-  title,
-  description,
-  active,
-  complete,
-}: WorkflowStepProps) {
-  const styles = complete
-    ? "border-emerald-200 bg-emerald-50"
-    : active
-      ? "border-blue-200 bg-blue-50"
-      : "border-slate-200 bg-slate-50";
-
-  const numberStyles = complete
-    ? "bg-emerald-600 text-white"
-    : active
-      ? "bg-blue-600 text-white"
-      : "bg-slate-200 text-slate-600";
-
-  return (
-    <div className={`rounded-xl border p-4 ${styles}`}>
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${numberStyles}`}
-        >
-          {complete ? <CheckCircle2 className="h-4 w-4" /> : number}
-        </div>
-
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
-
-          <p className="mt-0.5 text-xs text-slate-500">{description}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/*
- * =========================================================
- * CHECK-IN STATUS
- * =========================================================
- */
-
-type CheckInStatusProps = {
-  assignment: EventAssignment;
-
-  isOpen: boolean;
-
-  wasOpened: boolean;
-
-  wasClosed: boolean;
-
-  canOpen: boolean;
-
-  checkOutHasStarted: boolean;
-
-  blockedMessage: string;
-};
-
-function CheckInStatus({
-  assignment,
-  isOpen,
-  wasOpened,
-  wasClosed,
-  canOpen,
-  checkOutHasStarted,
-  blockedMessage,
-}: CheckInStatusProps) {
-  if (isOpen) {
-    return (
-      <StatusMessage
-        icon={CheckCircle2}
-        className="border-emerald-200 bg-emerald-50 text-emerald-900"
-        iconClassName="text-emerald-600"
-        title="Check-In is open"
-      >
-        Time In started at{" "}
-        <span className="font-semibold">
-          {formatDateTime(assignment.check_in_opened_at)}
-        </span>
-        . QR scanning and manual attendance codes can record participant Time
-        In.
-      </StatusMessage>
-    );
-  }
-
-  /*
-   * When Check-In can no longer be opened, show the exact
-   * blocking reason supplied by the dashboard hook.
-   *
-   * This covers:
-   * - event end reached
-   * - completed/cancelled/draft event
-   * - an actively open Check-Out session
-   */
-  if (!canOpen) {
-    return (
-      <StatusMessage
-        icon={LockKeyhole}
-        className="border-slate-200 bg-slate-50 text-slate-700"
-        iconClassName="text-slate-500"
-        title="Check-In is locked"
-      >
-        {checkOutHasStarted
-          ? "Check-Out is currently active. Close Check-Out before attempting to reopen Check-In."
-          : blockedMessage}
-      </StatusMessage>
-    );
-  }
-
-  /*
-   * Closed but still reopenable for late participants.
-   */
-  if (wasClosed) {
-    return (
-      <StatusMessage
-        icon={RotateCcw}
-        className="border-amber-200 bg-amber-50 text-amber-900"
-        iconClassName="text-amber-600"
-        title="Check-In is closed"
-      >
-        Time In was closed at{" "}
-        <span className="font-semibold">
-          {formatDateTime(assignment.check_in_closed_at)}
-        </span>
-        . Event Staff may reopen Check-In for late participants until the
-        scheduled event end time.
-      </StatusMessage>
-    );
-  }
-
-  return (
-    <StatusMessage
-      icon={LockKeyhole}
-      className="border-amber-200 bg-amber-50 text-amber-900"
-      iconClassName="text-amber-600"
-      title={wasOpened ? "Check-In unavailable" : "Check-In not opened"}
-    >
-      {blockedMessage}
-    </StatusMessage>
-  );
-}
-
-/*
- * =========================================================
- * CHECK-OUT STATUS
- * =========================================================
- */
-
-type CheckOutStatusProps = {
-  assignment: EventAssignment;
-
-  isOpen: boolean;
-
-  wasOpened: boolean;
-
-  wasClosed: boolean;
-
-  canOpen: boolean;
-
-  blockedMessage: string;
-};
-
-function CheckOutStatus({
-  assignment,
-  isOpen,
-  wasOpened,
-  wasClosed,
-  canOpen,
-  blockedMessage,
-}: CheckOutStatusProps) {
-  const eventEndTime = assignment.event.end_at
-    ? new Date(assignment.event.end_at).getTime()
-    : null;
-
-  const checkOutClosedTime = assignment.check_out_closed_at
-    ? new Date(assignment.check_out_closed_at).getTime()
-    : null;
-
-  const eventHasEnded = Boolean(
-    eventEndTime !== null &&
-    !Number.isNaN(eventEndTime) &&
-    Date.now() >= eventEndTime,
-  );
-
-  const validClosedCheckOut = Boolean(
-    eventHasEnded &&
-    wasClosed &&
-    eventEndTime !== null &&
-    checkOutClosedTime !== null &&
-    !Number.isNaN(checkOutClosedTime) &&
-    checkOutClosedTime >= eventEndTime,
-  );
-
-  /*
-   * Before event end, legacy Check-Out timestamps must not
-   * make the UI claim that Check-Out is open or completed.
-   */
-  if (!eventHasEnded) {
-    return (
-      <StatusMessage
-        icon={LockKeyhole}
-        className="border-amber-200 bg-amber-50 text-amber-900"
-        iconClassName="text-amber-600"
-        title="Check-Out not available yet"
-      >
-        {blockedMessage}
-      </StatusMessage>
-    );
-  }
-
-  if (isOpen) {
-    return (
-      <StatusMessage
-        icon={CheckCircle2}
-        className="border-blue-200 bg-blue-50 text-blue-900"
-        iconClassName="text-blue-600"
-        title="Check-Out is open"
-      >
-        Time Out started at{" "}
-        <span className="font-semibold">
-          {formatDateTime(assignment.check_out_opened_at)}
-        </span>
-        . QR scanning and manual attendance codes can now record participant
-        Time Out.
-      </StatusMessage>
-    );
-  }
-
-  if (validClosedCheckOut) {
-    return (
-      <StatusMessage
-        icon={RotateCcw}
-        className="border-amber-200 bg-amber-50 text-amber-900"
-        iconClassName="text-amber-600"
-        title="Check-Out is closed"
-      >
-        Time Out was closed at{" "}
-        <span className="font-semibold">
-          {formatDateTime(assignment.check_out_closed_at)}
-        </span>
-        . Event Staff may reopen Check-Out to continue recording participant
-        Time Out.
-      </StatusMessage>
-    );
-  }
-
-  if (canOpen) {
-    return (
-      <StatusMessage
-        icon={DoorOpen}
-        className="border-blue-200 bg-blue-50 text-blue-900"
-        iconClassName="text-blue-600"
-        title={wasOpened ? "Check-Out can be reopened" : "Check-Out is ready"}
-      >
-        {wasOpened
-          ? "The previous Check-Out record does not represent a valid post-event completion. Event Staff may reopen Check-Out and continue recording participant Time Out."
-          : "The event has ended and Check-In is closed. Event Staff may open Check-Out to begin recording participant Time Out."}
-      </StatusMessage>
-    );
-  }
-
-  return (
-    <StatusMessage
-      icon={LockKeyhole}
-      className="border-amber-200 bg-amber-50 text-amber-900"
-      iconClassName="text-amber-600"
-      title={
-        wasOpened ? "Check-Out unavailable" : "Check-Out not available yet"
-      }
-    >
-      {blockedMessage}
-    </StatusMessage>
-  );
-}
-
-/*
- * =========================================================
- * INFO CARD
- * =========================================================
- */
-
-type InfoCardProps = {
-  icon: LucideIcon;
-
-  label: string;
-
-  value: string;
-
-  capitalize?: boolean;
-};
-
-function InfoCard({
-  icon: Icon,
-  label,
-  value,
-  capitalize = false,
-}: InfoCardProps) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-      <div className="flex items-center gap-2 text-slate-500">
-        <Icon className="h-4 w-4 shrink-0" />
-
-        <p className="text-xs font-semibold uppercase tracking-wide">{label}</p>
-      </div>
-
-      <p
-        className={`mt-3 break-words text-sm font-semibold leading-5 text-slate-900 ${
-          capitalize ? "capitalize" : ""
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-/*
- * =========================================================
- * STATUS MESSAGE
- * =========================================================
- */
-
-type StatusMessageProps = {
-  icon: LucideIcon;
-
-  title: string;
-
-  className: string;
-
-  iconClassName: string;
-
-  children: React.ReactNode;
-};
-
-function StatusMessage({
-  icon: Icon,
-  title,
-  className,
-  iconClassName,
-  children,
-}: StatusMessageProps) {
-  return (
-    <div className={`rounded-xl border p-4 ${className}`}>
-      <div className="flex items-start gap-3">
-        <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconClassName}`} />
-
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">{title}</p>
-
-          <p className="mt-1 text-sm leading-6">{children}</p>
-        </div>
-      </div>
-    </div>
   );
 }
