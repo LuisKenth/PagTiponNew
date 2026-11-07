@@ -264,13 +264,13 @@ export default function ProvincialSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-72 transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${
+        className={`fixed left-0 top-0 z-50 h-dvh overflow-hidden w-72 transform border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-h-0 flex-col">
           {/* Brand */}
-          <div className="border-b border-slate-200 px-5 py-5">
+          <div className="shrink-0 border-b border-slate-200 px-5 py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-700 text-white shadow-sm">
@@ -300,7 +300,10 @@ export default function ProvincialSidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-4 py-4">
+          <nav
+            aria-label="Provincial navigation"
+            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-4"
+          >
             <div className="space-y-4">
               {navigationGroups.map((group) => (
                 <div key={group.label}>
@@ -366,8 +369,8 @@ export default function ProvincialSidebar() {
           </nav>
 
           {/* Bottom section */}
-          <div className="border-t border-slate-200 p-4">
-            <div className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3">
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="mb-3 hidden rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 lg:block">
               <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">
                 Current Workspace
               </p>
