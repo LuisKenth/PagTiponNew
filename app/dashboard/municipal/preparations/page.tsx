@@ -1,15 +1,16 @@
 "use client";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 
 import { useEffect, useRef, useState } from "react";
 
 import { ClipboardList, RefreshCw, TriangleAlert, X } from "lucide-react";
 
+import MunicipalDeliveryToast from "../components/MunicipalDeliveryToast";
 import PrepareEventModal from "../components/PrepareEventModal";
 import ReceivedEventsSection from "../components/ReceivedEventsSection";
-import useMunicipalDashboard from "../hooks/useMunicipalDashboard";
-import MunicipalDeliveryToast from "../components/MunicipalDeliveryToast";
 import MunicipalEventsFilters from "../events/components/MunicipalEventsFilters";
 import useMunicipalEventsPage from "../events/hooks/useMunicipalEventsPage";
+import useMunicipalDashboard from "../hooks/useMunicipalDashboard";
 
 import type { ReceivedEvent } from "../types/municipalDashboard";
 
@@ -233,54 +234,14 @@ export default function MunicipalPreparationsPage() {
   return (
     <>
       <div className="space-y-5 sm:space-y-6">
-        {/* PAGE HEADING */}
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="h-1 bg-slate-950" />
-
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                  Event Operations
-                </p>
-
-                <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-                  Event Preparation
-                </h1>
-
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Manage municipal event preparation, assign local venues,
-                  provide participant instructions, and control registration
-                  before provincial and municipal events begin.
-                </p>
-
-                <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
-                  Ongoing, completed, and cancelled events remain available for
-                  reference but can no longer be modified.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void handleRefresh()}
-              disabled={loading || refreshing}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${
-                  loading || refreshing ? "animate-spin" : ""
-                }`}
-              />
-
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
-        </section>
+        <MunicipalPageHeader
+          icon={<ClipboardList className="h-6 w-6" />}
+          eyebrow="Municipal Event Operations"
+          title="Event Preparation"
+          description="Assign venues, provide participant instructions, and manage event registration before events begin."
+          footer="Ongoing, completed, and cancelled events remain available for reference but cannot be modified."
+          actions={null}
+        />
 
         {/* QUERY TARGET ERROR */}
         {targetError && (

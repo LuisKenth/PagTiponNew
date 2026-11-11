@@ -1,4 +1,6 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
+
 import VenueLocationButton from "@/app/components/VenueLocationButton";
 
 import Link from "next/link";
@@ -554,36 +556,14 @@ export default function ParticipantEventsPage() {
     }
   }, []);
 
+  useLiveData({
+    onUpdate: () => {
+      return fetchOpenEvents(false);
+    },
+    disabled: loading || Boolean(registeringId),
+  });
   useEffect(() => {
     void fetchOpenEvents(true);
-
-    const refreshSilently = () => {
-      void fetchOpenEvents(false);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshSilently();
-      }
-    };
-
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        refreshSilently();
-      }
-    }, 30000);
-
-    window.addEventListener("focus", refreshSilently);
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.clearInterval(intervalId);
-
-      window.removeEventListener("focus", refreshSilently);
-
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, [fetchOpenEvents]);
 
   const openEventIds = useMemo(
@@ -971,8 +951,6 @@ export default function ParticipantEventsPage() {
 
   return (
     <main className="p-4 sm:p-6 lg:p-8">
-
-
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -1046,10 +1024,31 @@ export default function ParticipantEventsPage() {
             </p>
           </div>
 
-          <ol aria-label="How to join an event" className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700 sm:grid-cols-3">
-            <li><span className="font-semibold text-slate-950">1. View event</span><p className="mt-1">Check the schedule, venue, and instructions.</p></li>
-            <li><span className="font-semibold text-slate-950">2. Register</span><p className="mt-1">Confirm that you want to attend.</p></li>
-            <li><span className="font-semibold text-slate-950">3. Show your QR code</span><p className="mt-1">Your pass opens after registration. Show it to Event Staff for Time-in and Time-out.</p></li>
+          <ol
+            aria-label="How to join an event"
+            className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700 sm:grid-cols-3"
+          >
+            <li>
+              <span className="font-semibold text-slate-950">
+                1. View event
+              </span>
+              <p className="mt-1">
+                Check the schedule, venue, and instructions.
+              </p>
+            </li>
+            <li>
+              <span className="font-semibold text-slate-950">2. Register</span>
+              <p className="mt-1">Confirm that you want to attend.</p>
+            </li>
+            <li>
+              <span className="font-semibold text-slate-950">
+                3. Show your QR code
+              </span>
+              <p className="mt-1">
+                Your pass opens after registration. Show it to Event Staff for
+                Time-in and Time-out.
+              </p>
+            </li>
           </ol>
 
           {loading ? (
@@ -1177,14 +1176,21 @@ export default function ParticipantEventsPage() {
                           </div>
 
                           <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                            <summary className="cursor-pointer text-sm font-semibold text-slate-800">View Event Details</summary>
+                            <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                              View Event Details
+                            </summary>
                             <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
-                              {item.event?.description || "No description provided."}
+                              {item.event?.description ||
+                                "No description provided."}
                             </p>
                             {item.local_instructions && (
                               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                                <h4 className="text-sm font-semibold text-amber-900">Participant Instructions</h4>
-                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900 [overflow-wrap:anywhere]">{item.local_instructions}</p>
+                                <h4 className="text-sm font-semibold text-amber-900">
+                                  Participant Instructions
+                                </h4>
+                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900 [overflow-wrap:anywhere]">
+                                  {item.local_instructions}
+                                </p>
                               </div>
                             )}
                           </details>

@@ -1,15 +1,17 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import { useEffect, useMemo, useState } from "react";
 
+import { MUNICIPALITIES } from "@/lib/municipalities";
 import { supabase } from "@/lib/supabase";
 
+import Pagination from "../components/Pagination";
 import EventsFilters from "./components/EventsFilters";
 import EventsHeader from "./components/EventsHeader";
 import EventsStatusTabs from "./components/EventsStatusTabs";
 import EventsSummary from "./components/EventsSummary";
 import EventsTable from "./components/EventsTable";
-import Pagination from "../components/Pagination";
 
 import type {
   EventSortOption,
@@ -55,8 +57,8 @@ export default function ProvincialEventsPage() {
   /*
    * FETCH EVENTS
    */
-  const fetchEvents = async () => {
-    setLoading(true);
+  const fetchEvents = async (silent = false) => {
+    if (!silent) setLoading(true);
 
     const now = Date.now();
 
@@ -85,6 +87,7 @@ export default function ProvincialEventsPage() {
         const automaticStatus = getAutomaticEventStatus(event, now);
 
         if (
+          !silent &&
           automaticStatus !== event.status &&
           automaticStatus !== "draft" &&
           automaticStatus !== "cancelled"
@@ -152,6 +155,10 @@ export default function ProvincialEventsPage() {
     setLoading(false);
   };
 
+  useLiveData({
+    onUpdate: () => fetchEvents(true),
+    disabled: loading || Boolean(deletingId || publishingId || cancellingId),
+  });
   useEffect(() => {
     fetchEvents();
   }, []);
@@ -173,15 +180,7 @@ export default function ProvincialEventsPage() {
   /*
    * MUNICIPALITY OPTIONS
    */
-  const municipalityOptions = useMemo(() => {
-    const municipalities = events.flatMap((event) =>
-      event.municipalities.map((item) => item.municipality),
-    );
-
-    return Array.from(new Set(municipalities)).sort((a, b) =>
-      a.localeCompare(b),
-    );
-  }, [events]);
+  const municipalityOptions = MUNICIPALITIES;
 
   /*
    * FILTERED EVENTS

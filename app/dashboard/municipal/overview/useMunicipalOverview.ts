@@ -1,4 +1,5 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 import { useCallback, useEffect, useState } from "react";
 import { EMPTY_OVERVIEW, type MunicipalOverviewData } from "./model";
 import { readMunicipalOverview } from "./readData";
@@ -8,21 +9,20 @@ export function useMunicipalOverview() {
     [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => {
-    setLoading(true);
     setRevision((value) => value + 1);
   }, []);
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      setLoading(true);
+      if (revision === 0) setLoading(true);
       setError("");
       try {
         const result = await readMunicipalOverview(controller.signal);
         if (!cancelled) setData(result);
       } catch (error) {
         if (!cancelled) {
-          setData(EMPTY_OVERVIEW);
+          if (revision === 0) setData(EMPTY_OVERVIEW);
           setError(
             error instanceof Error
               ? error.message
@@ -39,11 +39,6 @@ export function useMunicipalOverview() {
       controller.abort();
     };
   }, [revision]);
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, 60000);
-    return () => window.clearInterval(interval);
-  }, [refresh]);
+  useLiveData({ onUpdate: refresh, disabled: loading });
   return { data, loading, error, refresh };
 }

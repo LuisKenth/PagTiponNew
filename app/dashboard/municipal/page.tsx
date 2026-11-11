@@ -1,20 +1,24 @@
 "use client";
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 import {
+  AlertTriangle,
   ArrowRight,
+  BarChart3,
   CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
   ClipboardCheck,
   ClipboardList,
   LayoutDashboard,
   Loader2,
-  MapPin,
-  RefreshCw,
+  ScanLine,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
-import { useMunicipalOverview } from "./overview/useMunicipalOverview";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   MUNICIPAL_EVENT_STATES,
   municipalDate,
@@ -22,6 +26,7 @@ import {
   municipalOverviewMetrics,
   preparationLabel,
 } from "./overview/model";
+import { useMunicipalOverview } from "./overview/useMunicipalOverview";
 const card =
   "min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6";
 const button =
@@ -114,84 +119,29 @@ export default function MunicipalDashboardPage() {
   ).join(", ");
   return (
     <div className="min-w-0 space-y-5 pb-6 sm:space-y-6">
-      <header
-        className="min-w-0 rounded-2xl border p-5 shadow-sm sm:p-7"
-        style={{ backgroundColor: "#172554", borderColor: "#1e3a8a" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 20,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ flex: "1 1 380px", minWidth: 0 }}>
-            <div className="flex items-center gap-3">
-              <span
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ backgroundColor: "#263869", color: "white" }}
-              >
-                <LayoutDashboard size={22} aria-hidden="true" />
-              </span>
-              <span
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: "#bfdbfe" }}
-              >
-                Municipal Overview
-              </span>
-            </div>
-            <h1
-              className="mt-4 break-words text-2xl font-bold tracking-tight sm:text-3xl"
-              style={{ color: "white" }}
-            >
-              Municipal Dashboard
-            </h1>
-            <p className="mt-2 text-sm leading-6" style={{ color: "#e2e8f0" }}>
-              {data.fullName ? `Welcome back, ${data.fullName}. ` : ""}Here’s
-              your municipal event overview.
-            </p>
-            <p
-              className="mt-3 flex items-center gap-2 text-xs font-medium"
-              style={{ color: "#bfdbfe" }}
-            >
-              <MapPin size={15} aria-hidden="true" />
-              {data.municipality || "Your municipality"}
-            </p>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              maxWidth: "100%",
-              minWidth: 0,
-            }}
-          >
-            <button
-              type="button"
-              onClick={refresh}
-              disabled={loading}
-              className={button}
-            >
-              <RefreshCw
-                size={17}
-                aria-hidden="true"
-                className={loading ? "animate-spin" : ""}
-              />{" "}
-              Refresh
-            </button>
+      <MunicipalPageHeader
+        icon={<LayoutDashboard className="h-6 w-6" />}
+        eyebrow="Municipal Administration · Overview"
+        title="Municipal Dashboard"
+        description={
+          <>
+            {data.fullName ? `Welcome back, ${data.fullName}. ` : ""}
+            Review events and attendance in{" "}
+            <strong>{data.municipality || "your municipality"}</strong>.
+          </>
+        }
+        actions={
+          <>
+            {null}
             <Link
               href="/dashboard/municipal/preparations"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
             >
-              View Events <ArrowRight size={17} aria-hidden="true" />
+              Manage Preparations <ArrowRight size={17} />
             </Link>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
       {notice && (
         <div
           role="status"
@@ -270,13 +220,134 @@ export default function MunicipalDashboardPage() {
               href="/dashboard/municipal/attendance"
             />
           </section>
+          {/* Prioritized operational alerts. Counts are derived from the already loaded
+              municipality-scoped overview; no additional privileged query is made. */}
+          <section aria-labelledby="municipal-alerts-heading" className={card}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle
+                    size={19}
+                    className="text-indigo-600"
+                    aria-hidden="true"
+                  />
+                  <h2
+                    id="municipal-alerts-heading"
+                    className="text-base font-bold text-slate-900"
+                  >
+                    Important Alerts
+                  </h2>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Operational items that may need attention in{" "}
+                  {data.municipality || "your municipality"}.
+                </p>
+              </div>
+              <Link
+                href="/dashboard/municipal/notifications"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:underline"
+              >
+                Notifications <ArrowRight size={14} aria-hidden="true" />
+              </Link>
+            </div>
+            {loading ? (
+              <div
+                className="mt-4 h-14 animate-pulse rounded-xl bg-slate-100"
+                aria-label="Loading alerts"
+              />
+            ) : (
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {metrics.needsPreparation > 0 && (
+                  <Link
+                    href="/dashboard/municipal/preparations"
+                    className="group flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 transition hover:border-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    <ClipboardList
+                      className="mt-0.5 h-5 w-5 shrink-0 text-amber-700"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-amber-900">
+                        {metrics.needsPreparation} event
+                        {metrics.needsPreparation === 1 ? "" : "s"} need
+                        preparation
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-amber-800">
+                        Assign venue, instructions, and registration settings.
+                      </p>
+                    </div>
+                  </Link>
+                )}
+                {metrics.counts.ongoing > 0 && (
+                  <Link
+                    href="/dashboard/municipal/attendance"
+                    className="group flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 transition hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  >
+                    <ScanLine
+                      className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-emerald-900">
+                        {metrics.counts.ongoing} ongoing event
+                        {metrics.counts.ongoing === 1 ? "" : "s"}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-emerald-800">
+                        View live attendance and event details.
+                      </p>
+                    </div>
+                  </Link>
+                )}
+                {metrics.counts.unscheduled > 0 && (
+                  <Link
+                    href="/dashboard/municipal/preparations"
+                    className="group flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 transition hover:border-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  >
+                    <AlertTriangle
+                      className="mt-0.5 h-5 w-5 shrink-0 text-orange-700"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-orange-900">
+                        {metrics.counts.unscheduled} event
+                        {metrics.counts.unscheduled === 1 ? "" : "s"} need
+                        schedule review
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-orange-800">
+                        Check events with an incomplete or invalid schedule.
+                      </p>
+                    </div>
+                  </Link>
+                )}
+                {metrics.needsPreparation === 0 &&
+                  metrics.counts.ongoing === 0 &&
+                  metrics.counts.unscheduled === 0 && (
+                    <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2 xl:col-span-3">
+                      <CheckCircle2
+                        className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-900">
+                          No urgent event-operation alerts
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-emerald-800">
+                          Review Notifications for new invitations and
+                          administrative updates.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+          </section>
           <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2 sm:gap-6">
             <section className={card} aria-busy={loading}>
               <h2 className="text-base font-bold text-slate-900">
                 Event Status
               </h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                All events received by your municipality
+                Provincial and municipal events for your municipality
               </p>
               {loading ? (
                 <div
@@ -444,6 +515,148 @@ export default function MunicipalDashboardPage() {
                   )}
                 </>
               )}
+            </section>
+          </div>
+          <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2 sm:gap-6">
+            <section
+              className={card}
+              aria-labelledby="municipal-attendance-heading"
+              aria-busy={loading}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2
+                    id="municipal-attendance-heading"
+                    className="text-base font-bold text-slate-900"
+                  >
+                    Attendance Snapshot
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Final attendance for completed events only.
+                  </p>
+                </div>
+                <Link
+                  href="/dashboard/municipal/attendance"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:underline"
+                >
+                  View attendance <ArrowRight size={14} aria-hidden="true" />
+                </Link>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium text-slate-600">
+                    Completed-event registrations
+                  </p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                    {loading ? "…" : metrics.completedRegistrations}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                  <p className="text-xs font-medium text-emerald-800">
+                    Attended (Present + Late)
+                  </p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-emerald-900">
+                    {loading ? "…" : metrics.attended}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-600">
+                  <span>Completed-event attendance rate</span>
+                  <span>
+                    {loading
+                      ? "…"
+                      : metrics.attendanceRate === null
+                        ? "—"
+                        : `${metrics.attendanceRate}%`}
+                  </span>
+                </div>
+                <div
+                  className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-100"
+                  role="progressbar"
+                  aria-label="Completed-event attendance rate"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={metrics.attendanceRate ?? 0}
+                >
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, metrics.attendanceRate ?? 0))}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  — means no registered participants in completed events.
+                  Upcoming registrations are excluded from this rate.
+                </p>
+              </div>
+            </section>
+            <section
+              className={card}
+              aria-labelledby="municipal-quick-actions-heading"
+            >
+              <h2
+                id="municipal-quick-actions-heading"
+                className="text-base font-bold text-slate-900"
+              >
+                Quick Actions
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Open frequently used municipal workspaces.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: "Create Event",
+                    href: "/dashboard/municipal/events/create",
+                    icon: CalendarPlus,
+                  },
+                  {
+                    label: "Prepare Events",
+                    href: "/dashboard/municipal/preparations",
+                    icon: ClipboardList,
+                  },
+                  {
+                    label: "Registrations",
+                    href: "/dashboard/municipal/registrations/events",
+                    icon: Users,
+                  },
+                  {
+                    label: "Attendance",
+                    href: "/dashboard/municipal/attendance",
+                    icon: ScanLine,
+                  },
+                  {
+                    label: "Verify Participants",
+                    href: "/dashboard/municipal/participant-verifications",
+                    icon: ShieldCheck,
+                  },
+                  {
+                    label: "Reports",
+                    href: "/dashboard/municipal/reports",
+                    icon: BarChart3,
+                  },
+                ].map((action) => {
+                  const ActionIcon = action.icon;
+                  return (
+                    <Link
+                      key={action.href}
+                      href={action.href}
+                      className="group flex min-h-20 min-w-0 flex-col items-start justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 transition hover:border-indigo-200 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:flex-row sm:items-center sm:px-4"
+                    >
+                      <ActionIcon
+                        size={19}
+                        aria-hidden="true"
+                        className="shrink-0 text-indigo-600"
+                      />
+                      <span className="min-w-0 text-xs font-semibold text-slate-800 group-hover:text-indigo-800 sm:text-sm">
+                        {action.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
             </section>
           </div>
           {data.loadedAt && !loading && (

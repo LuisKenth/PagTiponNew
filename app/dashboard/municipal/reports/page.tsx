@@ -1,261 +1,154 @@
 "use client";
-
-import {
-  CircleAlert,
-  TriangleAlert,
-} from "lucide-react";
-
-import AttendanceBreakdown from "./components/AttendanceBreakdown";
-import EventPerformanceTable from "./components/EventPerformanceTable";
-import MunicipalReportsHeader from "./components/MunicipalReportsHeader";
-import ParticipantCategoryBreakdown from "./components/ParticipantCategoryBreakdown";
-import ReportFilters from "./components/ReportFilters";
-import ReportSummaryCards from "./components/ReportSummaryCards";
-import ReportsPagination from "./components/ReportsPagination";
-
+import { useState } from "react";
+import ReportWorkspace, {
+  type EventRow,
+} from "../../components/reports/ReportWorkspace";
 import useMunicipalReports from "./hooks/useMunicipalReports";
-
-import {
-  exportMunicipalReportCsv,
-} from "./utils/exportMunicipalReportCsv";
-
+import SearchableEventSelect from "../../provincial/reports/components/SearchableEventSelect";
+const control =
+  "mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm";
 export default function MunicipalReportsPage() {
-  const {
-    filteredEvents,
-    paginatedEvents,
-    eventOptions,
-    participantCategoryOptions,
-    participantCategoryBreakdown,
-    municipality,
-    summary,
+  const r = useMunicipalReports();
+  const [source, setSource] = useState("all");
+  const events = r.filteredEvents.filter(
+    (e) => source === "all" || e.eventOrigin === source,
+  );
+  const ids = new Set(events.map((e) => e.eventMunicipalityId));
+  const invalid = Boolean(r.dateFrom && r.dateTo && r.dateFrom > r.dateTo);
 
-    loading,
-    refreshing,
-    errorMessage,
-    warningMessage,
+  const selectedEventTitle =
+    r.selectedEventId === "all"
+      ? "All"
+      : r.reportEvents.find(
+          (event) => event.eventMunicipalityId === r.selectedEventId,
+        )?.eventTitle || "Selected event";
 
-    searchTerm,
-    selectedEventId,
-    statusFilter,
-    participantCategoryFilter,
-    dateFrom,
-    dateTo,
-    currentPage,
-    pageSize,
-    totalPages,
-    firstVisibleItem,
-    lastVisibleItem,
-    hasActiveFilters,
-
-    setSearchTerm,
-    changeSelectedEvent,
-    setStatusFilter,
-    setParticipantCategoryFilter,
-    setDateFrom,
-    setDateTo,
-    clearFilters,
-
-    changePageSize,
-    goToPreviousPage,
-    goToNextPage,
-
-    refreshReports,
-  } = useMunicipalReports();
-
-  function handleExport() {
-    exportMunicipalReportCsv({
-      events: filteredEvents,
-
-      municipality,
-
-      participantCategoryFilter,
-
-      participantCategoryBreakdown,
-    });
-  }
-
-  return (
-    <div className="space-y-6">
-      <MunicipalReportsHeader
-        municipality={municipality}
-        loading={loading}
-        refreshing={refreshing}
-        exportDisabled={
-          loading ||
-          filteredEvents.length === 0
-        }
-        onExport={handleExport}
-        onRefresh={() =>
-          void refreshReports()
-        }
-      />
-
-      {warningMessage && (
-        <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-            <TriangleAlert className="h-5 w-5" />
-          </div>
-
-          <div>
-            <p className="text-sm font-bold text-amber-900">
-              Partial Report Data
-            </p>
-
-            <p className="mt-1 text-sm leading-6 text-amber-700">
-              {warningMessage}
-            </p>
-          </div>
-        </section>
-      )}
-
-      {errorMessage && !loading && (
-        <section className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-700">
-            <CircleAlert className="h-5 w-5" />
-          </div>
-
-          <div>
-            <p className="text-sm font-bold text-red-900">
-              Report Loading Failed
-            </p>
-
-            <p className="mt-1 text-sm leading-6 text-red-700">
-              {errorMessage}
-            </p>
-          </div>
-        </section>
-      )}
-
-      <ReportFilters
-        searchTerm={searchTerm}
-        selectedEventId={
-          selectedEventId
-        }
-        statusFilter={
-          statusFilter
-        }
-        participantCategoryFilter={
-          participantCategoryFilter
-        }
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        eventOptions={
-          eventOptions
-        }
-        participantCategoryOptions={
-          participantCategoryOptions
-        }
-        resultCount={
-          filteredEvents.length
-        }
-        hasActiveFilters={
-          hasActiveFilters
-        }
-        onSearchChange={
-          setSearchTerm
-        }
-        onEventChange={
-          changeSelectedEvent
-        }
-        onStatusChange={
-          setStatusFilter
-        }
-        onParticipantCategoryChange={
-          setParticipantCategoryFilter
-        }
-        onDateFromChange={
-          setDateFrom
-        }
-        onDateToChange={
-          setDateTo
-        }
-        onClearFilters={
-          clearFilters
-        }
-      />
-
-      <ReportSummaryCards
-        summary={summary}
-      />
-
-      <AttendanceBreakdown
-        summary={summary}
-      />
-
-      <ParticipantCategoryBreakdown
-        data={
-          participantCategoryBreakdown
-        }
-        loading={loading}
-        errorMessage={
-          errorMessage
-        }
-      />
-
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Event Performance
-            </h2>
-
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              Compare registrations,
-              attendance outcomes, and
-              check-in methods for each
-              assigned event.
-            </p>
-          </div>
-
-          <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
-            {filteredEvents.length}{" "}
-            {filteredEvents.length === 1
-              ? "event"
-              : "events"}
-          </span>
-        </div>
-
-        <EventPerformanceTable
-          events={paginatedEvents}
-          loading={loading}
-          errorMessage={
-            errorMessage
-          }
+  const description = [
+    `Municipality: ${r.municipality || "Your municipality"}`,
+    `Event: ${selectedEventTitle}`,
+    `Source: ${
+      source === "all"
+        ? "All sources"
+        : source === "municipal"
+          ? "Municipal"
+          : "Provincial"
+    }`,
+    `Event start date (PH): ${r.dateFrom || "Any"} to ${r.dateTo || "Any"}`,
+  ].join(" · ");
+  const controls = (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="min-w-0">
+        <SearchableEventSelect
+          events={r.reportEvents
+            .filter((event) => source === "all" || event.eventOrigin === source)
+            .map((event) => ({
+              id: event.eventMunicipalityId,
+              title: `${event.eventTitle} · ${
+                event.eventOrigin === "municipal" ? "Municipal" : "Provincial"
+              }`,
+              start_at: event.startAt,
+              status: event.eventStatus,
+            }))
+            .sort((a, b) => a.title.localeCompare(b.title))}
+          value={r.selectedEventId}
+          onChange={(eventId) => {
+            r.setSearchTerm("");
+            r.changeSelectedEvent(eventId);
+          }}
         />
-
-        {!loading &&
-          !errorMessage && (
-            <ReportsPagination
-              currentPage={
-                currentPage
-              }
-              totalPages={
-                totalPages
-              }
-              pageSize={
-                pageSize
-              }
-              totalItems={
-                filteredEvents.length
-              }
-              firstVisibleItem={
-                firstVisibleItem
-              }
-              lastVisibleItem={
-                lastVisibleItem
-              }
-              onPageSizeChange={
-                changePageSize
-              }
-              onPreviousPage={
-                goToPreviousPage
-              }
-              onNextPage={
-                goToNextPage
-              }
-            />
-          )}
-      </section>
+      </div>
+      <label className="min-w-0 text-xs font-semibold">
+        Event source
+        <select
+          className={control}
+          value={source}
+          onChange={(e) => {
+            setSource(e.target.value);
+            r.setSearchTerm("");
+            r.changeSelectedEvent("all");
+          }}
+        >
+          <option value="all">All sources</option>
+          <option value="provincial">Provincial</option>
+          <option value="municipal">Municipal</option>
+        </select>
+      </label>
+      <label className="min-w-0 text-xs font-semibold">
+        From (PH)
+        <input
+          type="date"
+          className={control}
+          value={r.dateFrom}
+          max={r.dateTo || undefined}
+          onChange={(e) => r.setDateFrom(e.target.value)}
+        />
+      </label>
+      <label className="min-w-0 text-xs font-semibold">
+        To (PH)
+        <input
+          type="date"
+          className={control}
+          value={r.dateTo}
+          min={r.dateFrom || undefined}
+          onChange={(e) => r.setDateTo(e.target.value)}
+        />
+      </label>
+      <button
+        className={`${control} self-end font-semibold`}
+        onClick={() => {
+          r.clearFilters();
+          setSource("all");
+        }}
+      >
+        Clear filters
+      </button>
     </div>
+  );
+  return (
+    <ReportWorkspace
+      provincial={false}
+      municipality={r.municipality}
+      loading={r.loading}
+      error={
+        invalid ? "From date must be on or before To date." : r.errorMessage
+      }
+      updatedAt={r.lastUpdatedAt}
+      onRefresh={() => void r.refreshReports()}
+      filters={controls}
+      filterDescription={description}
+      events={events.map(
+        (e): EventRow => ({
+          id: e.eventMunicipalityId,
+          title: e.eventTitle,
+          source: e.eventOrigin === "municipal" ? "Municipal" : "Provincial",
+          municipality: r.municipality || "—",
+          start: e.startAt,
+          end: e.endAt,
+          status: e.eventStatus,
+          registered: e.totalRegistrations,
+          present: e.presentCount,
+          late: e.lateCount,
+          absent: e.absentCount,
+          pending: e.pendingCount,
+        }),
+      )}
+      people={r.participantRows
+        .filter((p) => ids.has(p.eventMunicipalityId))
+        .map((p) => ({
+          id: p.rsvpId,
+          eventId: p.eventMunicipalityId,
+          name: p.participantName,
+          municipality: r.municipality || "—",
+          category: p.categoryLabel,
+          status:
+            p.attendanceStatus === "pending"
+              ? "Awaiting time-in"
+              : p.attendanceStatus,
+          timeIn: p.checkedInAt,
+          timeOut: p.checkedOutAt,
+          method: p.method,
+        }))}
+      participation={[]}
+    />
   );
 }

@@ -14,6 +14,7 @@ export type MunicipalReportEvent = {
   eventId: string | null;
 
   eventTitle: string;
+  eventOrigin?: "provincial" | "municipal";
 
   eventStatus: string;
 
@@ -68,8 +69,10 @@ export type MunicipalReportSummary = {
 
 export type MunicipalReportEventOption = {
   eventMunicipalityId: string;
-
   eventTitle: string;
+  eventOrigin?: "provincial" | "municipal";
+  startAt?: string | null;
+  eventStatus?: string | null;
 };
 
 export type MunicipalReportProfile = {
@@ -116,4 +119,20 @@ export type MunicipalParticipantCategoryBreakdownItem = {
 
     count: number;
   }[];
+};
+
+/** Municipality-restricted participant attendance rows from the existing RPC. */
+export type MunicipalReportParticipantRow = {
+  rsvpId: string;
+  participantId: string;
+  participantName: string;
+  eventMunicipalityId: string;
+  eventTitle: string;
+  eventOrigin?: "provincial" | "municipal";
+  attendanceStatus: string;
+  method: string | null;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  category: string;
+  categoryLabel: string;
 };

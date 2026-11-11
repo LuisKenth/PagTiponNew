@@ -1,8 +1,9 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
+import { supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { manageMunicipalAdmin } from "../utils/manageMunicipalAdmin";
-import { supabase } from "@/lib/supabase";
 
 import { MUNICIPALITIES } from "../constants/municipalities";
 import type {
@@ -17,8 +18,8 @@ export default function useMunicipalities() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const fetchMunicipalAdmins = useCallback(async () => {
-    setLoading(true);
+  const fetchMunicipalAdmins = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
 
     const { data, error } = await supabase
       .from("profiles")
@@ -37,8 +38,8 @@ export default function useMunicipalities() {
 
     if (error) {
       console.error("Municipal admin fetch error:", error.message);
-      alert(`Unable to load municipal admins: ${error.message}`);
-      setAdmins([]);
+      if (!silent) alert(`Unable to load municipal admins: ${error.message}`);
+      if (!silent) setAdmins([]);
       setLoading(false);
       return;
     }
@@ -48,10 +49,16 @@ export default function useMunicipalities() {
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => { void fetchMunicipalAdmins(); }, 0);
+    const timeout = window.setTimeout(() => {
+      void fetchMunicipalAdmins();
+    }, 0);
     return () => window.clearTimeout(timeout);
   }, [fetchMunicipalAdmins]);
 
+  useLiveData({
+    onUpdate: () => fetchMunicipalAdmins(true),
+    disabled: loading || processingId !== null,
+  });
   const approvedAdmins = useMemo(
     () => admins.filter((admin) => admin.verification_status === "approved"),
     [admins],

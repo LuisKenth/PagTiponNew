@@ -1,8 +1,8 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 import ProvincialPageHeader from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 
-import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { MUNICIPALITIES } from "@/lib/municipalities";
 import {
   Activity,
   ArrowRight,
@@ -17,16 +17,17 @@ import {
   FileText,
   LayoutDashboard,
   Plus,
-  RefreshCw,
   Users,
 } from "lucide-react";
-import { useProvincialDashboard } from "./hooks/useProvincialDashboard";
+import Link from "next/link";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   dashboardMetrics,
   eventDate,
   eventStatus,
   monthlyCreated,
 } from "./dashboardMetrics";
+import { useProvincialDashboard } from "./hooks/useProvincialDashboard";
 
 const statuses = [
   {
@@ -244,7 +245,7 @@ export default function ProvincialDashboardPage() {
     setRefreshing(true);
     setRefreshError("");
     try {
-      await reload();
+      await reload(true);
     } catch {
       setRefreshError("Unable to refresh. Please try again.");
     } finally {
@@ -266,21 +267,10 @@ export default function ProvincialDashboardPage() {
         }
         actions={
           <div className="grid shrink-0 grid-cols-2 gap-3 sm:flex">
-            <button
-              type="button"
-              onClick={() => void refresh()}
+            <BackgroundDataSync
+              onUpdate={() => refresh()}
               disabled={busy || refreshing}
-              aria-label="Refresh dashboard"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={`h-4 w-4 shrink-0 ${
-                  refreshing ? "animate-spin" : ""
-                }`}
-              />
-              Refresh
-            </button>
+            />
 
             <Link
               href="/dashboard/provincial/events/create"
@@ -603,6 +593,11 @@ export default function ProvincialDashboardPage() {
                   <strong className="text-slate-900">{data.open}</strong>
                 </p>
               </div>
+              <p className="mt-4 text-xs leading-5 text-slate-500">
+                Province-wide coverage: {MUNICIPALITIES.length} municipalities.
+                Preparation totals above count only assigned upcoming and
+                ongoing events.
+              </p>
               {!data.activeAssignments.length && (
                 <p className="mt-4 text-xs leading-5 text-slate-400">
                   No active event assignments yet.

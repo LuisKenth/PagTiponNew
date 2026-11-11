@@ -1,16 +1,8 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 import VenueLocationButton from "@/app/components/VenueLocationButton";
 
-import {
-  CalendarCheck2,
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  History,
-  RefreshCw,
-  TicketCheck,
-  XCircle,
-} from "lucide-react";
+import { CalendarCheck2, History } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -458,19 +450,10 @@ export default function ParticipantRegistrationsPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void fetchRegistrations(true)}
+            <BackgroundDataSync
+              onUpdate={() => fetchRegistrations(true)}
               disabled={refreshing}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw
-                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </button>
+            />
           </div>
         </section>
 
@@ -596,14 +579,39 @@ export default function ParticipantRegistrationsPage() {
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClasses(item.event.status)}`}>{getEventStatusLabel(item.event.status)}</span>
-                          {rsvpCancelled && <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">Registration Cancelled</span>}
-                          <span className="text-xs text-slate-500">{item.event.event_origin === "municipal" ? "Municipal" : "Provincial"} · {item.assignment.municipality}</span>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClasses(item.event.status)}`}
+                          >
+                            {getEventStatusLabel(item.event.status)}
+                          </span>
+                          {rsvpCancelled && (
+                            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                              Registration Cancelled
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500">
+                            {item.event.event_origin === "municipal"
+                              ? "Municipal"
+                              : "Provincial"}{" "}
+                            · {item.assignment.municipality}
+                          </span>
                         </div>
-                        <h3 className="mt-3 break-words text-lg font-bold leading-6 text-slate-950 sm:text-xl">{item.event.title}</h3>
+                        <h3 className="mt-3 break-words text-lg font-bold leading-6 text-slate-950 sm:text-xl">
+                          {item.event.title}
+                        </h3>
                         <dl className="mt-3 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm">
-                          <div className="min-w-0"><dt className="text-xs text-slate-500">Starts</dt><dd className="mt-1 font-semibold text-slate-800">{formatDateTime(item.event.start_at)}</dd></div>
-                          <div className="min-w-0"><dt className="text-xs text-slate-500">Ends</dt><dd className="mt-1 font-semibold text-slate-800">{formatDateTime(item.event.end_at)}</dd></div>
+                          <div className="min-w-0">
+                            <dt className="text-xs text-slate-500">Starts</dt>
+                            <dd className="mt-1 font-semibold text-slate-800">
+                              {formatDateTime(item.event.start_at)}
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-xs text-slate-500">Ends</dt>
+                            <dd className="mt-1 font-semibold text-slate-800">
+                              {formatDateTime(item.event.end_at)}
+                            </dd>
+                          </div>
                         </dl>
                         <div className="mt-4">
                           {active && (
@@ -644,14 +652,41 @@ export default function ParticipantRegistrationsPage() {
                           )}
                         </div>
                         <div className="mt-3">
-                          <VenueLocationButton eventMunicipalityId={item.rsvp.event_municipality_id} label="Venue & Directions" />
+                          <VenueLocationButton
+                            eventMunicipalityId={
+                              item.rsvp.event_municipality_id
+                            }
+                            label="Venue & Directions"
+                          />
                         </div>
                         <details className="group mt-3 border-t border-slate-100 pt-1">
-                          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-700 focus-visible:outline-violet-600">Event Details</summary>
+                          <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-700 focus-visible:outline-violet-600">
+                            Event Details
+                          </summary>
                           <div className="space-y-4 pb-2 text-sm leading-6 text-slate-600">
-                            <div><h4 className="font-semibold text-slate-900">About this event</h4><p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.event.description || "No description provided."}</p></div>
-                            {item.assignment.local_instructions && <div className="rounded-xl bg-amber-50 p-3 text-amber-900"><h4 className="font-semibold">Participant Instructions</h4><p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.assignment.local_instructions}</p></div>}
-                            <p className="text-xs text-slate-500">Registered on {formatDateTime(item.rsvp.registered_at)}</p>
+                            <div>
+                              <h4 className="font-semibold text-slate-900">
+                                About this event
+                              </h4>
+                              <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                {item.event.description ||
+                                  "No description provided."}
+                              </p>
+                            </div>
+                            {item.assignment.local_instructions && (
+                              <div className="rounded-xl bg-amber-50 p-3 text-amber-900">
+                                <h4 className="font-semibold">
+                                  Participant Instructions
+                                </h4>
+                                <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                  {item.assignment.local_instructions}
+                                </p>
+                              </div>
+                            )}
+                            <p className="text-xs text-slate-500">
+                              Registered on{" "}
+                              {formatDateTime(item.rsvp.registered_at)}
+                            </p>
                           </div>
                         </details>
                       </div>

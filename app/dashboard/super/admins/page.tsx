@@ -1,36 +1,36 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  Copy,
-  Eye,
-  EyeOff,
-  Loader2,
-  Mail,
-  MailCheck,
-  Search,
-  UserPlus,
-  Users,
-  Trash2,
-  UserRound,
-  ShieldCheck,
-  CalendarDays,
-  Fingerprint,
-} from "lucide-react";
-import { superRequest, message } from "@/lib/super/client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import { message, superRequest } from "@/lib/super/client";
 import {
   formatDate,
   type AccountResult,
   type ProvincialAccount,
 } from "@/lib/super/types";
 import {
-  PageHeader,
-  RefreshButton,
-  Loading,
+  CalendarDays,
+  Copy,
+  Eye,
+  EyeOff,
+  Fingerprint,
+  Loader2,
+  Mail,
+  MailCheck,
+  Search,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
   ErrorMessage,
-  SuccessMessage,
+  Loading,
+  Modal,
+  PageHeader,
   Pagination,
   StatusBadge,
-  Modal,
+  SuccessMessage,
   inputClass,
   primaryClass,
   secondaryClass,
@@ -295,9 +295,9 @@ export default function ProvincialAdmins() {
         description="Create administrator accounts, manage access, and help account owners recover their login."
         icon={Users}
       >
-        <RefreshButton
-          busy={loading || busy}
-          onClick={() => setRevision((v) => v + 1)}
+        <BackgroundDataSync
+          onUpdate={() => setRevision((v) => v + 1)}
+          disabled={loading || busy}
         />
         <button
           type="button"

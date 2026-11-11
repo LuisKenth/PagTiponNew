@@ -1,17 +1,19 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
+
 import ProvincialPageHeader, {
   provincialHeaderButton,
   provincialHeaderPrimaryButton,
 } from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Download,
   FileText,
   Image as ImageIcon,
 } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -58,6 +60,11 @@ export default function ProvincialMemoViewerPage() {
   const [memo, setMemo] = useState<EventMemo | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [liveRevision, setLiveRevision] = useState(0);
+  useLiveData({
+    onUpdate: () => setLiveRevision((v) => v + 1),
+    disabled: loading,
+  });
   useEffect(() => {
     const fetchMemo = async () => {
       if (!eventId || !memoId) {
@@ -65,7 +72,7 @@ export default function ProvincialMemoViewerPage() {
         return;
       }
 
-      setLoading(true);
+      if (liveRevision === 0) setLoading(true);
 
       const { data, error } = await supabase
         .from("event_memos")
@@ -96,7 +103,7 @@ export default function ProvincialMemoViewerPage() {
     };
 
     fetchMemo();
-  }, [eventId, memoId]);
+  }, [eventId, memoId, liveRevision]);
 
   const goBackToEvent = () => {
     router.push(`/dashboard/provincial/events/${eventId}`);

@@ -1,4 +1,5 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 
 import {
   AlertCircle,
@@ -307,8 +308,14 @@ export default function EventStaffAssignmentsPanel() {
       return;
     }
 
-    if (!events.some((municipalEvent) => municipalEvent.id === selectedEventMunicipalityId)) {
-      setFormError("The selected event is no longer available. Please refresh and try again.");
+    if (
+      !events.some(
+        (municipalEvent) => municipalEvent.id === selectedEventMunicipalityId,
+      )
+    ) {
+      setFormError(
+        "The selected event is no longer available. Please refresh and try again.",
+      );
       return;
     }
 
@@ -318,7 +325,9 @@ export default function EventStaffAssignmentsPanel() {
     }
 
     if (!availableStaff.some((profile) => profile.id === selectedStaffId)) {
-      setFormError("This staff member is unavailable or already assigned to the selected event.");
+      setFormError(
+        "This staff member is unavailable or already assigned to the selected event.",
+      );
       return;
     }
 
@@ -477,187 +486,181 @@ export default function EventStaffAssignmentsPanel() {
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-500">
-            <Link2 className="h-4 w-4" />
-            Event Access
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-500">
+              <Link2 className="h-4 w-4" />
+              Event Access
+            </div>
+
+            <h2 className="text-xl font-bold text-slate-950">
+              Event Staff Assignments
+            </h2>
+
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+              Assign approved Event Staff to prepared events in{" "}
+              {municipality || "your municipality"}.
+            </p>
           </div>
 
-          <h2 className="text-xl font-bold text-slate-950">
-            Event Staff Assignments
-          </h2>
-
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-            Assign approved Event Staff to prepared events in {municipality || "your municipality"}.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => void loadAssignments(false)}
-            disabled={loading || refreshing || submitting}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <BackgroundDataSync
+              onUpdate={() => loadAssignments(false)}
+              disabled={loading || refreshing || submitting}
             />
-            Refresh
-          </button>
-
-          <button
-            type="button"
-            onClick={openDialog}
-            disabled={
-              loading || approvedStaff.length === 0 || events.length === 0
-            }
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <UserPlus className="h-4 w-4" />
-            Assign to Event
-          </button>
-        </div>
-        </div>
-
-      {successMessage && (
-        <div
-          role="status"
-          className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
-        >
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-
-          <span>{successMessage}</span>
-        </div>
-      )}
-
-      {pageError && (
-        <div
-          role="alert"
-          className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
-        >
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-
-          <div className="flex-1">
-            <p>{pageError}</p>
 
             <button
               type="button"
-              onClick={() => void loadAssignments(false)}
-              className="mt-2 font-bold underline underline-offset-2"
+              onClick={openDialog}
+              disabled={
+                loading || approvedStaff.length === 0 || events.length === 0
+              }
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Try again
+              <UserPlus className="h-4 w-4" />
+              Assign to Event
             </button>
           </div>
         </div>
-      )}
 
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3 sm:px-6">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800">
-              Assigned Events
-            </h3>
-          </div>
+        {successMessage && (
+          <div
+            role="status"
+            className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+          >
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
 
-          <div className="flex gap-2 text-xs font-bold">
-            <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">
-              {activeAssignments.length} Active
-            </span>
-
-            <span className="rounded-full bg-violet-50 px-3 py-1.5 text-violet-700">
-              {events.length} Prepared Events
-            </span>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="space-y-3 p-5 sm:p-6">
-            {[1, 2].map((item) => (
-              <div
-                key={item}
-                className="h-24 animate-pulse rounded-xl bg-slate-100"
-              />
-            ))}
-          </div>
-        ) : activeAssignments.length === 0 ? (
-          <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-6 sm:px-6">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-              <Link2 className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900">
-                No Event Staff assigned yet
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {approvedStaff.length === 0
-                  ? "Create and approve an Event Staff account first."
-                  : events.length === 0
-                    ? "Prepare an event before assigning staff."
-                    : "Use Assign Event Staff above to get started."}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {activeAssignments.map((assignment) => {
-              const eventDetails = assignment.eventMunicipality?.event;
-
-              const removing = removingAssignmentId === assignment.id;
-
-              return (
-                <article
-                  key={assignment.id}
-                  className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                        Active
-                      </span>
-
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Event Assignment
-                      </span>
-                    </div>
-
-                    <h4 className="mt-3 text-base font-bold text-slate-950">
-                      {eventDetails?.title || "Untitled Event"}
-                    </h4>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {assignment.staff?.full_name || "Unnamed Staff"}
-                    </p>
-
-                    <p className="text-sm text-slate-500">
-                      {assignment.staff?.email || "No email address"}
-                    </p>
-
-                    <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500">
-                      <CalendarDays className="h-4 w-4" />
-
-                      {formatDateTime(eventDetails?.start_at)}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void handleRemove(assignment)}
-                    disabled={removingAssignmentId !== null}
-                    className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {removing ? (
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-
-                    {removing ? "Removing..." : "Remove Assignment"}
-                  </button>
-                </article>
-              );
-            })}
+            <span>{successMessage}</span>
           </div>
         )}
-      </div>
+
+        {pageError && (
+          <div
+            role="alert"
+            className="mx-5 my-3 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+          >
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+
+            <div className="flex-1">
+              <p>{pageError}</p>
+
+              <button
+                type="button"
+                onClick={() => void loadAssignments(false)}
+                className="mt-2 font-bold underline underline-offset-2"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-3 sm:px-6">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                Assigned Events
+              </h3>
+            </div>
+
+            <div className="flex gap-2 text-xs font-bold">
+              <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">
+                {activeAssignments.length} Active
+              </span>
+
+              <span className="rounded-full bg-violet-50 px-3 py-1.5 text-violet-700">
+                {events.length} Prepared Events
+              </span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="space-y-3 p-5 sm:p-6">
+              {[1, 2].map((item) => (
+                <div
+                  key={item}
+                  className="h-24 animate-pulse rounded-xl bg-slate-100"
+                />
+              ))}
+            </div>
+          ) : activeAssignments.length === 0 ? (
+            <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-6 sm:px-6">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                <Link2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">
+                  No Event Staff assigned yet
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {approvedStaff.length === 0
+                    ? "Create and approve an Event Staff account first."
+                    : events.length === 0
+                      ? "Prepare an event before assigning staff."
+                      : "Use Assign Event Staff above to get started."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {activeAssignments.map((assignment) => {
+                const eventDetails = assignment.eventMunicipality?.event;
+
+                const removing = removingAssignmentId === assignment.id;
+
+                return (
+                  <article
+                    key={assignment.id}
+                    className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                          Active
+                        </span>
+
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Event Assignment
+                        </span>
+                      </div>
+
+                      <h4 className="mt-3 text-base font-bold text-slate-950">
+                        {eventDetails?.title || "Untitled Event"}
+                      </h4>
+
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {assignment.staff?.full_name || "Unnamed Staff"}
+                      </p>
+
+                      <p className="text-sm text-slate-500">
+                        {assignment.staff?.email || "No email address"}
+                      </p>
+
+                      <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-500">
+                        <CalendarDays className="h-4 w-4" />
+
+                        {formatDateTime(eventDetails?.start_at)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleRemove(assignment)}
+                      disabled={removingAssignmentId !== null}
+                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {removing ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+
+                      {removing ? "Removing..." : "Remove Assignment"}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {dialogOpen && (
@@ -685,7 +688,8 @@ export default function EventStaffAssignmentsPanel() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Select a prepared event first, then choose an approved Event Staff member.
+                  Select a prepared event first, then choose an approved Event
+                  Staff member.
                 </p>
               </div>
 
@@ -758,7 +762,11 @@ export default function EventStaffAssignmentsPanel() {
                     setSelectedStaffId(event.target.value);
                     setFormError("");
                   }}
-                  disabled={submitting || !selectedEventMunicipalityId || availableStaff.length === 0}
+                  disabled={
+                    submitting ||
+                    !selectedEventMunicipalityId ||
+                    availableStaff.length === 0
+                  }
                   className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-700 focus:ring-4 focus:ring-slate-100 disabled:bg-slate-100"
                 >
                   <option value="">
@@ -779,8 +787,9 @@ export default function EventStaffAssignmentsPanel() {
 
                 {selectedEventMunicipalityId && availableStaff.length === 0 && (
                   <p className="mt-2 text-xs font-medium text-amber-700">
-                    No approved staff members are available for this event. They may
-                    already be assigned, or an Event Staff account needs approval.
+                    No approved staff members are available for this event. They
+                    may already be assigned, or an Event Staff account needs
+                    approval.
                   </p>
                 )}
               </div>

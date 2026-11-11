@@ -1,8 +1,15 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, ChevronDown, RefreshCw, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { CalendarClock, ChevronDown, ShieldCheck } from "lucide-react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 type EventDetails = {
   id: string;
@@ -49,7 +56,9 @@ function formatPhilippineTime(value: string | number): string {
 
 function currentDeadlineMillis(event: DeadlineEvent): number {
   const end = new Date(event.endAt).getTime();
-  const override = event.overrideAt ? new Date(event.overrideAt).getTime() : NaN;
+  const override = event.overrideAt
+    ? new Date(event.overrideAt).getTime()
+    : NaN;
   return Number.isFinite(override) ? override : end + TWO_HOURS_MS;
 }
 
@@ -74,7 +83,8 @@ export default function CheckOutDeadlineExtensionPanel() {
     setLoading(true);
     setError("");
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
       if (authError || !authData.user) throw new Error("Please sign in again.");
 
       const { data: profile, error: profileError } = await supabase
@@ -82,21 +92,29 @@ export default function CheckOutDeadlineExtensionPanel() {
         .select("municipality, role, verification_status")
         .eq("id", authData.user.id)
         .single();
-      if (profileError || !profile || profile.role !== "municipal_admin" ||
-          profile.verification_status !== "approved" || !profile.municipality) {
+      if (
+        profileError ||
+        !profile ||
+        profile.role !== "municipal_admin" ||
+        profile.verification_status !== "approved" ||
+        !profile.municipality
+      ) {
         throw new Error("Only approved Municipal Admins can extend Check-Out.");
       }
 
       const { data, error: eventError } = await supabase
         .from("event_municipalities")
-        .select("id, municipality, check_out_deadline_at, events(id, title, status, end_at)")
+        .select(
+          "id, municipality, check_out_deadline_at, events(id, title, status, end_at)",
+        )
         .eq("municipality", profile.municipality);
       if (eventError) throw eventError;
 
       const normalized = ((data ?? []) as unknown as EventRow[])
         .map((row): DeadlineEvent | null => {
           const event = Array.isArray(row.events) ? row.events[0] : row.events;
-          if (!event?.end_at || ["draft", "cancelled"].includes(event.status)) return null;
+          if (!event?.end_at || ["draft", "cancelled"].includes(event.status))
+            return null;
           if (!Number.isFinite(new Date(event.end_at).getTime())) return null;
           return {
             id: row.id,
@@ -106,14 +124,20 @@ export default function CheckOutDeadlineExtensionPanel() {
           };
         })
         .filter((event): event is DeadlineEvent => event !== null)
-        .sort((a, b) => new Date(b.endAt).getTime() - new Date(a.endAt).getTime());
+        .sort(
+          (a, b) => new Date(b.endAt).getTime() - new Date(a.endAt).getTime(),
+        );
 
       setEvents(normalized);
       setSelectedEventId((previous) =>
         normalized.some((event) => event.id === previous) ? previous : "",
       );
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to load events.");
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to load events.",
+      );
     } finally {
       setLoading(false);
     }
@@ -126,7 +150,9 @@ export default function CheckOutDeadlineExtensionPanel() {
     }
     const { data, error: auditError } = await supabase
       .from("attendance_check_out_deadline_audit")
-      .select("id, event_municipality_id, old_deadline_at, new_deadline_at, reason, created_at")
+      .select(
+        "id, event_municipality_id, old_deadline_at, new_deadline_at, reason, created_at",
+      )
       .eq("event_municipality_id", eventMunicipalityId)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -161,9 +187,14 @@ export default function CheckOutDeadlineExtensionPanel() {
     if (!newDeadline || !Number.isFinite(proposedMillis)) {
       return setError("Enter a valid Philippine date and time.");
     }
-    if (proposedMillis <= Date.now() || proposedMillis <= currentDeadlineMillis(selectedEvent) ||
-        proposedMillis > eventEndMillis + ONE_DAY_MS) {
-      return setError("The new deadline must be later than the current deadline, in the future, and within 24 hours of event end.");
+    if (
+      proposedMillis <= Date.now() ||
+      proposedMillis <= currentDeadlineMillis(selectedEvent) ||
+      proposedMillis > eventEndMillis + ONE_DAY_MS
+    ) {
+      return setError(
+        "The new deadline must be later than the current deadline, in the future, and within 24 hours of event end.",
+      );
     }
     if (reason.trim().length < 10 || reason.trim().length > 500) {
       return setError("Enter a reason between 10 and 500 characters.");
@@ -171,22 +202,35 @@ export default function CheckOutDeadlineExtensionPanel() {
 
     setSubmitting(true);
     try {
-      const { data, error: rpcError } = await supabase.rpc("extend_event_check_out_deadline", {
-        p_event_municipality_id: selectedEvent.id,
-        p_new_deadline_at: dateTime.toISOString(),
-        p_reason: reason.trim(),
-      });
+      const { data, error: rpcError } = await supabase.rpc(
+        "extend_event_check_out_deadline",
+        {
+          p_event_municipality_id: selectedEvent.id,
+          p_new_deadline_at: dateTime.toISOString(),
+          p_reason: reason.trim(),
+        },
+      );
       if (rpcError) throw rpcError;
-      if (!data || typeof data !== "object" || (data as { success?: boolean }).success !== true) {
+      if (
+        !data ||
+        typeof data !== "object" ||
+        (data as { success?: boolean }).success !== true
+      ) {
         throw new Error("The extension was not confirmed by the database.");
       }
-      setSuccess("Check-Out deadline extended. The reason has been saved in the audit log.");
+      setSuccess(
+        "Check-Out deadline extended. The reason has been saved in the audit log.",
+      );
       setNewDeadline("");
       setReason("");
       await loadEvents();
       await loadHistory(selectedEvent.id);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to extend the deadline.");
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to extend the deadline.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -205,42 +249,86 @@ export default function CheckOutDeadlineExtensionPanel() {
             <CalendarClock className="h-5 w-5" />
           </span>
           <span>
-            <span className="block font-bold text-slate-900">Check-Out Deadline Extension</span>
-            <span className="mt-1 block text-sm text-slate-500">Municipal Admin only · Reason and audit required</span>
+            <span className="block font-bold text-slate-900">
+              Check-Out Deadline Extension
+            </span>
+            <span className="mt-1 block text-sm text-slate-500">
+              Municipal Admin only · Reason and audit required
+            </span>
           </span>
         </span>
-        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-500 transition ${expanded ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-slate-500 transition ${expanded ? "rotate-180" : ""}`}
+        />
       </button>
 
       {expanded && (
         <div className="space-y-5 border-t border-slate-200 p-5 sm:p-6">
           <p className="text-sm leading-6 text-slate-600">
-            Check-Out normally closes two hours after an event ends. Extend the deadline only for delays or technical issues. All times below are Philippine time.
+            Check-Out normally closes two hours after an event ends. Extend the
+            deadline only for delays or technical issues. All times below are
+            Philippine time.
           </p>
-          {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-          {success && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{success}</p>}
+          {error && (
+            <p
+              role="alert"
+              className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
+            >
+              {error}
+            </p>
+          )}
+          {success && (
+            <p
+              role="status"
+              className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"
+            >
+              {success}
+            </p>
+          )}
 
-          <form className="space-y-4" onSubmit={(event) => void extendDeadline(event)}>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => void extendDeadline(event)}
+          >
             <label className="block text-sm font-semibold text-slate-700">
               Event
               <select
                 value={selectedEventId}
-                onChange={(event) => { setSelectedEventId(event.target.value); setNewDeadline(""); setSuccess(""); }}
+                onChange={(event) => {
+                  setSelectedEventId(event.target.value);
+                  setNewDeadline("");
+                  setSuccess("");
+                }}
                 disabled={loading || submitting}
                 className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               >
                 <option value="">Select a municipal event</option>
                 {events.map((event) => (
-                  <option value={event.id} key={event.id}>{event.title} — {formatPhilippineTime(event.endAt)}</option>
+                  <option value={event.id} key={event.id}>
+                    {event.title} — {formatPhilippineTime(event.endAt)}
+                  </option>
                 ))}
               </select>
             </label>
 
             {selectedEvent && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                <p><span className="font-semibold">Event ends:</span> {formatPhilippineTime(selectedEvent.endAt)}</p>
-                <p className="mt-1"><span className="font-semibold">Current Check-Out deadline:</span> {formatPhilippineTime(currentDeadlineMillis(selectedEvent))}</p>
-                <p className="mt-1 text-xs text-slate-500">Maximum extension: {formatPhilippineTime(new Date(selectedEvent.endAt).getTime() + ONE_DAY_MS)}</p>
+                <p>
+                  <span className="font-semibold">Event ends:</span>{" "}
+                  {formatPhilippineTime(selectedEvent.endAt)}
+                </p>
+                <p className="mt-1">
+                  <span className="font-semibold">
+                    Current Check-Out deadline:
+                  </span>{" "}
+                  {formatPhilippineTime(currentDeadlineMillis(selectedEvent))}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Maximum extension:{" "}
+                  {formatPhilippineTime(
+                    new Date(selectedEvent.endAt).getTime() + ONE_DAY_MS,
+                  )}
+                </p>
               </div>
             )}
 
@@ -269,33 +357,56 @@ export default function CheckOutDeadlineExtensionPanel() {
                 placeholder="Example: QR scanner was temporarily unavailable during dismissal."
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm"
               />
-              <span className="mt-1 block text-xs font-normal text-slate-500">{reason.trim().length}/500 characters · 10 minimum</span>
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                {reason.trim().length}/500 characters · 10 minimum
+              </span>
             </label>
 
             <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => void loadEvents()} disabled={loading || submitting}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">
-                <RefreshCw className="h-4 w-4" /> Refresh
-              </button>
-              <button type="submit" disabled={!selectedEvent || !newDeadline || reason.trim().length < 10 || submitting}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                <ShieldCheck className="h-4 w-4" /> {submitting ? "Saving..." : "Approve Extension"}
+              <BackgroundDataSync
+                onUpdate={() => loadEvents()}
+                disabled={loading || submitting}
+              />
+              <button
+                type="submit"
+                disabled={
+                  !selectedEvent ||
+                  !newDeadline ||
+                  reason.trim().length < 10 ||
+                  submitting
+                }
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShieldCheck className="h-4 w-4" />{" "}
+                {submitting ? "Saving..." : "Approve Extension"}
               </button>
             </div>
           </form>
 
           {selectedEvent && (
             <div className="border-t border-slate-200 pt-4">
-              <h3 className="font-semibold text-slate-900">Recent Extension History</h3>
+              <h3 className="font-semibold text-slate-900">
+                Recent Extension History
+              </h3>
               {history.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">No recorded extensions for this event.</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  No recorded extensions for this event.
+                </p>
               ) : (
                 <div className="mt-3 space-y-2">
                   {history.map((item) => (
-                    <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
-                      <p className="font-semibold text-slate-800">{formatPhilippineTime(item.old_deadline_at)} → {formatPhilippineTime(item.new_deadline_at)}</p>
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-slate-200 p-3 text-sm"
+                    >
+                      <p className="font-semibold text-slate-800">
+                        {formatPhilippineTime(item.old_deadline_at)} →{" "}
+                        {formatPhilippineTime(item.new_deadline_at)}
+                      </p>
                       <p className="mt-1 text-slate-600">{item.reason}</p>
-                      <p className="mt-1 text-xs text-slate-400">Recorded {formatPhilippineTime(item.created_at)}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Recorded {formatPhilippineTime(item.created_at)}
+                      </p>
                     </div>
                   ))}
                 </div>

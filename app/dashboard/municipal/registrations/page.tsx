@@ -1,15 +1,9 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
+import { Download, Loader2, Search, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Download,
-  Loader2,
-  MapPin,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
 import {
   CATEGORY_LABELS,
   VERIFICATION_LABELS,
@@ -121,65 +115,19 @@ export default function MunicipalParticipantsPage() {
   };
   return (
     <div className="min-w-0 space-y-6 pb-6">
-      <header
-        className="rounded-2xl border p-5 shadow-sm sm:p-7"
-        style={{ backgroundColor: "#172554", borderColor: "#1e3a8a" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 20,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ flex: "1 1 380px", minWidth: 0 }}>
-            <div className="flex items-center gap-3">
-              <span
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ backgroundColor: "#263869", color: "white" }}
-              >
-                <Users size={22} />
-              </span>
-              <span
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: "#bfdbfe" }}
-              >
-                Municipal Directory
-              </span>
-            </div>
-            <h1
-              className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl"
-              style={{ color: "white" }}
-            >
-              Participants
-            </h1>
-            <p
-              className="mt-2 max-w-2xl text-sm leading-6"
-              style={{ color: "#e2e8f0" }}
-            >
-              All participant accounts in your municipality, including those
-              without event registrations.
-            </p>
-            <p
-              className="mt-3 flex items-center gap-2 text-xs font-medium"
-              style={{ color: "#bfdbfe" }}
-            >
-              <MapPin size={15} />
-              {municipality || "Your municipality"}
-            </p>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              maxWidth: "100%",
-              minWidth: 0,
-            }}
-          >
+      <MunicipalPageHeader
+        icon={<Users className="h-6 w-6" />}
+        eyebrow="Municipal Directory"
+        title="Participants"
+        description={
+          <>
+            All participant accounts in{" "}
+            <strong>{municipality || "your municipality"}</strong>, including
+            users without registrations.
+          </>
+        }
+        actions={
+          <>
             <button
               type="button"
               className={button}
@@ -188,18 +136,10 @@ export default function MunicipalParticipantsPage() {
             >
               <Download size={17} /> Export CSV
             </button>
-            <button
-              type="button"
-              className={button}
-              onClick={refresh}
-              disabled={loading}
-            >
-              <RefreshCw size={17} className={loading ? "animate-spin" : ""} />{" "}
-              Refresh Participants
-            </button>
-          </div>
-        </div>
-      </header>
+            <BackgroundDataSync onUpdate={refresh} disabled={loading} />
+          </>
+        }
+      />
       <section
         aria-label="Filter participants"
         className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"

@@ -1,10 +1,15 @@
 "use client";
-import { Copy, Eye, EyeOff } from "lucide-react";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 import { isStrongPassword } from "@/lib/passwordPolicy";
+import { supabase } from "@/lib/supabase";
 import {
   AlertCircle,
   Building2,
   CheckCircle2,
+  Copy,
+  Eye,
+  EyeOff,
   Mail,
   RefreshCw,
   ShieldCheck,
@@ -22,8 +27,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { supabase } from "@/lib/supabase";
-import EventStaffAssignmentsPanel from "./components/EventStaffAssignmentsPanel";
 import CheckOutDeadlineExtensionPanel from "./components/CheckOutDeadlineExtensionPanel";
 
 type EventStaffProfile = {
@@ -363,77 +366,58 @@ export default function EventStaffManagementPage() {
       setSubmitting(false);
     }
   }
+  useLiveData({
+    onUpdate: () => loadStaff(false),
+    disabled: loading || refreshing || submitting || actionStaffId !== null,
+  });
   return (
     <main className="w-full">
       <div className="space-y-5">
-        {/* Compact page header */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
-                <ShieldCheck className="h-6 w-6" aria-hidden="true" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                  Municipal Administration
-                </p>
-                <h1 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">
-                  Event Staff
-                </h1>
-                <p className="mt-1 text-sm text-slate-500">
-                  Assign staff to events and manage staff accounts.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void loadStaff(false)}
-                disabled={loading || refreshing || actionStaffId !== null}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </button>
+        <MunicipalPageHeader
+          icon={<ShieldCheck className="h-6 w-6" />}
+          title="Event Staff"
+          description="Assign staff to events and manage staff accounts."
+          actions={
+            <>
               <button
                 type="button"
                 onClick={openDialog}
                 disabled={
                   loading || approvedCount >= 5 || actionStaffId !== null
                 }
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 <UserPlus className="h-4 w-4" />
                 Add Event Staff
               </button>
+            </>
+          }
+          footer={
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <span>
+                <strong className="text-slate-900">
+                  {loading ? "—" : `${approvedCount} / 5`}
+                </strong>{" "}
+                active staff
+              </span>
+              <span>
+                <strong className="text-slate-900">
+                  {loading ? "—" : staffProfiles.length}
+                </strong>{" "}
+                total accounts
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Building2 className="h-4 w-4" />
+                {loading
+                  ? "Loading municipality..."
+                  : municipality || "Municipality unavailable"}
+              </span>
+              {approvedCount >= 5 && (
+                <span className="text-amber-700">Staff limit reached</span>
+              )}
             </div>
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
-            <span>
-              <strong className="text-slate-900">
-                {loading ? "—" : `${approvedCount} / 5`}
-              </strong>{" "}
-              active staff
-            </span>
-            <span>
-              <strong className="text-slate-900">
-                {loading ? "—" : staffProfiles.length}
-              </strong>{" "}
-              total accounts
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Building2 className="h-4 w-4 text-slate-400" />
-              {loading
-                ? "Loading municipality..."
-                : municipality || "Municipality unavailable"}
-            </span>
-            {approvedCount >= 5 && (
-              <span className="text-amber-700">Staff limit reached</span>
-            )}
-          </div>
-        </section>
+          }
+        />
         {/* Messages */}
         {successMessage && (
           <div
@@ -557,13 +541,16 @@ export default function EventStaffManagementPage() {
             </button>
           </div>
         )}
-        {/* Event Staff Assignments */}
-        <EventStaffAssignmentsPanel />
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+          Assign or manage staff from the event's Assign Staff / Manage Staff
+          button in Municipal Events or Provincial Events. This page manages
+          staff accounts.
+        </div>
 
         {/* Authorized Check-Out Extension */}
         <CheckOutDeadlineExtensionPanel />
         {/* Staff list */}
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 border-t-4 border-t-indigo-600 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
             <h2 className="text-lg font-bold text-slate-950">Staff Accounts</h2>
             <p className="mt-1 text-sm text-slate-500">

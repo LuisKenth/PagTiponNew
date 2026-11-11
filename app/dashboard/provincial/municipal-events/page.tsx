@@ -1,23 +1,25 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 
+import VenueLocationButton from "@/app/components/VenueLocationButton";
+import { municipalEventRequest, phDate } from "@/lib/municipal-events/client";
+import type { MunicipalEvent } from "@/lib/municipal-events/types";
+import { MUNICIPALITIES } from "@/lib/municipalities";
+import { CalendarDays } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, RefreshCw } from "lucide-react";
 import ProvincialPageHeader, {
   provincialHeaderButton,
 } from "../components/ProvincialPageHeader";
-import EventsTable from "../events/components/EventsTable";
 import EventsFilters from "../events/components/EventsFilters";
 import EventsStatusTabs from "../events/components/EventsStatusTabs";
+import EventsTable from "../events/components/EventsTable";
 import SummaryCard from "../events/components/SummaryCard";
-import { getAutomaticEventStatus, getStatusClass } from "../events/utils";
 import type {
   EventSortOption,
   EventStatusFilter,
   EventWithMunicipalities,
 } from "../events/types";
-import { municipalEventRequest, phDate } from "@/lib/municipal-events/client";
-import type { MunicipalEvent } from "@/lib/municipal-events/types";
-import VenueLocationButton from "@/app/components/VenueLocationButton";
+import { getAutomaticEventStatus, getStatusClass } from "../events/utils";
 
 export default function MunicipalEventsMonitor() {
   const [records, setRecords] = useState<MunicipalEvent[]>([]);
@@ -210,14 +212,7 @@ export default function MunicipalEventsMonitor() {
         title="Municipal Events"
         description="View published municipal events across Antique."
         actions={
-          <button
-            type="button"
-            className={provincialHeaderButton}
-            disabled={loading}
-            onClick={() => void load()}
-          >
-            <RefreshCw size={16} /> Refresh
-          </button>
+          <BackgroundDataSync onUpdate={() => load()} disabled={loading} />
         }
       />
       {error && (
@@ -265,9 +260,7 @@ export default function MunicipalEventsMonitor() {
         <EventsFilters
           searchTerm={search}
           municipalityFilter={town}
-          municipalityOptions={[
-            ...new Set(records.map((event) => event.owner_municipality)),
-          ].sort()}
+          municipalityOptions={MUNICIPALITIES}
           sortOption={sort}
           filteredCount={filtered.length}
           totalCount={events.length}

@@ -1,3 +1,4 @@
+
 export type AttendanceStatus =
   | "pending"
   | "present"
@@ -40,9 +41,15 @@ export type MunicipalAttendanceRecord = {
   attendance_id: string | null;
   attendance_status: AttendanceStatus;
   attendance_method: AttendanceMethod | null;
+
+  // Time-In information
   checked_in_at: string | null;
   checked_in_by: string | null;
   checked_in_by_name: string | null;
+
+  // Time-Out information
+  // Optional until confirmed in the Supabase RPC response.
+  checked_out_at?: string | null;
 };
 
 export type AttendanceEventOption = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import EventPreparationDialog from "../components/EventPreparationDialog";
 
@@ -70,15 +70,6 @@ export default function MunicipalEventsPage() {
    * database-side lifecycle updates from the
    * cron job can appear without a full page reload.
    */
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      void refreshEvents();
-    }, 60_000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [refreshEvents]);
 
   /*
    * Registration summary count.

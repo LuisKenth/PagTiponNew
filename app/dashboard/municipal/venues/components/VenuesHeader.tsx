@@ -1,13 +1,7 @@
-import Link from "next/link";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 
-import {
-  ArrowLeft,
-  Building2,
-  ListFilter,
-  MapPin,
-  RefreshCw,
-  UsersRound,
-} from "lucide-react";
+import { Building2, ListFilter, MapPin, UsersRound } from "lucide-react";
 
 type VenuesHeaderProps = {
   municipality: string | null;
@@ -19,8 +13,7 @@ type VenuesHeaderProps = {
   onRefresh: () => void;
 };
 
-const numberFormatter =
-  new Intl.NumberFormat("en-PH");
+const numberFormatter = new Intl.NumberFormat("en-PH");
 
 export default function VenuesHeader({
   municipality,
@@ -31,11 +24,9 @@ export default function VenuesHeader({
   refreshing,
   onRefresh,
 }: VenuesHeaderProps) {
-  const isRefreshing =
-    loading || refreshing;
+  const isRefreshing = loading || refreshing;
 
-  const municipalityLabel =
-    municipality || "Unavailable";
+  const municipalityLabel = municipality || "Unavailable";
 
   const refreshLabel = loading
     ? "Loading Venues..."
@@ -44,69 +35,22 @@ export default function VenuesHeader({
       : "Refresh Venues";
 
   return (
-    <header
-      aria-labelledby="municipal-venues-heading"
-      aria-busy={isRefreshing}
-      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+    <MunicipalPageHeader
+      icon={<Building2 className="h-6 w-6" />}
+      title="Municipal Venues"
+      eyebrow="Municipal Administration"
+      description={
+        <>
+          Add, update, and manage approved event locations for{" "}
+          <strong>{municipality || "your municipality"}</strong>.
+        </>
+      }
+      backHref="/dashboard/municipal"
+      actions={
+        <BackgroundDataSync onUpdate={onRefresh} disabled={isRefreshing} />
+      }
+      id="municipal-venues-heading"
     >
-      <div className="p-5 sm:p-6">
-        <Link
-          href="/dashboard/municipal"
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1 text-sm font-semibold text-slate-500 transition hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
-
-        <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-3.5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm sm:h-13 sm:w-13">
-              <Building2 className="h-6 w-6" />
-            </div>
-
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                Municipal Management
-              </p>
-
-              <h1
-                id="municipal-venues-heading"
-                className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"
-              >
-                Municipal Venues
-              </h1>
-
-              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">
-                Add, update, and manage approved
-                event locations for{" "}
-                <span className="font-semibold text-slate-800">
-                  {municipality ||
-                    "your municipality"}
-                </span>
-                .
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${
-                isRefreshing
-                  ? "animate-spin"
-                  : ""
-              }`}
-            />
-
-            {refreshLabel}
-          </button>
-        </div>
-      </div>
-
       <div className="mobile-summary-grid grid grid-cols-1 border-t border-slate-200 bg-slate-50/70 sm:grid-cols-2 xl:grid-cols-4">
         <div className="border-b border-slate-200 p-4 sm:border-r sm:p-5 xl:border-b-0">
           <div className="flex min-h-12 items-center gap-3">
@@ -120,9 +64,7 @@ export default function VenuesHeader({
               </p>
 
               <p className="mt-1 text-xl font-bold tabular-nums text-slate-950">
-                {numberFormatter.format(
-                  totalVenues,
-                )}
+                {numberFormatter.format(totalVenues)}
               </p>
             </div>
           </div>
@@ -143,9 +85,7 @@ export default function VenuesHeader({
                 aria-live="polite"
                 className="mt-1 text-xl font-bold tabular-nums text-blue-700"
               >
-                {numberFormatter.format(
-                  filteredVenues,
-                )}
+                {numberFormatter.format(filteredVenues)}
               </p>
             </div>
           </div>
@@ -163,9 +103,7 @@ export default function VenuesHeader({
               </p>
 
               <p className="mt-1 text-xl font-bold tabular-nums text-emerald-700">
-                {numberFormatter.format(
-                  totalCapacity,
-                )}
+                {numberFormatter.format(totalCapacity)}
               </p>
             </div>
           </div>
@@ -192,6 +130,6 @@ export default function VenuesHeader({
           </div>
         </div>
       </div>
-    </header>
+    </MunicipalPageHeader>
   );
 }

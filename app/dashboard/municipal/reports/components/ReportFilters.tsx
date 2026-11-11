@@ -1,16 +1,14 @@
 "use client";
 
-import {
-  Search,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 
 import type {
   MunicipalParticipantCategoryOption,
   MunicipalReportEventOption,
   MunicipalReportEventStatus,
 } from "../types/municipalReports";
+
+import MunicipalSearchableEventSelect from "./MunicipalSearchableEventSelect";
 
 type ReportFiltersProps = {
   searchTerm: string;
@@ -33,29 +31,17 @@ type ReportFiltersProps = {
 
   hasActiveFilters: boolean;
 
-  onSearchChange: (
-    value: string,
-  ) => void;
+  onSearchChange: (value: string) => void;
 
-  onEventChange: (
-    value: string,
-  ) => void;
+  onEventChange: (value: string) => void;
 
-  onStatusChange: (
-    value: MunicipalReportEventStatus,
-  ) => void;
+  onStatusChange: (value: MunicipalReportEventStatus) => void;
 
-  onParticipantCategoryChange: (
-    value: string,
-  ) => void;
+  onParticipantCategoryChange: (value: string) => void;
 
-  onDateFromChange: (
-    value: string,
-  ) => void;
+  onDateFromChange: (value: string) => void;
 
-  onDateToChange: (
-    value: string,
-  ) => void;
+  onDateToChange: (value: string) => void;
 
   onClearFilters: () => void;
 };
@@ -120,7 +106,7 @@ export default function ReportFilters({
   onClearFilters,
 }: ReportFiltersProps) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="relative z-20 overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Header */}
       <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-start gap-3">
@@ -129,24 +115,18 @@ export default function ReportFilters({
           </div>
 
           <div>
-            <h2 className="font-bold text-slate-900">
-              Report Filters
-            </h2>
+            <h2 className="font-bold text-slate-900">Report Filters</h2>
 
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Narrow the report by event,
-              status, participant category,
-              or event date.
+              Narrow the report by event, status, participant category, or event
+              date.
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <span className="inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600">
-            {resultCount}{" "}
-            {resultCount === 1
-              ? "event"
-              : "events"}
+            {resultCount} {resultCount === 1 ? "event" : "events"}
           </span>
 
           {hasActiveFilters && (
@@ -156,7 +136,6 @@ export default function ReportFilters({
               className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-4 focus:ring-red-50"
             >
               <X className="h-4 w-4" />
-
               Clear Filters
             </button>
           )}
@@ -174,12 +153,7 @@ export default function ReportFilters({
         >
           {/* Search */}
           <div className="sm:col-span-2 xl:col-span-1">
-            <label
-              htmlFor="report-search"
-              className={
-                labelClassName
-              }
-            >
+            <label htmlFor="report-search" className={labelClassName}>
               Search Event
             </label>
 
@@ -190,11 +164,7 @@ export default function ReportFilters({
                 id="report-search"
                 type="search"
                 value={searchTerm}
-                onChange={(event) =>
-                  onSearchChange(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search event title..."
                 className="min-h-11 w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-slate-500 focus:ring-4 focus:ring-slate-100"
               />
@@ -203,58 +173,19 @@ export default function ReportFilters({
 
           {/* Event */}
           <div>
-            <label
-              htmlFor="report-event"
-              className={
-                labelClassName
-              }
-            >
-              Event
-            </label>
+            <span className={labelClassName}>Event</span>
 
-            <select
-              id="report-event"
+            <MunicipalSearchableEventSelect
+              events={eventOptions}
               value={selectedEventId}
-              onChange={(event) =>
-                onEventChange(
-                  event.target.value,
-                )
-              }
-              className={
-                controlClassName
-              }
-            >
-              <option value="all">
-                All Events
-              </option>
-
-              {eventOptions.map(
-                (eventOption) => (
-                  <option
-                    key={
-                      eventOption.eventMunicipalityId
-                    }
-                    value={
-                      eventOption.eventMunicipalityId
-                    }
-                  >
-                    {
-                      eventOption.eventTitle
-                    }
-                  </option>
-                ),
-              )}
-            </select>
+              onChange={onEventChange}
+              ariaLabel="Select event to filter municipal reports"
+            />
           </div>
 
           {/* Event Status */}
           <div>
-            <label
-              htmlFor="report-status"
-              className={
-                labelClassName
-              }
-            >
+            <label htmlFor="report-status" className={labelClassName}>
               Event Status
             </label>
 
@@ -262,31 +193,15 @@ export default function ReportFilters({
               id="report-status"
               value={statusFilter}
               onChange={(event) =>
-                onStatusChange(
-                  event.target
-                    .value as MunicipalReportEventStatus,
-                )
+                onStatusChange(event.target.value as MunicipalReportEventStatus)
               }
-              className={
-                controlClassName
-              }
+              className={controlClassName}
             >
-              {statusOptions.map(
-                (option) => (
-                  <option
-                    key={
-                      option.value
-                    }
-                    value={
-                      option.value
-                    }
-                  >
-                    {
-                      option.label
-                    }
-                  </option>
-                ),
-              )}
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -294,58 +209,32 @@ export default function ReportFilters({
           <div>
             <label
               htmlFor="report-participant-category"
-              className={
-                labelClassName
-              }
+              className={labelClassName}
             >
               Participant Category
             </label>
 
             <select
               id="report-participant-category"
-              value={
-                participantCategoryFilter
-              }
+              value={participantCategoryFilter}
               onChange={(event) =>
-                onParticipantCategoryChange(
-                  event.target.value,
-                )
+                onParticipantCategoryChange(event.target.value)
               }
-              className={
-                controlClassName
-              }
+              className={controlClassName}
             >
-              <option value="all">
-                All Categories
-              </option>
+              <option value="all">All Categories</option>
 
-              {participantCategoryOptions.map(
-                (option) => (
-                  <option
-                    key={
-                      option.value
-                    }
-                    value={
-                      option.value
-                    }
-                  >
-                    {
-                      option.label
-                    }
-                  </option>
-                ),
-              )}
+              {participantCategoryOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 
           {/* Date From */}
           <div>
-            <label
-              htmlFor="report-date-from"
-              className={
-                labelClassName
-              }
-            >
+            <label htmlFor="report-date-from" className={labelClassName}>
               From
             </label>
 
@@ -353,29 +242,15 @@ export default function ReportFilters({
               id="report-date-from"
               type="date"
               value={dateFrom}
-              max={
-                dateTo ||
-                undefined
-              }
-              onChange={(event) =>
-                onDateFromChange(
-                  event.target.value,
-                )
-              }
-              className={
-                controlClassName
-              }
+              max={dateTo || undefined}
+              onChange={(event) => onDateFromChange(event.target.value)}
+              className={controlClassName}
             />
           </div>
 
           {/* Date To */}
           <div>
-            <label
-              htmlFor="report-date-to"
-              className={
-                labelClassName
-              }
-            >
+            <label htmlFor="report-date-to" className={labelClassName}>
               To
             </label>
 
@@ -383,18 +258,9 @@ export default function ReportFilters({
               id="report-date-to"
               type="date"
               value={dateTo}
-              min={
-                dateFrom ||
-                undefined
-              }
-              onChange={(event) =>
-                onDateToChange(
-                  event.target.value,
-                )
-              }
-              className={
-                controlClassName
-              }
+              min={dateFrom || undefined}
+              onChange={(event) => onDateToChange(event.target.value)}
+              className={controlClassName}
             />
           </div>
         </div>
@@ -405,9 +271,8 @@ export default function ReportFilters({
             <div className="h-2 w-2 shrink-0 rounded-full bg-slate-500" />
 
             <p className="text-xs font-medium leading-5 text-slate-500">
-              Report totals and event
-              performance currently reflect
-              the active filters above.
+              Report totals and event performance currently reflect the active
+              filters above.
             </p>
           </div>
         )}

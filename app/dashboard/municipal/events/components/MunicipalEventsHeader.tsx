@@ -1,13 +1,6 @@
-import Link from "next/link";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 
-import {
-  ArrowLeft,
-  Ban,
-  CalendarDays,
-  ListFilter,
-  RefreshCw,
-  UnlockKeyhole,
-} from "lucide-react";
+import { Ban, CalendarDays, ListFilter, UnlockKeyhole } from "lucide-react";
 
 type MunicipalEventsHeaderProps = {
   municipality: string;
@@ -30,69 +23,22 @@ export default function MunicipalEventsHeader({
   refreshing,
   onRefresh,
 }: MunicipalEventsHeaderProps) {
-  const isRefreshing =
-    loading || refreshing;
+  const isRefreshing = loading || refreshing;
 
   return (
-    <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* Main header */}
-      <div className="flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <Link
-            href="/dashboard/municipal"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-slate-950"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </Link>
-
-          <div className="mt-3 flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm sm:h-12 sm:w-12">
-              <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
-
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-                Event Operations
-              </p>
-
-              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-                Provincial Events
-              </h1>
-
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                Search, review, and manage
-                provincial events assigned to{" "}
-                <span className="font-semibold text-slate-800">
-                  {municipality ||
-                    "your municipality"}
-                </span>
-                .
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${
-              isRefreshing
-                ? "animate-spin"
-                : ""
-            }`}
-          />
-
-          {refreshing
-            ? "Refreshing..."
-            : "Refresh Events"}
-        </button>
-      </div>
-
+    <MunicipalPageHeader
+      icon={<CalendarDays className="h-6 w-6" />}
+      title="Provincial Events"
+      eyebrow="Municipal Event Operations"
+      description={
+        <>
+          Search, review, and manage provincial events assigned to{" "}
+          <strong>{municipality || "your municipality"}</strong>.
+        </>
+      }
+      backHref="/dashboard/municipal"
+      actions={null}
+    >
       {/* Summary statistics */}
       <div className="mobile-summary-grid grid grid-cols-2 border-t border-slate-200 bg-slate-50 sm:grid-cols-4">
         <div className="border-b border-r border-slate-200 p-4 sm:border-b-0 sm:p-5">
@@ -167,6 +113,6 @@ export default function MunicipalEventsHeader({
           </div>
         </div>
       </div>
-    </header>
+    </MunicipalPageHeader>
   );
 }

@@ -1,15 +1,14 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
 import {
   AlertCircle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Loader2,
-  RefreshCw,
   X,
   type LucideIcon,
 } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
 export const inputClass =
   "mt-2 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 disabled:bg-slate-100";
 export const primaryClass =
@@ -82,28 +81,6 @@ export function Loading() {
       <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
       Loading account information…
     </div>
-  );
-}
-export function RefreshButton({
-  busy,
-  onClick,
-}: {
-  busy: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={secondaryClass}
-      disabled={busy}
-      onClick={onClick}
-    >
-      <RefreshCw
-        className={`h-4 w-4 ${busy ? "animate-spin" : ""}`}
-        aria-hidden="true"
-      />
-      Refresh
-    </button>
   );
 }
 export function StatusBadge({ status }: { status: string }) {

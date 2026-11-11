@@ -75,7 +75,8 @@ export async function readMunicipalEventRows(scope: {
     if (scope.monitor)
       query = query
         .neq("status", "draft")
-        .not("municipal_approval_recorded_at", "is", null);
+        .not("municipal_approval_recorded_at", "is", null)
+        .not("municipal_approval_recorded_by", "is", null);
     else if (scope.municipality)
       query = query.eq("owner_municipality", scope.municipality);
     else throw new EventRequestError("Municipality scope is required.", 403);

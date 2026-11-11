@@ -7,30 +7,12 @@ import { FileText as ProvincialHeaderIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { MUNICIPALITIES } from "@/lib/municipalities";
 import EventAudienceSelector from "../../create/components/EventAudienceSelector";
 
 import { getAutomaticEventStatus, getStatusClass } from "../../utils";
 
-const municipalitiesList = [
-  "Anini-y",
-  "Barbaza",
-  "Belison",
-  "Bugasong",
-  "Caluya",
-  "Culasi",
-  "Hamtic",
-  "Laua-an",
-  "Libertad",
-  "Pandan",
-  "Patnongon",
-  "San Jose de Buenavista",
-  "San Remigio",
-  "Sebaste",
-  "Sibalom",
-  "Tibiao",
-  "Tobias Fornier",
-  "Valderrama",
-];
+const municipalitiesList = [...MUNICIPALITIES];
 
 const MEMO_BUCKET = "official-memos";
 

@@ -77,7 +77,7 @@ export default function MunicipalRegistrationsPage() {
         refreshing={refreshing}
         exportDisabled={loading || filteredRegistrations.length === 0}
         onExport={handleExport}
-        onRefresh={() => void refreshRegistrations()}
+        onRefresh={() => refreshRegistrations()}
       />
 
       <RegistrationFilters

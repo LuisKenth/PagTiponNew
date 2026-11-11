@@ -663,10 +663,27 @@ export async function GET(request: Request) {
             ) ?? null,
         }));
 
+    // Include ongoing prepared assignments in schedule warnings without adding
+    // them to the existing list of events eligible for new assignments.
+    const scheduleEvents = new Map(
+      ((eventsResult.data ?? []) as unknown as RawMunicipalEvent[])
+        .map(target => ({target, event: normalizeEvent(target.events)}))
+        .filter(row => row.event && !["draft", "cancelled", "completed"].includes(normalizeValue(row.event.status)))
+        .map(row => [row.target.id, row.event!] as const),
+    );
+    const scheduleAssignments = (assignmentsResult.data ?? [])
+      .filter(a => a.status === "active" && staffById.has(a.staff_id) && scheduleEvents.has(a.event_municipality_id))
+      .map(a => {
+        const event = scheduleEvents.get(a.event_municipality_id)!;
+        return {staffId:a.staff_id, assignmentId:a.event_municipality_id, title:event.title, start:event.start_at, end:event.end_at};
+      });
+
     return NextResponse.json(
       {
         municipality:
           admin.municipality,
+
+        scheduleAssignments,
 
         staff,
 

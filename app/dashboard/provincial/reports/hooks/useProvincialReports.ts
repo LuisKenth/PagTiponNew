@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
+import { MUNICIPALITIES } from "@/lib/municipalities";
 
 import type {
 
@@ -53,45 +54,7 @@ const STANDARD_PARTICIPANT_CATEGORIES: ParticipantCategoryOption[] = [
   { value: "others", label: "Others" },
 ];
 
-const PROVINCIAL_MUNICIPALITIES = [
-
-  "Anini-y",
-
-  "Barbaza",
-
-  "Belison",
-
-  "Bugasong",
-
-  "Caluya",
-
-  "Culasi",
-
-  "Hamtic",
-
-  "Laua-an",
-
-  "Libertad",
-
-  "Pandan",
-
-  "Patnongon",
-
-  "San Jose de Buenavista",
-
-  "San Remigio",
-
-  "Sebaste",
-
-  "Sibalom",
-
-  "Tibiao",
-
-  "Tobias Fornier",
-
-  "Valderrama",
-
-];
+const PROVINCIAL_MUNICIPALITIES = MUNICIPALITIES;
 
 export type ParticipantCategoryBreakdownItem = {
 
@@ -722,17 +685,11 @@ export default function useProvincialReports() {
     useMemo<MunicipalityReport[]>(() => {
 
       const municipalityNames = Array.from(
-
         new Set(
-
-          filteredTargets.map(
-
-            (target) => target.municipality
-
-          )
-
-        )
-
+          selectedMunicipality === "all"
+            ? [...PROVINCIAL_MUNICIPALITIES, ...filteredTargets.map((target) => target.municipality)]
+            : [selectedMunicipality],
+        ),
       ).sort((a, b) => a.localeCompare(b));
 
       return municipalityNames.map((municipality) => {
@@ -862,6 +819,8 @@ export default function useProvincialReports() {
       filteredRsvps,
 
       filteredAttendance,
+
+      selectedMunicipality,
 
     ]);
 

@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import { message, superRequest } from "@/lib/super/client";
+import type { OverviewResult } from "@/lib/super/types";
 import {
   Activity,
   ArrowRight,
@@ -10,24 +11,23 @@ import {
   Users,
   UserX,
 } from "lucide-react";
-import { superRequest, message } from "@/lib/super/client";
-import type { OverviewResult } from "@/lib/super/types";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import ActivityList from "./components/ActivityList";
 import { useSuperAccount } from "./components/SuperContext";
 import {
-  PageHeader,
-  RefreshButton,
-  Loading,
   ErrorMessage,
+  Loading,
+  PageHeader,
   primaryClass,
 } from "./components/ui";
-import ActivityList from "./components/ActivityList";
 export default function SuperDashboard() {
   const { profile } = useSuperAccount();
   const [data, setData] = useState<OverviewResult | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       setData(
         await superRequest<OverviewResult>("/api/super/admins?view=overview"),
@@ -81,7 +81,7 @@ export default function SuperDashboard() {
         description={`Welcome, ${profile.full_name || "Super Admin"}. Manage administrator access and keep account recovery information up to date.`}
         icon={ShieldCheck}
       >
-        <RefreshButton busy={loading} onClick={() => void load()} />
+        <BackgroundDataSync onUpdate={() => load(true)} disabled={loading} />
       </PageHeader>
       {error && <ErrorMessage>{error}</ErrorMessage>}
       <section

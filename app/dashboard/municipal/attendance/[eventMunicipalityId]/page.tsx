@@ -1,21 +1,15 @@
-
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
-  ArrowLeft,
   CalendarDays,
   ClipboardCheck,
   Clock3,
-  Download,
-  RefreshCw,
   Search,
   UserCheck,
   Users,
@@ -35,7 +29,6 @@ import type {
 } from "../types/municipalAttendance";
 
 import { filterAttendanceRecords } from "../utils/municipalAttendanceUtils";
-import { exportAttendanceCsv } from "../utils/exportAttendanceCsv";
 
 const PAGE_SIZE = 10;
 
@@ -104,14 +97,10 @@ export default function EventAttendancePage() {
   const eventMunicipalityId = params.eventMunicipalityId;
 
   const [event, setEvent] = useState<EventDetails | null>(null);
-  const [records, setRecords] = useState<
-    MunicipalAttendanceRecord[]
-  >([]);
+  const [records, setRecords] = useState<MunicipalAttendanceRecord[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(
-    null,
-  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -143,12 +132,11 @@ export default function EventAttendancePage() {
           throw new Error("Please sign in to view attendance.");
         }
 
-        const { data: profile, error: profileError } =
-          await supabase
-            .from("profiles")
-            .select("role, municipality, verification_status")
-            .eq("id", user.id)
-            .single();
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role, municipality, verification_status")
+          .eq("id", user.id)
+          .single();
 
         if (
           profileError ||
@@ -157,19 +145,16 @@ export default function EventAttendancePage() {
           profile.verification_status !== "approved" ||
           !profile.municipality
         ) {
-          throw new Error(
-            "An approved Municipal Admin account is required.",
-          );
+          throw new Error("An approved Municipal Admin account is required.");
         }
 
         // Get assignment details independently of attendance rows.
-        const { data: assignment, error: assignmentError } =
-          await supabase
-            .from("event_municipalities")
-            .select("id, event_id, municipality")
-            .eq("id", eventMunicipalityId)
-            .eq("municipality", profile.municipality)
-            .single();
+        const { data: assignment, error: assignmentError } = await supabase
+          .from("event_municipalities")
+          .select("id, event_id, municipality")
+          .eq("id", eventMunicipalityId)
+          .eq("municipality", profile.municipality)
+          .single();
 
         if (assignmentError || !assignment) {
           throw new Error(
@@ -177,27 +162,24 @@ export default function EventAttendancePage() {
           );
         }
 
-        const matchedAssignment =
-          assignment as EventAssignment;
+        const matchedAssignment = assignment as EventAssignment;
 
         // Load event information and attendance records.
-        const [eventResult, attendanceResult] =
-          await Promise.all([
-            supabase
-              .from("events")
-              .select("id, title, status, start_at, end_at")
-              .eq("id", matchedAssignment.event_id)
-              .single(),
+        const [eventResult, attendanceResult] = await Promise.all([
+          supabase
+            .from("events")
+            .select("id, title, status, start_at, end_at")
+            .eq("id", matchedAssignment.event_id)
+            .single(),
 
-            supabase.rpc("get_municipal_attendance", {
-              p_event_municipality_id: eventMunicipalityId,
-            }),
-          ]);
+          supabase.rpc("get_municipal_attendance_with_checkout", {
+            p_event_municipality_id: eventMunicipalityId,
+          }),
+        ]);
 
         if (eventResult.error || !eventResult.data) {
           throw new Error(
-            eventResult.error?.message ||
-              "Unable to load event information.",
+            eventResult.error?.message || "Unable to load event information.",
           );
         }
 
@@ -245,12 +227,10 @@ export default function EventAttendancePage() {
       present: records.filter(
         (record) => record.attendance_status === "present",
       ).length,
-      late: records.filter(
-        (record) => record.attendance_status === "late",
-      ).length,
-      absent: records.filter(
-        (record) => record.attendance_status === "absent",
-      ).length,
+      late: records.filter((record) => record.attendance_status === "late")
+        .length,
+      absent: records.filter((record) => record.attendance_status === "absent")
+        .length,
       pending: records.filter(
         (record) => record.attendance_status === "pending",
       ).length,
@@ -267,29 +247,17 @@ export default function EventAttendancePage() {
         statusFilter,
         methodFilter,
       }),
-    [
-      records,
-      searchTerm,
-      eventMunicipalityId,
-      statusFilter,
-      methodFilter,
-    ],
+    [records, searchTerm, eventMunicipalityId, statusFilter, methodFilter],
   );
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredRecords.length / PAGE_SIZE),
-  );
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
 
   const activePage = Math.min(currentPage, totalPages);
 
   const paginatedRecords = useMemo(() => {
     const start = (activePage - 1) * PAGE_SIZE;
 
-    return filteredRecords.slice(
-      start,
-      start + PAGE_SIZE,
-    );
+    return filteredRecords.slice(start, start + PAGE_SIZE);
   }, [filteredRecords, activePage]);
 
   const eventGroup = useMemo<AttendanceEventGroup | null>(() => {
@@ -329,27 +297,15 @@ export default function EventAttendancePage() {
   }, [event, eventMunicipalityId, paginatedRecords]);
 
   const firstItem =
-    filteredRecords.length === 0
-      ? 0
-      : (activePage - 1) * PAGE_SIZE + 1;
+    filteredRecords.length === 0 ? 0 : (activePage - 1) * PAGE_SIZE + 1;
 
-  const lastItem = Math.min(
-    activePage * PAGE_SIZE,
-    filteredRecords.length,
-  );
+  const lastItem = Math.min(activePage * PAGE_SIZE, filteredRecords.length);
 
   function clearFilters() {
     setSearchTerm("");
     setStatusFilter("all");
     setMethodFilter("all");
     setCurrentPage(1);
-  }
-
-  function handleExport() {
-    exportAttendanceCsv({
-      records: filteredRecords,
-      eventTitle: event?.title ?? null,
-    });
   }
 
   const summaryCards = [
@@ -381,67 +337,38 @@ export default function EventAttendancePage() {
 
   return (
     <div className="space-y-6">
-      {/* Back Navigation */}
-      <Link
-        href="/dashboard/municipal/attendance"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Attendance
-      </Link>
-
-      {/* Event Header */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
-              <ClipboardCheck className="h-5 w-5" />
-            </div>
-
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                Event Attendance
-              </p>
-
-              <h1 className="mt-1 break-words text-xl font-bold text-slate-950 sm:text-2xl">
-                {loading
-                  ? "Loading event..."
-                  : event?.title || "Attendance Records"}
-              </h1>
-
-              {event && (
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <span className="inline-flex items-center gap-2 text-sm text-slate-500">
-                    <CalendarDays size={16} />
-                    {formatDate(event.start_at)}
-                  </span>
-
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClass(
-                      event.status,
-                    )}`}
-                  >
-                    {formatStatus(event.status)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setRevision((value) => value + 1)}
+      <MunicipalPageHeader
+        backHref="/dashboard/municipal/attendance"
+        backLabel="Back to Attendance"
+        icon={<ClipboardCheck className="h-6 w-6" />}
+        eyebrow="Event Attendance"
+        title={
+          loading ? "Loading event..." : event?.title || "Attendance Records"
+        }
+        description={
+          event ? (
+            <span className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-2">
+                <CalendarDays size={16} />
+                {formatDate(event.start_at)}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClass(event.status)}`}
+              >
+                {formatStatus(event.status)}
+              </span>
+            </span>
+          ) : (
+            "Review individual attendance and check-out records."
+          )
+        }
+        actions={
+          <BackgroundDataSync
+            onUpdate={() => setRevision((value) => value + 1)}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw
-              size={16}
-              className={loading ? "animate-spin" : ""}
-            />
-            Refresh
-          </button>
-        </div>
-      </section>
+          />
+        }
+      />
 
       {errorMessage && (
         <div
@@ -499,15 +426,19 @@ export default function EventAttendancePage() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleExport}
-                disabled={loading || filteredRecords.length === 0}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-              >
-                <Download size={16} />
-                Export CSV
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {!loading && event && (
+                  <Link
+                    href={`/dashboard/municipal/reports?eventMunicipalityId=${encodeURIComponent(
+                      eventMunicipalityId,
+                    )}&view=attendance`}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    <ClipboardCheck size={16} />
+                    View Event Report
+                  </Link>
+                )}
+              </div>
             </div>
 
             {/* Participant Filters */}
@@ -534,9 +465,7 @@ export default function EventAttendancePage() {
               <select
                 value={statusFilter}
                 onChange={(event) => {
-                  setStatusFilter(
-                    event.target.value as AttendanceStatusFilter,
-                  );
+                  setStatusFilter(event.target.value as AttendanceStatusFilter);
                   setCurrentPage(1);
                 }}
                 aria-label="Attendance status"
@@ -552,9 +481,7 @@ export default function EventAttendancePage() {
               <select
                 value={methodFilter}
                 onChange={(event) => {
-                  setMethodFilter(
-                    event.target.value as AttendanceMethodFilter,
-                  );
+                  setMethodFilter(event.target.value as AttendanceMethodFilter);
                   setCurrentPage(1);
                 }}
                 aria-label="Time-in method"
@@ -566,7 +493,8 @@ export default function EventAttendancePage() {
               </select>
             </div>
 
-            {(searchTerm || statusFilter !== "all" ||
+            {(searchTerm ||
+              statusFilter !== "all" ||
               methodFilter !== "all") && (
               <button
                 type="button"
@@ -588,18 +516,14 @@ export default function EventAttendancePage() {
             </div>
           ) : records.length === 0 ? (
             <div className="p-12 text-center">
-              <Users
-                size={30}
-                className="mx-auto text-slate-400"
-              />
+              <Users size={30} className="mx-auto text-slate-400" />
 
               <h3 className="mt-3 font-semibold text-slate-900">
                 No registered participants
               </h3>
 
               <p className="mt-2 text-sm text-slate-500">
-                There are no participant attendance records
-                for this event yet.
+                There are no participant attendance records for this event yet.
               </p>
             </div>
           ) : filteredRecords.length === 0 ? (
@@ -623,17 +547,15 @@ export default function EventAttendancePage() {
               {/* Participant Pagination */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
                 <p className="text-sm text-slate-500">
-                  Showing {firstItem}–{lastItem} of{" "}
-                  {filteredRecords.length} records
+                  Showing {firstItem}–{lastItem} of {filteredRecords.length}{" "}
+                  records
                 </p>
 
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     disabled={activePage <= 1}
-                    onClick={() =>
-                      setCurrentPage(Math.max(1, activePage - 1))
-                    }
+                    onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
                     className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-40"
                   >
                     Previous
@@ -647,9 +569,7 @@ export default function EventAttendancePage() {
                     type="button"
                     disabled={activePage >= totalPages}
                     onClick={() =>
-                      setCurrentPage(
-                        Math.min(totalPages, activePage + 1),
-                      )
+                      setCurrentPage(Math.min(totalPages, activePage + 1))
                     }
                     className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-40"
                   >

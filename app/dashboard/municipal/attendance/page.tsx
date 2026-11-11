@@ -1,16 +1,16 @@
-
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
 import {
   ArrowRight,
   CalendarDays,
   ClipboardList,
-  RefreshCw,
   Search,
   Users,
 } from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import useAttendanceEventList from "./hooks/useAttendanceEventList";
 
@@ -58,12 +58,7 @@ function formatStatus(status: string) {
 }
 
 export default function MunicipalAttendancePage() {
-  const {
-    events,
-    loading,
-    errorMessage,
-    refresh,
-  } = useAttendanceEventList();
+  const { events, loading, errorMessage, refresh } = useAttendanceEventList();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -73,15 +68,10 @@ export default function MunicipalAttendancePage() {
 
     if (!search) return events;
 
-    return events.filter((event) =>
-      event.title.toLowerCase().includes(search),
-    );
+    return events.filter((event) => event.title.toLowerCase().includes(search));
   }, [events, searchTerm]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredEvents.length / PAGE_SIZE),
-  );
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE));
 
   const currentPage = Math.min(page, totalPages);
 
@@ -91,47 +81,18 @@ export default function MunicipalAttendancePage() {
   );
 
   const firstItem =
-    filteredEvents.length === 0
-      ? 0
-      : (currentPage - 1) * PAGE_SIZE + 1;
+    filteredEvents.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
 
-  const lastItem = Math.min(
-    currentPage * PAGE_SIZE,
-    filteredEvents.length,
-  );
+  const lastItem = Math.min(currentPage * PAGE_SIZE, filteredEvents.length);
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div>
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-white">
-            <ClipboardList size={24} />
-          </div>
-
-          <h1 className="text-2xl font-bold text-slate-900">
-            Event Attendance
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Select an event to view and monitor participant
-            attendance records.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw
-            size={16}
-            className={loading ? "animate-spin" : ""}
-          />
-          Refresh
-        </button>
-      </div>
+      <MunicipalPageHeader
+        icon={<ClipboardList className="h-6 w-6" />}
+        title="Event Attendance"
+        description="Select an event to view and monitor participant attendance records."
+        actions={<BackgroundDataSync onUpdate={refresh} disabled={loading} />}
+      />
 
       {/* Event Search and List */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -141,8 +102,7 @@ export default function MunicipalAttendancePage() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Search for an event and open its attendance
-            records.
+            Search for an event and open its attendance records.
           </p>
 
           <div className="relative mt-5 max-w-xl">
@@ -181,10 +141,7 @@ export default function MunicipalAttendancePage() {
             </div>
           ) : paginatedEvents.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-              <CalendarDays
-                size={28}
-                className="mx-auto text-slate-400"
-              />
+              <CalendarDays size={28} className="mx-auto text-slate-400" />
 
               <h3 className="mt-3 font-semibold text-slate-900">
                 No events found
@@ -248,46 +205,37 @@ export default function MunicipalAttendancePage() {
           )}
         </div>
 
-        {!loading &&
-          !errorMessage &&
-          filteredEvents.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 sm:px-6">
-              <p className="text-sm text-slate-500">
-                Showing {firstItem}–{lastItem} of{" "}
-                {filteredEvents.length} events
-              </p>
+        {!loading && !errorMessage && filteredEvents.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 sm:px-6">
+            <p className="text-sm text-slate-500">
+              Showing {firstItem}–{lastItem} of {filteredEvents.length} events
+            </p>
 
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={currentPage <= 1}
-                  onClick={() =>
-                    setPage(Math.max(1, currentPage - 1))
-                  }
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-40"
-                >
-                  Previous
-                </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-40"
+              >
+                Previous
+              </button>
 
-                <span className="text-sm text-slate-600">
-                  {currentPage} / {totalPages}
-                </span>
+              <span className="text-sm text-slate-600">
+                {currentPage} / {totalPages}
+              </span>
 
-                <button
-                  type="button"
-                  disabled={currentPage >= totalPages}
-                  onClick={() =>
-                    setPage(
-                      Math.min(totalPages, currentPage + 1),
-                    )
-                  }
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-40"
+              >
+                Next
+              </button>
             </div>
-          )}
+          </div>
+        )}
       </section>
     </div>
   );

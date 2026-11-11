@@ -1,21 +1,25 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import VenueLocationButton from "@/app/components/VenueLocationButton";
 import EventPreparationDialog from "@/app/dashboard/municipal/components/EventPreparationDialog";
+import EventStaffAction from "@/app/dashboard/municipal/components/EventStaffFlow";
 import MunicipalEventTable from "@/app/dashboard/municipal/components/MunicipalEventTable";
-import type { ReceivedEvent } from "@/app/dashboard/municipal/types/municipalDashboard";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 import ReceivedEventCard from "@/app/dashboard/municipal/components/ReceivedEventCard";
-import type { MunicipalVenue } from "@/app/dashboard/municipal/types/municipalDashboard";
-import { ArrowRight, CalendarDays, RefreshCw, Search, UserRoundPlus } from "lucide-react";
+import type {
+  MunicipalVenue,
+  ReceivedEvent,
+} from "@/app/dashboard/municipal/types/municipalDashboard";
 import ProvincialPageHeader, {
-  provincialHeaderButton,
   provincialHeaderPrimaryButton,
 } from "@/app/dashboard/provincial/components/ProvincialPageHeader";
-import VenueLocationButton from "@/app/components/VenueLocationButton";
 import { municipalEventRequest, phDate } from "@/lib/municipal-events/client";
 import type { MunicipalEvent } from "@/lib/municipal-events/types";
 import { MUNICIPALITIES } from "@/lib/municipalities";
+import { CalendarDays, Search, UserRoundPlus } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 function toReceivedEvent(e: MunicipalEvent): ReceivedEvent {
   return {
     id: e.event_municipalities[0]?.id || e.id,
@@ -42,6 +46,8 @@ export default function MunicipalEventList({
   monitor?: boolean;
 }) {
   const router = useRouter();
+  // Keep Provincial monitoring navy; use shared white header for Municipal Admin.
+  const PageHeader = monitor ? ProvincialPageHeader : MunicipalPageHeader;
   const [preparationId, setPreparationId] = useState<string | null>(null);
   const [venues, setVenues] = useState<MunicipalVenue[]>([]);
   const [events, setEvents] = useState<MunicipalEvent[]>([]),
@@ -74,6 +80,17 @@ export default function MunicipalEventList({
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
   }, [load]);
+  useEffect(() => {
+    if (monitor || loading) return;
+    const url = new URL(window.location.href);
+    const eventId = url.searchParams.get("prepareEvent");
+    if (!eventId) return;
+    const event = events.find((e) => e.id === eventId);
+    if (!event?.event_municipalities[0]?.id) return;
+    setPreparationId(event.event_municipalities[0].id);
+    url.searchParams.delete("prepareEvent");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, [events, loading, monitor]);
   const filtered = useMemo(
     () =>
       events.filter(
@@ -148,7 +165,7 @@ export default function MunicipalEventList({
           onUpdated={() => void load()}
         />
       )}
-      <ProvincialPageHeader
+      <PageHeader
         icon={<CalendarDays size={22} />}
         eyebrow={
           monitor ? "Municipal event monitoring" : "Municipal event management"
@@ -161,15 +178,7 @@ export default function MunicipalEventList({
         }
         actions={
           <>
-            <button
-              type="button"
-              className={provincialHeaderButton}
-              disabled={loading}
-              onClick={() => void load()}
-            >
-              <RefreshCw size={16} />
-              Refresh
-            </button>
+            <BackgroundDataSync onUpdate={() => load()} disabled={loading} />
             {!monitor && (
               <Link
                 href="/dashboard/municipal/events/create"
@@ -199,20 +208,17 @@ export default function MunicipalEventList({
                 Next Step: Assign Event Staff
               </h2>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                After publishing a municipal event, go to Event Staff and assign
-                at least one active staff member to that specific event. Event
-                Staff will manage participant Time In and Time Out through QR
-                scanning or manual attendance codes.
+                After publishing, save the event preparation as Ready, then
+                select Assign Staff on its row. Assign at least one active staff
+                member to that specific event. Event Staff will manage
+                participant Time In and Time Out through QR scanning or manual
+                attendance codes.
               </p>
             </div>
           </div>
-          <Link
-            href="/dashboard/municipal/event-staff"
-            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            Assign Event Staff
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          <p className="text-sm font-semibold text-blue-800">
+            Use Assign Staff on a Ready event below.
+          </p>
         </section>
       )}
       {error && (
@@ -314,15 +320,19 @@ export default function MunicipalEventList({
                 );
                 if (!event) return null;
 
-                if (["published", "upcoming", "ongoing"].includes(event.status)) {
+                if (
+                  ["published", "upcoming", "ongoing"].includes(event.status)
+                ) {
                   return (
-                    <Link
-                      href="/dashboard/municipal/event-staff"
-                      title={`Go to Event Staff and assign staff to ${event.title}`}
-                      className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-                    >
-                      Assign Staff
-                    </Link>
+                    <EventStaffAction
+                      eventId={event.id}
+                      assignmentId={event.event_municipalities[0]?.id}
+                      title={event.title}
+                      ready={
+                        event.event_municipalities[0]?.municipal_status ===
+                        "prepared"
+                      }
+                    />
                   );
                 }
 
@@ -376,13 +386,15 @@ export default function MunicipalEventList({
                         {["published", "upcoming", "ongoing"].includes(
                           e.status,
                         ) && (
-                          <Link
-                            href="/dashboard/municipal/event-staff"
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-                          >
-                            <UserRoundPlus className="h-4 w-4" />
-                            Assign / Manage Event Staff
-                          </Link>
+                          <EventStaffAction
+                            eventId={e.id}
+                            assignmentId={e.event_municipalities[0]?.id}
+                            title={e.title}
+                            ready={
+                              e.event_municipalities[0]?.municipal_status ===
+                              "prepared"
+                            }
+                          />
                         )}
                         {["draft", "published", "upcoming"].includes(
                           e.status,

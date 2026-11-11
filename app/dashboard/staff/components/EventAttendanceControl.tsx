@@ -1,4 +1,3 @@
-
 import {
   CalendarDays,
   LockKeyhole,
@@ -80,8 +79,7 @@ export default function EventAttendanceControl({
   onRefresh,
 }: EventAttendanceControlProps) {
   const controlsBusy =
-    controlLoading !== null ||
-    checkOutControlLoading !== null;
+    controlLoading !== null || checkOutControlLoading !== null;
 
   /*
    * TIME-IN STATUS
@@ -107,8 +105,7 @@ export default function EventAttendanceControl({
         : "Ready to start recording participant Time-in."
       : isCheckOutOpen
         ? "Time-out is active. Time-in cannot be reopened."
-        : checkInBlockedMessage ||
-          "Time-in is currently unavailable.";
+        : checkInBlockedMessage || "Time-in is currently unavailable.";
 
   /*
    * TIME-OUT STATUS
@@ -121,7 +118,9 @@ export default function EventAttendanceControl({
    * the session is completed.
    */
   const checkOutStatus = isCheckOutExpired
-    ? wasCheckOutOpened ? "Closed" : "Expired"
+    ? wasCheckOutOpened
+      ? "Closed"
+      : "Expired"
     : isCheckOutOpen
       ? "Open"
       : canOpenCheckOut
@@ -144,24 +143,23 @@ export default function EventAttendanceControl({
         ? wasCheckOutOpened
           ? "You may reopen Time-out to continue recording Time-out."
           : "The event has ended. You may now open Time-out."
-        : checkOutBlockedMessage ||
-          "Time-out is not available yet.";
+        : checkOutBlockedMessage || "Time-out is not available yet.";
 
   const checkInBadgeClass = isCheckInOpen
     ? "bg-emerald-100 text-emerald-700"
     : wasCheckInClosed && !canOpenCheckIn
       ? "bg-slate-100 text-slate-600"
-    : canOpenCheckIn
-      ? "bg-amber-100 text-amber-700"
-      : "bg-slate-100 text-slate-600";
+      : canOpenCheckIn
+        ? "bg-amber-100 text-amber-700"
+        : "bg-slate-100 text-slate-600";
 
   const checkOutBadgeClass = isCheckOutExpired
     ? "bg-slate-100 text-slate-600"
     : isCheckOutOpen
       ? "bg-blue-100 text-blue-700"
-    : canOpenCheckOut
-      ? "bg-amber-100 text-amber-700"
-      : "bg-slate-100 text-slate-600";
+      : canOpenCheckOut
+        ? "bg-amber-100 text-amber-700"
+        : "bg-slate-100 text-slate-600";
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -194,8 +192,7 @@ export default function EventAttendanceControl({
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              No events are currently assigned to your
-              Event Staff account.
+              No events are currently assigned to your Event Staff account.
             </p>
           </div>
         ) : (
@@ -210,267 +207,242 @@ export default function EventAttendanceControl({
       </div>
 
       {/* EVENT DETAILS AND CONTROLS */}
-      {!loading &&
-        assignments.length > 0 &&
-        selectedAssignment && (
-          <div className="space-y-4 p-4 sm:p-6">
-            {/* A compact schedule strip keeps scanner controls close to the event picker. */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
-              <span className="inline-flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-slate-500" aria-hidden="true" />
-                <span>Event: {formatDateTime(selectedAssignment.event.start_at)} – {formatDateTime(selectedAssignment.event.end_at)}</span>
+      {!loading && assignments.length > 0 && selectedAssignment && (
+        <div className="space-y-4 p-4 sm:p-6">
+          {/* A compact schedule strip keeps scanner controls close to the event picker. */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
+            <span className="inline-flex items-center gap-2">
+              <CalendarDays
+                className="h-4 w-4 text-slate-500"
+                aria-hidden="true"
+              />
+              <span>
+                Event: {formatDateTime(selectedAssignment.event.start_at)} –{" "}
+                {formatDateTime(selectedAssignment.event.end_at)}
               </span>
-              {checkOutDeadlineAt && (
-                <span className="inline-flex items-center gap-2">
-                  <LockKeyhole className="h-4 w-4 text-slate-500" aria-hidden="true" />
-                  Time-out deadline: {formatDateTime(checkOutDeadlineAt)}
-                </span>
-              )}
-            </div>
+            </span>
+            {checkOutDeadlineAt && (
+              <span className="inline-flex items-center gap-2">
+                <LockKeyhole
+                  className="h-4 w-4 text-slate-500"
+                  aria-hidden="true"
+                />
+                Time-out deadline: {formatDateTime(checkOutDeadlineAt)}
+              </span>
+            )}
+          </div>
 
-            {/* SESSION CONTROLS */}
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Attendance Sessions
-              </h3>
+          {/* SESSION CONTROLS */}
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              Attendance Sessions
+            </h3>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Manage participant Time-in and Time-out.
-              </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage participant Time-in and Time-out.
+            </p>
 
-              <div className="mt-3 grid gap-4 lg:grid-cols-2">
-                {/* TIME-IN CARD */}
-                <section className="flex flex-col rounded-2xl border border-slate-200 p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                        <LogIn className="h-5 w-5" />
-                      </div>
-
-                      <div>
-                        <h4 className="font-bold text-slate-900">
-                          Time-in
-                        </h4>
-
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          Participant Time-in
-                        </p>
-                      </div>
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              {/* TIME-IN CARD */}
+              <section className="flex flex-col rounded-2xl border border-slate-200 p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                      <LogIn className="h-5 w-5" />
                     </div>
 
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${checkInBadgeClass}`}
-                    >
-                      {checkInStatus}
-                    </span>
-                  </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Time-in</h4>
 
-                  <p
-                    aria-live="polite"
-                    className="mt-4 min-h-12 text-sm leading-6 text-slate-600"
-                  >
-                    {checkInDescription}
-                  </p>
-
-                  {isCheckInOpen &&
-                    selectedAssignment.check_in_opened_at && (
-                      <p className="mb-3 text-xs text-slate-500">
-                        Opened:{" "}
-                        {formatDateTime(
-                          selectedAssignment.check_in_opened_at,
-                        )}
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Participant Time-in
                       </p>
-                    )}
-
-                  <div className="mt-auto pt-3">
-                    {isCheckInOpen ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void onCloseCheckIn()
-                        }
-                        disabled={controlsBusy}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {controlLoading === "close" ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Square className="h-4 w-4" />
-                        )}
-
-                        {controlLoading === "close"
-                          ? "Closing..."
-                          : "Close Time-in"}
-                      </button>
-                    ) : canOpenCheckIn ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void onOpenCheckIn()
-                        }
-                        disabled={controlsBusy}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {controlLoading === "open" ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : wasCheckInClosed ? (
-                          <RotateCcw className="h-4 w-4" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
-
-                        {controlLoading === "open"
-                          ? "Opening..."
-                          : wasCheckInClosed
-                            ? "Reopen Time-in"
-                            : "Open Time-in"}
-                      </button>
-                    ) : (
-                      <div className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500">
-                        <LockKeyhole className="h-4 w-4" />
-                        Time-in Unavailable
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </section>
 
-                {/* TIME-OUT CARD */}
-                <section className="flex flex-col rounded-2xl border border-slate-200 p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                        <LogOut className="h-5 w-5" />
-                      </div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${checkInBadgeClass}`}
+                  >
+                    {checkInStatus}
+                  </span>
+                </div>
 
-                      <div>
-                        <h4 className="font-bold text-slate-900">
-                          Time-out
-                        </h4>
+                <p
+                  aria-live="polite"
+                  className="mt-4 min-h-12 text-sm leading-6 text-slate-600"
+                >
+                  {checkInDescription}
+                </p>
 
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          Participant Time-out
-                        </p>
-                      </div>
+                {isCheckInOpen && selectedAssignment.check_in_opened_at && (
+                  <p className="mb-3 text-xs text-slate-500">
+                    Opened:{" "}
+                    {formatDateTime(selectedAssignment.check_in_opened_at)}
+                  </p>
+                )}
+
+                <div className="mt-auto pt-3">
+                  {isCheckInOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => void onCloseCheckIn()}
+                      disabled={controlsBusy}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {controlLoading === "close" ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+
+                      {controlLoading === "close"
+                        ? "Closing..."
+                        : "Close Time-in"}
+                    </button>
+                  ) : canOpenCheckIn ? (
+                    <button
+                      type="button"
+                      onClick={() => void onOpenCheckIn()}
+                      disabled={controlsBusy}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {controlLoading === "open" ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : wasCheckInClosed ? (
+                        <RotateCcw className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+
+                      {controlLoading === "open"
+                        ? "Opening..."
+                        : wasCheckInClosed
+                          ? "Reopen Time-in"
+                          : "Open Time-in"}
+                    </button>
+                  ) : (
+                    <div className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500">
+                      <LockKeyhole className="h-4 w-4" />
+                      Time-in Unavailable
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* TIME-OUT CARD */}
+              <section className="flex flex-col rounded-2xl border border-slate-200 p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                      <LogOut className="h-5 w-5" />
                     </div>
 
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${checkOutBadgeClass}`}
-                    >
-                      {checkOutStatus}
-                    </span>
-                  </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">Time-out</h4>
 
-                  <p
-                    aria-live="polite"
-                    className="mt-4 min-h-12 text-sm leading-6 text-slate-600"
-                  >
-                    {checkOutDescription}
-                  </p>
-
-                  {isCheckOutOpen &&
-                    selectedAssignment.check_out_opened_at && (
-                      <p className="mb-3 text-xs text-slate-500">
-                        Opened:{" "}
-                        {formatDateTime(
-                          selectedAssignment.check_out_opened_at,
-                        )}
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Participant Time-out
                       </p>
-                    )}
-
-                  <div className="mt-auto pt-3">
-                    {isCheckOutExpired ? (
-                      <div
-                        role="status"
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600"
-                      >
-                        <LockKeyhole className="h-4 w-4" />
-                        {wasCheckOutOpened ? "Time-out Closed" : "Time-out Window Expired"}
-                      </div>
-                    ) : isCheckOutOpen ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void onCloseCheckOut()
-                        }
-                        disabled={
-                          !canCloseCheckOut ||
-                          controlsBusy
-                        }
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {checkOutControlLoading === "close" ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Square className="h-4 w-4" />
-                        )}
-
-                        {checkOutControlLoading === "close"
-                          ? "Closing..."
-                          : "Close Time-out"}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void onOpenCheckOut()
-                        }
-                        disabled={
-                          !canOpenCheckOut ||
-                          controlsBusy
-                        }
-                        className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed ${
-                          canOpenCheckOut
-                            ? "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {checkOutControlLoading === "open" ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : !canOpenCheckOut ? (
-                          <LockKeyhole className="h-4 w-4" />
-                        ) : wasCheckOutClosed ? (
-                          <RotateCcw className="h-4 w-4" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
-
-                        {checkOutControlLoading === "open"
-                          ? "Opening..."
-                          : !canOpenCheckOut
-                            ? "Time-out Unavailable"
-                            : wasCheckOutClosed
-                              ? "Reopen Time-out"
-                              : "Open Time-out"}
-                      </button>
-                    )}
+                    </div>
                   </div>
-                </section>
-              </div>
-            </div>
 
-            {/* REFRESH */}
-            <div className="flex justify-end border-t border-slate-200 pt-4">
-              <button
-                type="button"
-                onClick={() => void onRefresh()}
-                disabled={controlsBusy}
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh Session
-              </button>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${checkOutBadgeClass}`}
+                  >
+                    {checkOutStatus}
+                  </span>
+                </div>
+
+                <p
+                  aria-live="polite"
+                  className="mt-4 min-h-12 text-sm leading-6 text-slate-600"
+                >
+                  {checkOutDescription}
+                </p>
+
+                {isCheckOutOpen && selectedAssignment.check_out_opened_at && (
+                  <p className="mb-3 text-xs text-slate-500">
+                    Opened:{" "}
+                    {formatDateTime(selectedAssignment.check_out_opened_at)}
+                  </p>
+                )}
+
+                <div className="mt-auto pt-3">
+                  {isCheckOutExpired ? (
+                    <div
+                      role="status"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600"
+                    >
+                      <LockKeyhole className="h-4 w-4" />
+                      {wasCheckOutOpened
+                        ? "Time-out Closed"
+                        : "Time-out Window Expired"}
+                    </div>
+                  ) : isCheckOutOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => void onCloseCheckOut()}
+                      disabled={!canCloseCheckOut || controlsBusy}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {checkOutControlLoading === "close" ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+
+                      {checkOutControlLoading === "close"
+                        ? "Closing..."
+                        : "Close Time-out"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void onOpenCheckOut()}
+                      disabled={!canOpenCheckOut || controlsBusy}
+                      className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed ${
+                        canOpenCheckOut
+                          ? "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {checkOutControlLoading === "open" ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : !canOpenCheckOut ? (
+                        <LockKeyhole className="h-4 w-4" />
+                      ) : wasCheckOutClosed ? (
+                        <RotateCcw className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+
+                      {checkOutControlLoading === "open"
+                        ? "Opening..."
+                        : !canOpenCheckOut
+                          ? "Time-out Unavailable"
+                          : wasCheckOutClosed
+                            ? "Reopen Time-out"
+                            : "Open Time-out"}
+                    </button>
+                  )}
+                </div>
+              </section>
             </div>
           </div>
-        )}
+
+          {/* REFRESH */}
+          <div className="flex justify-end border-t border-slate-200 pt-4">
+            {null}
+          </div>
+        </div>
+      )}
 
       {/* NO EVENT SELECTED */}
-      {!loading &&
-        assignments.length > 0 &&
-        !selectedAssignment && (
-          <div className="px-5 py-8 text-center text-sm text-slate-500">
-            Select an event above to view its attendance controls.
-          </div>
-        )}
+      {!loading && assignments.length > 0 && !selectedAssignment && (
+        <div className="px-5 py-8 text-center text-sm text-slate-500">
+          Select an event above to view its attendance controls.
+        </div>
+      )}
     </section>
   );
 }

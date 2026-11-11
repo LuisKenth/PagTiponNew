@@ -1,54 +1,13 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+
 import { supabase } from "@/lib/supabase";
-import {
-  emptyReportData,
-  type ReportData,
-  type ReportEvent,
-  type ReportTarget,
-  type ReportRegistration,
-  type ReportAttendance,
-  type ReportProfile,
-} from "../simpleReportData";
-const PAGE_SIZE = 500;
-async function readAll<T>(
-  query: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{
-    data: unknown[] | null;
-    error: { message: string } | null;
-  }>,
-): Promise<T[]> {
-  const result: T[] = [];
-  for (let offset = 0; ; offset += PAGE_SIZE) {
-    const { data, error } = await query(offset, offset + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    const rows = (data || []) as T[];
-    result.push(...rows);
-    if (rows.length < PAGE_SIZE) return result;
-  }
-}
-async function batches<T>(
-  ids: string[],
-  query: (
-    ids: string[],
-    from: number,
-    to: number,
-  ) => PromiseLike<{
-    data: unknown[] | null;
-    error: { message: string } | null;
-  }>,
-) {
-  const result: T[] = [];
-  for (let i = 0; i < ids.length; i += 100)
-    result.push(
-      ...(await readAll<T>((from, to) =>
-        query(ids.slice(i, i + 100), from, to),
-      )),
-    );
-  return result;
-}
+import { useCallback, useEffect, useRef, useState } from "react";
+import { emptyReportData, type ReportData } from "../simpleReportData";
+
+// Realtime + polling retain the current automatic attendance monitoring.
+const FALLBACK_REFRESH_MS = 15_000;
+const REALTIME_DEBOUNCE_MS = 750;
+
 export default function useSimpleReports() {
   const [data, setData] = useState<ReportData>(emptyReportData);
   const [loading, setLoading] = useState(true);
@@ -56,89 +15,115 @@ export default function useSimpleReports() {
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const mounted = useRef(false);
   const generation = useRef(0);
-  const refresh = useCallback(async () => {
+
+  // silent refresh keeps report cards visible while new data is fetched.
+  const refresh = useCallback(async (silent = false) => {
     const current = ++generation.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError("");
+
     try {
-      const events = await readAll<ReportEvent>((from, to) =>
-        supabase
-          .from("events")
-          .select("id,title,status,start_at,end_at,created_at")
-          .eq("event_origin", "provincial")
-          .order("id")
-          .range(from, to),
-      );
-      const targets = await batches<ReportTarget>(
-        events.map((e) => e.id),
-        (ids, from, to) =>
-          supabase
-            .from("event_municipalities")
-            .select("id,event_id,municipality")
-            .in("event_id", ids)
-            .order("id")
-            .range(from, to),
-      );
-      const registrations = await batches<ReportRegistration>(
-        targets.map((t) => t.id),
-        (ids, from, to) =>
-          supabase
-            .from("rsvps")
-            .select("id,event_municipality_id,user_id,status")
-            .in("event_municipality_id", ids)
-            .eq("status", "registered")
-            .order("id")
-            .range(from, to),
-      );
-      const [attendance, profiles] = await Promise.all([
-        batches<ReportAttendance>(
-          registrations.map((r) => r.id),
-          (ids, from, to) =>
-            supabase
-              .from("attendance")
-              .select("id,rsvp_id,status,checked_in_at,updated_at")
-              .in("rsvp_id", ids)
-              .order("id")
-              .range(from, to),
-        ),
-        batches<ReportProfile>(
-          [...new Set(registrations.map((r) => r.user_id))],
-          (ids, from, to) =>
-            supabase
-              .from("profiles")
-              .select(
-                "id,full_name,participant_category,participant_category_other",
-              )
-              .in("id", ids)
-              .order("id")
-              .range(from, to),
-        ),
-      ]);
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (sessionError || !accessToken) {
+        throw new Error("Please log in again to view provincial reports.");
+      }
+
+      // Approved provincial admin only: the server validates the bearer token
+      // before reading both provincial-created and approved municipal-created events.
+      const response = await fetch("/api/provincial/reports", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const payload: ReportData & { error?: string } = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load provincial reports.");
+      }
+      const reportData: ReportData = payload;
+
       if (mounted.current && current === generation.current) {
-        setData({ events, targets, registrations, attendance, profiles });
+        setData(reportData);
         setLoadedAt(Date.now());
       }
     } catch (e) {
       if (mounted.current && current === generation.current) {
         setError(e instanceof Error ? e.message : "Unable to load reports.");
-        setData(emptyReportData);
-        setLoadedAt(null);
+        if (!silent) {
+          setData(emptyReportData);
+          setLoadedAt(null);
+        }
       }
     } finally {
-      if (mounted.current && current === generation.current) setLoading(false);
+      if (mounted.current && current === generation.current) {
+        setLoading(false);
+      }
     }
   }, []);
-  const invalidateRequests = useCallback(() => {
-    ++generation.current;
-  }, []);
+
   useEffect(() => {
     mounted.current = true;
-    const timer = window.setTimeout(() => void refresh(), 0);
+    const firstLoadTimer = window.setTimeout(() => void refresh(), 0);
+    let changeTimer: number | null = null;
+
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (changeTimer !== null) window.clearTimeout(changeTimer);
+      changeTimer = window.setTimeout(() => {
+        changeTimer = null;
+        if (document.visibilityState === "visible") void refresh(true);
+      }, REALTIME_DEBOUNCE_MS);
+    };
+
+    // Postgres Changes requires tables in the supabase_realtime
+    // publication and appropriate RLS SELECT policies.
+    const channel = supabase
+      .channel("pagtipon-provincial-reports-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "attendance" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rsvps" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "events" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "event_municipalities" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    // Fallback if Realtime replication is not enabled or misses an event.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh(true);
+    }, FALLBACK_REFRESH_MS);
+
+    const onFocus = () => scheduleRefresh();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
     return () => {
       mounted.current = false;
-      invalidateRequests();
-      window.clearTimeout(timer);
+      ++generation.current;
+      window.clearTimeout(firstLoadTimer);
+      window.clearInterval(interval);
+      if (changeTimer !== null) window.clearTimeout(changeTimer);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      void supabase.removeChannel(channel);
     };
-  }, [refresh, invalidateRequests]);
+  }, [refresh]);
+
   return { data, loading, error, loadedAt, refresh };
 }

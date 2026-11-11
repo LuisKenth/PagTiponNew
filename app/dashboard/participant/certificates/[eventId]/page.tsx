@@ -1,4 +1,5 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import { ArrowLeft, Award, Download, Loader2, Printer } from "lucide-react";
 
@@ -75,61 +76,73 @@ export default function ParticipantCertificatePage() {
 
   const eventId = params.eventId;
 
-  const loadCertificate = useCallback(async () => {
-    if (!eventId) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      /*
-       * Make sure certificate exists.
-       *
-       * If already issued, the RPC returns
-       * the existing certificate.
-       */
-      const { error: issueError } = await supabase.rpc("issue_my_certificate", {
-        p_event_id: eventId,
-      });
-
-      if (issueError) {
-        throw issueError;
+  const loadCertificate = useCallback(
+    async (silent = false) => {
+      if (!eventId) {
+        return;
       }
 
-      /*
-       * Get full certificate information.
-       */
-      const { data, error: certificateError } = await supabase.rpc(
-        "get_my_certificate",
-        {
-          p_event_id: eventId,
-        },
-      );
+      if (!silent) setLoading(true);
+      setError(null);
 
-      if (certificateError) {
-        throw certificateError;
+      try {
+        /*
+         * Make sure certificate exists.
+         *
+         * If already issued, the RPC returns
+         * the existing certificate.
+         */
+        if (!silent) {
+          const { error: issueError } = await supabase.rpc(
+            "issue_my_certificate",
+            {
+              p_event_id: eventId,
+            },
+          );
+
+          if (issueError) {
+            throw issueError;
+          }
+        }
+
+        /*
+         * Get full certificate information.
+         */
+        const { data, error: certificateError } = await supabase.rpc(
+          "get_my_certificate",
+          {
+            p_event_id: eventId,
+          },
+        );
+
+        if (certificateError) {
+          throw certificateError;
+        }
+
+        const result = Array.isArray(data) ? data[0] : data;
+
+        if (!result) {
+          throw new Error("Certificate could not be found.");
+        }
+
+        setCertificate(result as CertificateData);
+      } catch (err) {
+        console.error("Certificate loading error:", err);
+
+        setError(
+          err instanceof Error ? err.message : "Unable to load certificate.",
+        );
+      } finally {
+        setLoading(false);
       }
+    },
+    [eventId],
+  );
 
-      const result = Array.isArray(data) ? data[0] : data;
-
-      if (!result) {
-        throw new Error("Certificate could not be found.");
-      }
-
-      setCertificate(result as CertificateData);
-    } catch (err) {
-      console.error("Certificate loading error:", err);
-
-      setError(
-        err instanceof Error ? err.message : "Unable to load certificate.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId]);
-
+  useLiveData({
+    onUpdate: () => loadCertificate(true),
+    disabled: loading || downloading,
+  });
   useEffect(() => {
     void loadCertificate();
   }, [loadCertificate]);
@@ -231,7 +244,9 @@ export default function ParticipantCertificatePage() {
       <div className="space-y-5">
         <button
           type="button"
-          onClick={() => router.push("/dashboard/participant/my-events?tab=certificates")}
+          onClick={() =>
+            router.push("/dashboard/participant/my-events?tab=certificates")
+          }
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-950"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -331,7 +346,9 @@ export default function ParticipantCertificatePage() {
           <div>
             <button
               type="button"
-              onClick={() => router.push("/dashboard/participant/my-events?tab=certificates")}
+              onClick={() =>
+                router.push("/dashboard/participant/my-events?tab=certificates")
+              }
               className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950"
             >
               <ArrowLeft className="h-4 w-4" />

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -42,13 +43,13 @@ export default function useMunicipalAttendance() {
   >([]);
 
   const [loading, setLoading] = useState(true);
-
   const [refreshing, setRefreshing] = useState(false);
 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    null,
+  );
 
   const [searchTerm, setSearchTerm] = useState("");
-
   const [selectedEventId, setSelectedEventId] = useState("all");
 
   const [statusFilter, setStatusFilter] =
@@ -60,45 +61,63 @@ export default function useMunicipalAttendance() {
   const [currentPage, setCurrentPage] = useState(1);
 
   /*
-   * Page size now represents the number
+   * Page size represents the number
    * of event groups displayed per page.
    */
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  const fetchAttendance = useCallback(async (showRefreshingState = false) => {
-    if (showRefreshingState) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
-    setErrorMessage(null);
-
-    try {
-      const { data, error } = await supabase.rpc("get_municipal_attendance", {
-        p_event_municipality_id: null,
-      });
-
-      if (error) {
-        throw error;
+  /*
+   * Load municipal attendance records.
+   *
+   * UPDATED:
+   * Uses the new RPC that includes
+   * checked_out_at and checked_out_by.
+   *
+   * The existing RPC continues to enforce
+   * Municipal Admin access restrictions.
+   */
+  const fetchAttendance = useCallback(
+    async (showRefreshingState = false) => {
+      if (showRefreshingState) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
-      setAttendanceRecords((data ?? []) as MunicipalAttendanceRecord[]);
-    } catch (error) {
-      console.error("Municipal attendance error:", error);
+      setErrorMessage(null);
 
-      setAttendanceRecords([]);
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_municipal_attendance_with_checkout",
+          {
+            p_event_municipality_id: null,
+          },
+        );
 
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to load municipal attendance records.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+        if (error) {
+          throw error;
+        }
+
+        setAttendanceRecords(
+          (data ?? []) as MunicipalAttendanceRecord[],
+        );
+      } catch (error) {
+        console.error("Municipal attendance error:", error);
+
+        setAttendanceRecords([]);
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load municipal attendance records.",
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     void fetchAttendance();
@@ -111,9 +130,13 @@ export default function useMunicipalAttendance() {
    * ?eventMunicipalityId=...
    */
   useEffect(() => {
-    const searchParameters = new URLSearchParams(window.location.search);
+    const searchParameters = new URLSearchParams(
+      window.location.search,
+    );
 
-    const targetEventId = searchParameters.get("eventMunicipalityId")?.trim();
+    const targetEventId = searchParameters
+      .get("eventMunicipalityId")
+      ?.trim();
 
     if (targetEventId) {
       setSelectedEventId(targetEventId);
@@ -144,8 +167,8 @@ export default function useMunicipalAttendance() {
   );
 
   /*
-   * Overall cards remain based on all
-   * currently filtered participant records.
+   * Overall summary cards are calculated
+   * from filtered participant records.
    */
   const attendanceSummary = useMemo(
     () => calculateAttendanceSummary(filteredAttendanceRecords),
@@ -153,24 +176,27 @@ export default function useMunicipalAttendance() {
   );
 
   /*
-   * Group the filtered records according
-   * to event_municipalities assignment.
+   * Group records by event municipality.
+   *
+   * Each record now also carries
+   * checked_out_at when available.
    */
-  const groupedAttendanceRecords = useMemo<AttendanceEventGroup[]>(() => {
-    const groupMap = new Map<string, MunicipalAttendanceRecord[]>();
+  const groupedAttendanceRecords = useMemo<
+    AttendanceEventGroup[]
+  >(() => {
+    const groupMap = new Map<
+      string,
+      MunicipalAttendanceRecord[]
+    >();
 
     filteredAttendanceRecords.forEach((record) => {
       const eventMunicipalityId = String(
         record.event_municipality_id ?? "",
       ).trim();
 
-      /*
-       * The event assignment ID should
-       * normally exist. Event title is
-       * retained as a defensive fallback.
-       */
       const groupKey =
-        eventMunicipalityId || `event-title:${record.event_title}`;
+        eventMunicipalityId ||
+        `event-title:${record.event_title}`;
 
       const currentRecords = groupMap.get(groupKey) ?? [];
 
@@ -179,60 +205,67 @@ export default function useMunicipalAttendance() {
       groupMap.set(groupKey, currentRecords);
     });
 
-    return Array.from(groupMap.entries()).map(([groupKey, eventRecords]) => {
-      const firstRecord = eventRecords[0];
+    return Array.from(groupMap.entries()).map(
+      ([groupKey, eventRecords]) => {
+        const firstRecord = eventRecords[0];
 
-      const presentCount = eventRecords.filter(
-        (record) => record.attendance_status === "present",
-      ).length;
+        const presentCount = eventRecords.filter(
+          (record) => record.attendance_status === "present",
+        ).length;
 
-      const lateCount = eventRecords.filter(
-        (record) => record.attendance_status === "late",
-      ).length;
+        const lateCount = eventRecords.filter(
+          (record) => record.attendance_status === "late",
+        ).length;
 
-      const absentCount = eventRecords.filter(
-        (record) => record.attendance_status === "absent",
-      ).length;
+        const absentCount = eventRecords.filter(
+          (record) => record.attendance_status === "absent",
+        ).length;
 
-      const pendingCount = eventRecords.filter(
-        (record) => record.attendance_status === "pending",
-      ).length;
+        const pendingCount = eventRecords.filter(
+          (record) => record.attendance_status === "pending",
+        ).length;
 
-      const qrCheckInCount = eventRecords.filter(
-        (record) => record.attendance_method === "qr",
-      ).length;
+        const qrCheckInCount = eventRecords.filter(
+          (record) => record.attendance_method === "qr",
+        ).length;
 
-      const manualCheckInCount = eventRecords.filter(
-        (record) => record.attendance_method === "manual",
-      ).length;
+        const manualCheckInCount = eventRecords.filter(
+          (record) => record.attendance_method === "manual",
+        ).length;
 
-      return {
-        eventMunicipalityId: groupKey,
+        return {
+          eventMunicipalityId: groupKey,
 
-        eventTitle: firstRecord?.event_title || "Untitled Event",
+          eventTitle:
+            firstRecord?.event_title || "Untitled Event",
 
-        eventStatus: firstRecord?.event_status || "unknown",
+          eventStatus:
+            firstRecord?.event_status || "unknown",
 
-        eventStartDate: firstRecord?.event_start_date ?? null,
-        eventEndDate: firstRecord?.event_end_date ?? null,
+          eventStartDate:
+            firstRecord?.event_start_date ?? null,
 
-        records: eventRecords,
+          eventEndDate:
+            firstRecord?.event_end_date ?? null,
 
-        registeredCount: eventRecords.length,
+          records: eventRecords,
 
-        presentCount,
-        lateCount,
-        absentCount,
-        pendingCount,
+          registeredCount: eventRecords.length,
 
-        qrCheckInCount,
-        manualCheckInCount,
-      };
-    });
+          presentCount,
+          lateCount,
+          absentCount,
+          pendingCount,
+
+          qrCheckInCount,
+          manualCheckInCount,
+        };
+      },
+    );
   }, [filteredAttendanceRecords]);
 
   /*
-   * Pagination now uses event groups.
+   * Pagination uses event groups.
    */
   const totalPages = Math.max(
     1,
@@ -242,7 +275,10 @@ export default function useMunicipalAttendance() {
   const paginatedEventGroups = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
 
-    return groupedAttendanceRecords.slice(startIndex, startIndex + pageSize);
+    return groupedAttendanceRecords.slice(
+      startIndex,
+      startIndex + pageSize,
+    );
   }, [currentPage, groupedAttendanceRecords, pageSize]);
 
   const firstVisibleItem =
@@ -260,7 +296,8 @@ export default function useMunicipalAttendance() {
       ? null
       : (eventOptions.find(
           (eventOption) =>
-            eventOption.event_municipality_id === selectedEventId,
+            eventOption.event_municipality_id ===
+            selectedEventId,
         ) ?? null);
 
   const hasActiveFilters =
@@ -271,10 +308,18 @@ export default function useMunicipalAttendance() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedEventId, statusFilter, methodFilter, pageSize]);
+  }, [
+    searchTerm,
+    selectedEventId,
+    statusFilter,
+    methodFilter,
+    pageSize,
+  ]);
 
   useEffect(() => {
-    setCurrentPage((previousPage) => Math.min(previousPage, totalPages));
+    setCurrentPage((previousPage) =>
+      Math.min(previousPage, totalPages),
+    );
   }, [totalPages]);
 
   function clearFilters() {
@@ -284,7 +329,11 @@ export default function useMunicipalAttendance() {
     setMethodFilter("all");
     setCurrentPage(1);
 
-    window.history.replaceState({}, "", "/dashboard/municipal/attendance");
+    window.history.replaceState(
+      {},
+      "",
+      "/dashboard/municipal/attendance",
+    );
   }
 
   function changeSelectedEvent(value: string) {
@@ -307,11 +356,15 @@ export default function useMunicipalAttendance() {
   }
 
   function goToPreviousPage() {
-    setCurrentPage((previousPage) => Math.max(1, previousPage - 1));
+    setCurrentPage((previousPage) =>
+      Math.max(1, previousPage - 1),
+    );
   }
 
   function goToNextPage() {
-    setCurrentPage((previousPage) => Math.min(totalPages, previousPage + 1));
+    setCurrentPage((previousPage) =>
+      Math.min(totalPages, previousPage + 1),
+    );
   }
 
   return {

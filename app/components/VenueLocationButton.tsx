@@ -1,20 +1,20 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Private signed image URLs are short-lived and rendered without the image optimization proxy. */
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ExternalLink, Loader2, MapPin, Save, Trash2, X } from "lucide-react";
-import VenueMap from "./VenueMap";
 import { supabase } from "@/lib/supabase";
 import {
   cleanLocation,
   locationError,
   photoError,
   validMapEmbed,
-  venueMapLink,
   VENUE_PHOTO_BUCKET,
   VENUE_PHOTO_LIMIT,
+  venueMapLink,
   type VenueLocation,
   type VenueLocationInput,
 } from "@/lib/venues/location";
+import { ExternalLink, Loader2, MapPin, Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import VenueMap from "./VenueMap";
 type Target = {
   venueId?: string;
   eventMunicipalityId?: string;
@@ -109,7 +109,7 @@ function VenueLocationDialog({
         if (!active.current) return;
         if (signError || urls?.some((url) => url.error))
           setPhotoWarning(
-            "Some photos could not be loaded. Refresh photos to try again.",
+            "Some photos could not be loaded. Retry photos to try again.",
           );
         setImages(
           Object.fromEntries(
@@ -418,7 +418,7 @@ function VenueLocationDialog({
                     onClick={() => void refreshImages()}
                     className="text-xs font-semibold text-indigo-600"
                   >
-                    Refresh photos
+                    Retry photos
                   </button>
                 )}
               </div>
@@ -446,7 +446,7 @@ function VenueLocationDialog({
                             className="h-36 w-full object-cover"
                             onError={() =>
                               setPhotoWarning(
-                                "A photo could not be loaded. Use Refresh photos to try again.",
+                                "A photo could not be loaded. Use Retry photos to try again.",
                               )
                             }
                           />

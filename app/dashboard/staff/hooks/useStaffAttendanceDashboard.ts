@@ -1,4 +1,5 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -140,8 +141,7 @@ export function useStaffAttendanceDashboard() {
   // The fallback deadline is exactly two hours after the scheduled event end.
   const checkoutOverride = (
     selectedAssignment as
-      | (EventAssignment & { check_out_deadline_at?: string | null })
-      | null
+      (EventAssignment & { check_out_deadline_at?: string | null }) | null
   )?.check_out_deadline_at;
   const checkoutOverrideTime = checkoutOverride
     ? new Date(checkoutOverride).getTime()
@@ -731,13 +731,13 @@ export function useStaffAttendanceDashboard() {
    */
 
   const fetchAttendanceRecords = useCallback(
-    async (eventMunicipalityId: DatabaseId | "") => {
+    async (eventMunicipalityId: DatabaseId | "", silent = false) => {
       if (!eventMunicipalityId) {
         setAttendanceRecords([]);
         return;
       }
 
-      setAttendanceLoading(true);
+      if (!silent) setAttendanceLoading(true);
 
       try {
         const {
@@ -859,9 +859,10 @@ export function useStaffAttendanceDashboard() {
           errorValue.message ?? "Unable to load attendance records.",
         );
 
-        setAttendanceRecords([]);
-
-        showMessage(formatDatabaseError(errorValue), "error");
+        if (!silent) {
+          setAttendanceRecords([]);
+          showMessage(formatDatabaseError(errorValue), "error");
+        }
       } finally {
         setAttendanceLoading(false);
       }
@@ -926,6 +927,21 @@ export function useStaffAttendanceDashboard() {
     selectedAssignment,
     showMessage,
   ]);
+
+  useLiveData({
+    onUpdate: async () => {
+      const assignment = await refreshEventAssignments(selectedAssignment?.id);
+      if (assignment) await fetchAttendanceRecords(assignment.id, true);
+      else setAttendanceRecords([]);
+    },
+    disabled:
+      loading ||
+      attendanceLoading ||
+      controlLoading !== null ||
+      checkOutControlLoading !== null,
+    intervalMs: 15_000,
+    pauseWhileEditing: false,
+  });
 
   /*
    * =====================================================

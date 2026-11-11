@@ -1,4 +1,5 @@
 "use client";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -9,9 +10,6 @@ import {
   FileText,
   FilePenLine,
 } from "lucide-react";
-import ProvincialPageHeader, {
-  provincialHeaderButton,
-} from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 import EventDetailsSection from "@/app/dashboard/provincial/events/create/components/EventDetailsSection";
 import EventScheduleSection from "@/app/dashboard/provincial/events/create/components/EventScheduleSection";
 import CreateEventActions from "@/app/dashboard/provincial/events/create/components/CreateEventActions";
@@ -177,7 +175,7 @@ export default function MunicipalEventForm({
       setSuccess(
         action === "draft"
           ? "Draft saved successfully. You can continue editing now or return to Municipal Events later."
-          : "Event published successfully for your municipality. Registration is closed; use Manage Preparation on the event card when ready.",
+          : "Event published successfully. Next, confirm its preparation as Ready, then assign Event Staff for attendance.",
       );
       if (onSaved) onSaved();
       else successDialog.current?.showModal();
@@ -195,7 +193,7 @@ export default function MunicipalEventForm({
   }
   return (
     <div className="space-y-6">
-      <ProvincialPageHeader
+      <MunicipalPageHeader
         icon={<CalendarPlus size={22} />}
         eyebrow="Municipal event management"
         title={requestedId ? "Edit Municipal Event" : "Create Municipal Event"}
@@ -211,7 +209,7 @@ export default function MunicipalEventForm({
           onClose ? (
             <button
               type="button"
-              className={provincialHeaderButton}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               disabled={busy}
               onClick={onClose}
             >
@@ -220,7 +218,7 @@ export default function MunicipalEventForm({
           ) : (
             <Link
               href="/dashboard/municipal/local-events"
-              className={provincialHeaderButton}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               <ArrowLeft size={16} aria-hidden="true" /> Back to Events
             </Link>
@@ -505,6 +503,7 @@ export default function MunicipalEventForm({
           {success}
         </p>
         <div className="flex flex-wrap gap-3">
+          {record?.status !== "draft" && record?.id && <Link className="rounded-xl bg-indigo-600 px-4 py-2 text-white" href={`/dashboard/municipal/local-events?prepareEvent=${encodeURIComponent(record.id)}`}>Continue to Preparation</Link>}
           <button
             type="button"
             autoFocus

@@ -1,6 +1,4 @@
-
 "use client";
-
 import MunicipalNotificationFilters from "./components/MunicipalNotificationFilters";
 import MunicipalNotificationList from "./components/MunicipalNotificationList";
 import MunicipalNotificationsHeader from "./components/MunicipalNotificationsHeader";
@@ -29,16 +27,15 @@ export default function MunicipalNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {/* Notifications Header */}
-        <MunicipalNotificationsHeader
+      <MunicipalNotificationsHeader
           unreadCount={unreadCount}
           refreshing={refreshing}
           markingAll={markingAll}
           onRefresh={refreshNotifications}
           onMarkAllAsRead={markAllAsRead}
-        />
+      />
 
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {/* Notification Filters */}
         <MunicipalNotificationFilters
           activeFilter={activeFilter}

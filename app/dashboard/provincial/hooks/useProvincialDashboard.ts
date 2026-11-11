@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AttendanceRow,
   EventMunicipalityRow,
@@ -36,8 +36,8 @@ export function useProvincialDashboard() {
   const [message, setMessage] = useState("");
   const [now, setNow] = useState<Date | null>(null);
 
-  const loadDashboard = async () => {
-    setLoading(true);
+  const loadDashboard = async (silent = false) => {
+    if (!silent) setLoading(true);
     setMessage("");
 
     const {
@@ -96,13 +96,11 @@ export function useProvincialDashboard() {
       return;
     }
 
-    const {
-      data: eventMunicipalityData,
-      error: eventMunicipalityError,
-    } = await supabase
-      .from("event_municipalities")
-      .select("*")
-      .in("event_id", eventIds);
+    const { data: eventMunicipalityData, error: eventMunicipalityError } =
+      await supabase
+        .from("event_municipalities")
+        .select("*")
+        .in("event_id", eventIds);
 
     if (eventMunicipalityError) {
       setMessage(eventMunicipalityError.message);
@@ -113,17 +111,14 @@ export function useProvincialDashboard() {
       return;
     }
 
-    const cleanEventMunicipalities =
-      (eventMunicipalityData || []) as EventMunicipalityRow[];
+    const cleanEventMunicipalities = (eventMunicipalityData ||
+      []) as EventMunicipalityRow[];
 
     setEventMunicipalities(cleanEventMunicipalities);
 
     const eventMunicipalityIds = cleanEventMunicipalities
       .map((item) => item.id)
-      .filter(
-        (id): id is string | number =>
-          id !== null && id !== undefined
-      );
+      .filter((id): id is string | number => id !== null && id !== undefined);
 
     if (eventMunicipalityIds.length === 0) {
       setRsvps([]);
@@ -150,10 +145,7 @@ export function useProvincialDashboard() {
 
     const rsvpIds = cleanRsvps
       .map((rsvp) => rsvp.id)
-      .filter(
-        (id): id is string | number =>
-          id !== null && id !== undefined
-      );
+      .filter((id): id is string | number => id !== null && id !== undefined);
 
     if (rsvpIds.length === 0) {
       setAttendance([]);
@@ -161,11 +153,10 @@ export function useProvincialDashboard() {
       return;
     }
 
-    const { data: attendanceData, error: attendanceError } =
-      await supabase
-        .from("attendance")
-        .select("*")
-        .in("rsvp_id", rsvpIds);
+    const { data: attendanceData, error: attendanceError } = await supabase
+      .from("attendance")
+      .select("*")
+      .in("rsvp_id", rsvpIds);
 
     if (attendanceError) {
       setMessage(attendanceError.message);
@@ -195,22 +186,21 @@ export function useProvincialDashboard() {
     const totalEvents = events.length;
 
     const upcomingEvents = events.filter(
-      (event) => getEventStatus(event, now) === "upcoming"
+      (event) => getEventStatus(event, now) === "upcoming",
     ).length;
 
     const uniqueMunicipalities = new Set(
       eventMunicipalities
         .map((item) => item.municipality?.trim().toLowerCase())
-        .filter(
-          (municipality): municipality is string =>
-            Boolean(municipality)
-        )
+        .filter((municipality): municipality is string =>
+          Boolean(municipality),
+        ),
     );
 
     const preparedMunicipalities = eventMunicipalities.filter((item) => {
       const status = String(item.status || "").toLowerCase();
       const registrationStatus = String(
-        item.registration_status || ""
+        item.registration_status || "",
       ).toLowerCase();
 
       return (
@@ -224,20 +214,16 @@ export function useProvincialDashboard() {
     const openRegistrations = eventMunicipalities.filter((item) => {
       const status = String(item.status || "").toLowerCase();
       const registrationStatus = String(
-        item.registration_status || ""
+        item.registration_status || "",
       ).toLowerCase();
 
-      return (
-        status === "registration_open" ||
-        registrationStatus === "open"
-      );
+      return status === "registration_open" || registrationStatus === "open";
     }).length;
 
     const totalRegistrations = rsvps.length;
 
     const presentAttendance = attendance.filter(
-      (record) =>
-        String(record.status || "").toLowerCase() === "present"
+      (record) => String(record.status || "").toLowerCase() === "present",
     ).length;
 
     const attendanceRate =

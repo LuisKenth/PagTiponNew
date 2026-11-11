@@ -1,14 +1,16 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
+
 import ProvincialPageHeader, {
   provincialHeaderButton,
   provincialHeaderPrimaryButton,
 } from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 import { FileText as ProvincialHeaderIcon } from "lucide-react";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type EventMemo = {
   id: string;
@@ -25,9 +27,14 @@ export default function MemoViewerPage() {
   const [event, setEvent] = useState<EventMemo | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [liveRevision, setLiveRevision] = useState(0);
+  useLiveData({
+    onUpdate: () => setLiveRevision((v) => v + 1),
+    disabled: loading,
+  });
   useEffect(() => {
     const fetchMemo = async () => {
-      setLoading(true);
+      if (liveRevision === 0) setLoading(true);
 
       const { data, error } = await supabase
         .from("events")
@@ -50,7 +57,7 @@ export default function MemoViewerPage() {
     if (eventId) {
       fetchMemo();
     }
-  }, [eventId]);
+  }, [eventId, liveRevision]);
 
   const getFileExtension = () => {
     const filename = event?.memo_filename?.toLowerCase() || "";

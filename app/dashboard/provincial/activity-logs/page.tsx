@@ -1,7 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
-import { History, Loader2, RefreshCw, Search } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 import {
   ACTIVITY_ACTIONS,
   ACTIVITY_CATEGORIES,
@@ -9,9 +7,10 @@ import {
   type ActivityEntry,
   type ActivityResult,
 } from "@/lib/provincialActivity";
-import ProvincialPageHeader, {
-  provincialHeaderButton,
-} from "../components/ProvincialPageHeader";
+import { supabase } from "@/lib/supabase";
+import { History, Loader2, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import ProvincialPageHeader from "../components/ProvincialPageHeader";
 const defaults = {
   q: "",
   category: "all",
@@ -188,18 +187,13 @@ export default function ProvincialActivityLogsPage() {
         title="Activity Logs"
         description="Review who managed Municipal Admin accounts, events, and official memos."
         actions={
-          <button
-            type="button"
-            className={provincialHeaderButton}
-            disabled={loading}
-            onClick={() => {
+          <BackgroundDataSync
+            onUpdate={() => {
               setLoading(true);
               setRevision((value) => value + 1);
             }}
-          >
-            <RefreshCw size={17} className={loading ? "animate-spin" : ""} />{" "}
-            Refresh Logs
-          </button>
+            disabled={loading}
+          />
         }
       />
       <section
@@ -332,7 +326,8 @@ export default function ProvincialActivityLogsPage() {
           </div>
         ) : error ? (
           <p className="p-10 text-center text-sm text-slate-500">
-            Activity logs could not be loaded. Use Refresh Logs to retry.
+            Activity logs could not be loaded. Automatic updates will retry when
+            connected.
           </p>
         ) : result.entries.length === 0 ? (
           <div className="p-10 text-center">

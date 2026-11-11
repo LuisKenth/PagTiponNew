@@ -1,7 +1,6 @@
-import { BarChart3, RefreshCw } from "lucide-react";
-import ProvincialPageHeader, {
-  provincialHeaderButton,
-} from "../../components/ProvincialPageHeader";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import { BarChart3 } from "lucide-react";
+import ProvincialPageHeader from "../../components/ProvincialPageHeader";
 type ReportsHeaderProps = { loading: boolean; onRefresh: () => void };
 export default function ReportsHeader({
   loading,
@@ -13,20 +12,7 @@ export default function ReportsHeader({
       eyebrow="Reports & Analytics"
       title="Reports"
       description="Review event summaries, municipality participation, and participant attendance."
-      actions={
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={loading}
-          className={provincialHeaderButton}
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-          />
-          {loading ? "Refreshing..." : "Refresh Reports"}
-        </button>
-      }
+      actions={<BackgroundDataSync onUpdate={onRefresh} disabled={loading} />}
     />
   );
 }

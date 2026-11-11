@@ -20,6 +20,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { signupParticipant } from "@/lib/accountAuth";
+import { MUNICIPALITIES } from "@/lib/municipalities";
 import {
   normalizeMobileNumber,
   MOBILE_NUMBER_MESSAGE,
@@ -33,26 +34,7 @@ import {
   type NameField,
 } from "@/lib/participantName";
 
-const municipalities = [
-  "Anini-y",
-  "Barbaza",
-  "Belison",
-  "Bugasong",
-  "Caluya",
-  "Culasi",
-  "Hamtic",
-  "Laua-an",
-  "Libertad",
-  "Pandan",
-  "Patnongon",
-  "San Jose de Buenavista",
-  "San Remigio",
-  "Sebaste",
-  "Sibalom",
-  "Tibiao",
-  "Tobias Fornier",
-  "Valderrama",
-];
+const municipalities = [...MUNICIPALITIES];
 
 const categories = [
   { value: "farmer", label: "Farmer" },

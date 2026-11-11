@@ -1,11 +1,7 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
@@ -27,73 +23,61 @@ function notifySidebarAboutChanges() {
     return;
   }
 
-  window.dispatchEvent(
-    new Event(NOTIFICATION_UPDATE_EVENT),
-  );
+  window.dispatchEvent(new Event(NOTIFICATION_UPDATE_EVENT));
 }
 
 export function useProvincialNotifications() {
   const router = useRouter();
 
-  const [notifications, setNotifications] = useState<
-    ProvincialNotification[]
-  >([]);
-  const [activeFilter, setActiveFilter] =
-    useState<NotificationFilter>("all");
+  const [notifications, setNotifications] = useState<ProvincialNotification[]>(
+    [],
+  );
+  const [activeFilter, setActiveFilter] = useState<NotificationFilter>("all");
 
-  const [currentUserId, setCurrentUserId] =
-    useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
 
-  const [updatingId, setUpdatingId] =
-    useState<NotificationId | null>(null);
+  const [updatingId, setUpdatingId] = useState<NotificationId | null>(null);
 
-  const [deletingId, setDeletingId] =
-    useState<NotificationId | null>(null);
+  const [deletingId, setDeletingId] = useState<NotificationId | null>(null);
 
   const [error, setError] = useState("");
 
-  const fetchNotifications = useCallback(
-    async (showRefreshLoader = false) => {
-      try {
-        setError("");
+  const fetchNotifications = useCallback(async (showRefreshLoader = false) => {
+    try {
+      setError("");
 
-        if (showRefreshLoader) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+      if (showRefreshLoader) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-        if (userError) {
-          throw userError;
-        }
+      if (userError) {
+        throw userError;
+      }
 
-        if (!user) {
-          setCurrentUserId(null);
-          setNotifications([]);
-          setError(
-            "No signed-in provincial administrator was found.",
-          );
-          return;
-        }
+      if (!user) {
+        setCurrentUserId(null);
+        setNotifications([]);
+        setError("No signed-in provincial administrator was found.");
+        return;
+      }
 
-        setCurrentUserId(user.id);
+      setCurrentUserId(user.id);
 
-        const {
-          data,
-          error: notificationError,
-        } = await supabase
-          .from("notifications")
-          .select(
-            `
+      const { data, error: notificationError } = await supabase
+        .from("notifications")
+        .select(
+          `
               id,
               user_id,
               type,
@@ -102,137 +86,85 @@ export function useProvincialNotifications() {
               event_id,
               created_at
             `,
-          )
-          .eq("user_id", user.id)
-          .order("created_at", {
-            ascending: false,
-          });
+        )
+        .eq("user_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        });
 
-        if (notificationError) {
-          throw notificationError;
-        }
+      if (notificationError) {
+        throw notificationError;
+      }
 
-        const notificationRows =
-          (data as NotificationRecord[] | null) ?? [];
+      const notificationRows = (data as NotificationRecord[] | null) ?? [];
 
-        const eventIds = Array.from(
-          new Set(
-            notificationRows
-              .map(
-                (notification) =>
-                  notification.event_id,
-              )
-              .filter(
-                (eventId): eventId is number =>
-                  typeof eventId === "number",
-              ),
-          ),
-        );
+      const eventIds = Array.from(
+        new Set(
+          notificationRows
+            .map((notification) => notification.event_id)
+            .filter(
+              (eventId): eventId is number => typeof eventId === "number",
+            ),
+        ),
+      );
 
-        const eventTitleMap = new Map<number, string>();
+      const eventTitleMap = new Map<number, string>();
 
-        if (eventIds.length > 0) {
-          const {
-            data: eventData,
-            error: eventError,
-          } = await supabase
-            .from("events")
-            .select("id, title")
-            .in("id", eventIds);
+      if (eventIds.length > 0) {
+        const { data: eventData, error: eventError } = await supabase
+          .from("events")
+          .select("id, title")
+          .in("id", eventIds);
 
-          if (eventError) {
-            console.error(
-              "Unable to load event titles:",
-              eventError.message,
-            );
-          } else {
-            for (const event of eventData ?? []) {
-              eventTitleMap.set(
-                event.id,
-                event.title,
-              );
-            }
+        if (eventError) {
+          console.error("Unable to load event titles:", eventError.message);
+        } else {
+          for (const event of eventData ?? []) {
+            eventTitleMap.set(event.id, event.title);
           }
         }
-
-        const notificationsWithTitles =
-          notificationRows.map((notification) => ({
-            ...notification,
-            eventTitle: notification.event_id
-              ? eventTitleMap.get(
-                  notification.event_id,
-                ) ?? null
-              : null,
-          }));
-
-        setNotifications(notificationsWithTitles);
-      } catch (fetchError) {
-        const message =
-          fetchError instanceof Error
-            ? fetchError.message
-            : "Unable to load notifications.";
-
-        console.error(
-          "Notification fetch error:",
-          fetchError,
-        );
-
-        setNotifications([]);
-        setError(message);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
       }
-    },
-    [],
-  );
+
+      const notificationsWithTitles = notificationRows.map((notification) => ({
+        ...notification,
+        eventTitle: notification.event_id
+          ? (eventTitleMap.get(notification.event_id) ?? null)
+          : null,
+      }));
+
+      setNotifications(notificationsWithTitles);
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Unable to load notifications.";
+
+      console.error("Notification fetch error:", fetchError);
+
+      setNotifications([]);
+      setError(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     void fetchNotifications();
   }, [fetchNotifications]);
 
-  useEffect(() => {
-    if (!currentUserId) {
-      return;
-    }
-
-    const notificationChannel = supabase
-      .channel(
-        `provincial-notifications-${currentUserId}`,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${currentUserId}`,
-        },
-        () => {
-          void fetchNotifications(true);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(
-        notificationChannel,
-      );
-    };
-  }, [currentUserId, fetchNotifications]);
+  useLiveData({
+    onUpdate: () => fetchNotifications(true),
+    disabled: loading || refreshing || !currentUserId,
+  });
 
   const unreadCount = useMemo(() => {
-    return notifications.filter(
-      (notification) => !notification.read,
-    ).length;
+    return notifications.filter((notification) => !notification.read).length;
   }, [notifications]);
 
   const filteredNotifications = useMemo(() => {
     return notifications.filter((notification) =>
-      matchesNotificationFilter(
-        notification,
-        activeFilter,
-      ),
+      matchesNotificationFilter(notification, activeFilter),
     );
   }, [activeFilter, notifications]);
 
@@ -281,10 +213,7 @@ export function useProvincialNotifications() {
             ? updateError.message
             : "Unable to mark the notification as read.";
 
-        console.error(
-          "Mark notification as read error:",
-          updateError,
-        );
+        console.error("Mark notification as read error:", updateError);
 
         setError(message);
 
@@ -331,10 +260,7 @@ export function useProvincialNotifications() {
           ? updateError.message
           : "Unable to mark all notifications as read.";
 
-      console.error(
-        "Mark all notifications error:",
-        updateError,
-      );
+      console.error("Mark all notifications error:", updateError);
 
       setError(message);
     } finally {
@@ -367,8 +293,7 @@ export function useProvincialNotifications() {
 
         setNotifications((currentNotifications) =>
           currentNotifications.filter(
-            (notification) =>
-              notification.id !== notificationId,
+            (notification) => notification.id !== notificationId,
           ),
         );
 
@@ -379,10 +304,7 @@ export function useProvincialNotifications() {
             ? deleteError.message
             : "Unable to delete the notification.";
 
-        console.error(
-          "Delete notification error:",
-          deleteError,
-        );
+        console.error("Delete notification error:", deleteError);
 
         setError(message);
       } finally {
@@ -393,19 +315,14 @@ export function useProvincialNotifications() {
   );
 
   const openNotification = useCallback(
-    async (
-      notification: ProvincialNotification,
-    ) => {
-      const wasMarkedAsRead = await markAsRead(
-        notification.id,
-      );
+    async (notification: ProvincialNotification) => {
+      const wasMarkedAsRead = await markAsRead(notification.id);
 
       if (!wasMarkedAsRead) {
         return;
       }
 
-      const notificationLink =
-        getNotificationLink(notification);
+      const notificationLink = getNotificationLink(notification);
 
       if (notificationLink) {
         router.push(notificationLink);
@@ -426,8 +343,7 @@ export function useProvincialNotifications() {
     updatingId,
     deletingId,
     error,
-    refreshNotifications: () =>
-      fetchNotifications(true),
+    refreshNotifications: () => fetchNotifications(true),
     markAsRead,
     markAllAsRead,
     deleteNotification,

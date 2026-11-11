@@ -1,9 +1,8 @@
 "use client";
 
-import { Bell, CheckCheck, Loader2, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, Loader2 } from "lucide-react";
 
 import ProvincialPageHeader, {
-  provincialHeaderButton,
   provincialHeaderPrimaryButton,
 } from "../../components/ProvincialPageHeader";
 
@@ -30,18 +29,7 @@ export default function NotificationsHeader({
       description="Review event notices, municipal preparation updates, official memos, and other system notifications."
       actions={
         <>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            className={provincialHeaderButton}
-          >
-            <RefreshCw
-              aria-hidden="true"
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </button>
+          {null}
           <button
             type="button"
             onClick={onMarkAllAsRead}

@@ -1,4 +1,6 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
+
 import ProvincialPageHeader from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 import { FileText as ProvincialHeaderIcon } from "lucide-react";
 
@@ -8,11 +10,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
-import MemoSummaryCards from "./components/MemoSummaryCards";
+import EventsWithoutMemo from "./components/EventsWithoutMemo";
 import MemoSearch from "./components/MemoSearch";
 import MemoSort, { type MemoSortValue } from "./components/MemoSort";
+import MemoSummaryCards from "./components/MemoSummaryCards";
 import MemoTable from "./components/MemoTable";
-import EventsWithoutMemo from "./components/EventsWithoutMemo";
 
 import type { EventRow, MemoEvent, MunicipalityRow } from "./types";
 
@@ -36,8 +38,8 @@ export default function OfficialMemosPage() {
   /*
    * FETCH MEMOS
    */
-  const fetchMemos = async () => {
-    setLoading(true);
+  const fetchMemos = async (silent = false) => {
+    if (!silent) setLoading(true);
 
     try {
       const { data: eventData, error: eventError } = await supabase
@@ -101,6 +103,7 @@ export default function OfficialMemosPage() {
     }
   };
 
+  useLiveData({ onUpdate: () => fetchMemos(true), disabled: loading });
   useEffect(() => {
     fetchMemos();
   }, []);

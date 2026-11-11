@@ -1,17 +1,18 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 
-import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { currentProof, proofLabel } from "@/lib/verificationStatus";
 import {
   AlertCircle,
   CheckCircle2,
   FileText,
   Loader2,
-  RefreshCw,
   ShieldCheck,
   X,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { proofLabel, currentProof } from "@/lib/verificationStatus";
+import { useEffect, useState } from "react";
 
 type Status = "pending" | "approved" | "rejected";
 type Filter = Status | "all";
@@ -138,7 +139,7 @@ export default function MunicipalParticipantVerificationsPage() {
           !admin.municipality
         ) {
           throw new Error(
-            "Only approved Municipal Admins can access this page."
+            "Only approved Municipal Admins can access this page.",
           );
         }
 
@@ -146,12 +147,15 @@ export default function MunicipalParticipantVerificationsPage() {
           .from("participant_verifications")
           .select(
             "id, participant_id, verification_type, municipality, participant_category, participant_category_other, document_type, document_path, invalidated_at, invalidation_reason, withdrawn_at, document_deleted_at, status, rejection_reason, submitted_at, reviewed_at",
-            { count: "exact" }
+            { count: "exact" },
           )
           .eq("municipality", admin.municipality);
 
         if (filter !== "all") {
-          query = query.eq("status", filter).is("invalidated_at", null).is("withdrawn_at", null);
+          query = query
+            .eq("status", filter)
+            .is("invalidated_at", null)
+            .is("withdrawn_at", null);
         }
 
         const from = (page - 1) * PAGE_SIZE;
@@ -185,7 +189,7 @@ export default function MunicipalParticipantVerificationsPage() {
           participants.map((participant) => [
             participant.id,
             participant.full_name,
-          ])
+          ]),
         );
 
         if (cancelled) return;
@@ -197,13 +201,10 @@ export default function MunicipalParticipantVerificationsPage() {
             ...row,
             participant_name:
               names.get(row.participant_id) || "Name unavailable",
-          }))
+          })),
         );
 
-        const lastPage = Math.max(
-          1,
-          Math.ceil((count || 0) / PAGE_SIZE)
-        );
+        const lastPage = Math.max(1, Math.ceil((count || 0) / PAGE_SIZE));
 
         if (page > lastPage) {
           setPage(lastPage);
@@ -214,7 +215,7 @@ export default function MunicipalParticipantVerificationsPage() {
         setItems([]);
         setTotal(0);
         setErrorMessage(
-          errorText(error, "Unable to load participant submissions.")
+          errorText(error, "Unable to load participant submissions."),
         );
       } finally {
         if (!cancelled) setLoading(false);
@@ -256,7 +257,7 @@ export default function MunicipalParticipantVerificationsPage() {
 
     if (!documentWindow) {
       setErrorMessage(
-        "Please allow pop-ups for this site to view the document."
+        "Please allow pop-ups for this site to view the document.",
       );
       return;
     }
@@ -284,10 +285,7 @@ export default function MunicipalParticipantVerificationsPage() {
     }
   }
 
-  function startReview(
-    item: ReviewItem,
-    decision: "approved" | "rejected"
-  ) {
+  function startReview(item: ReviewItem, decision: "approved" | "rejected") {
     setRejectionReason("");
     setReviewError(null);
     setReviewAction({ item, decision });
@@ -296,10 +294,7 @@ export default function MunicipalParticipantVerificationsPage() {
   async function saveReview() {
     if (!reviewAction || saving) return;
 
-    if (
-      reviewAction.decision === "rejected" &&
-      !rejectionReason.trim()
-    ) {
+    if (reviewAction.decision === "rejected" && !rejectionReason.trim()) {
       setReviewError("Please provide a rejection reason.");
       return;
     }
@@ -310,30 +305,25 @@ export default function MunicipalParticipantVerificationsPage() {
     setSuccessMessage(null);
 
     try {
-      const { error } = await supabase.rpc(
-        "review_participant_verification",
-        {
-          p_submission_id: reviewAction.item.id,
-          p_decision: reviewAction.decision,
-          p_rejection_reason:
-            reviewAction.decision === "rejected"
-              ? rejectionReason.trim()
-              : null,
-        }
-      );
+      const { error } = await supabase.rpc("review_participant_verification", {
+        p_submission_id: reviewAction.item.id,
+        p_decision: reviewAction.decision,
+        p_rejection_reason:
+          reviewAction.decision === "rejected" ? rejectionReason.trim() : null,
+      });
 
       if (error) throw error;
 
       setSuccessMessage(
         `Submission ${
           reviewAction.decision === "approved" ? "approved" : "rejected"
-        } successfully.`
+        } successfully.`,
       );
       setReviewAction(null);
       setRefreshKey((current) => current + 1);
     } catch (error) {
       setReviewError(
-        errorText(error, "Unable to save the review. Please try again.")
+        errorText(error, "Unable to save the review. Please try again."),
       );
     } finally {
       setSaving(false);
@@ -343,48 +333,24 @@ export default function MunicipalParticipantVerificationsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="mb-3 flex items-center gap-2 text-emerald-700">
-              <ShieldCheck className="h-6 w-6" aria-hidden="true" />
-              <span className="text-xs font-bold uppercase tracking-widest">
-                Municipal Administration
-              </span>
-            </div>
-
-            <h1 className="text-2xl font-bold text-slate-950">
-              Participant Verification
-            </h1>
-
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Review residency and category documents
-              {municipality ? ` for ${municipality}` : ""}.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setRefreshKey((current) => current + 1)}
+    <main className="min-w-0 space-y-6 pb-6">
+      <MunicipalPageHeader
+        icon={<ShieldCheck className="h-6 w-6" />}
+        title="Participant Verification"
+        description={
+          <>
+            Review residency and category documents
+            {municipality ? ` for ${municipality}` : ""}.
+          </>
+        }
+        actions={
+          <BackgroundDataSync
+            onUpdate={() => setRefreshKey((current) => current + 1)}
             disabled={loading || saving}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
-            Refresh
-          </button>
-        </div>
-
-        <p className="mt-4 rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600">
-          For residency, compare the document name and address with the
-          participant details. For category, check that the document supports
-          the category shown on the submission. Review each requirement
-          separately.
-        </p>
-      </section>
+          />
+        }
+        footer="For residency, compare the document name and address with participant details. For category, check that the document supports the declared category. Review each requirement separately."
+      />
 
       {errorMessage && (
         <div
@@ -408,9 +374,7 @@ export default function MunicipalParticipantVerificationsPage() {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-lg font-bold text-slate-950">
-            Submissions
-          </h2>
+          <h2 className="text-lg font-bold text-slate-950">Submissions</h2>
 
           <div>
             <label htmlFor="status-filter" className="sr-only">
@@ -467,7 +431,9 @@ export default function MunicipalParticipantVerificationsPage() {
 
                   <span
                     className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                      (currentProof(item) ? statusStyles[item.status] : "border-slate-200 bg-slate-50 text-slate-600")
+                      currentProof(item)
+                        ? statusStyles[item.status]
+                        : "border-slate-200 bg-slate-50 text-slate-600"
                     }`}
                   >
                     {proofLabel(item)}
@@ -497,9 +463,8 @@ export default function MunicipalParticipantVerificationsPage() {
                       <dd className="mt-1 font-medium text-slate-800">
                         {item.participant_category === "others"
                           ? item.participant_category_other || "Others"
-                          : categoryLabels[
-                              item.participant_category || ""
-                            ] || "Not specified"}
+                          : categoryLabels[item.participant_category || ""] ||
+                            "Not specified"}
                       </dd>
                     </div>
                   )}
@@ -527,7 +492,11 @@ export default function MunicipalParticipantVerificationsPage() {
                   <button
                     type="button"
                     onClick={() => void openDocument(item)}
-                    disabled={Boolean(openingId) || saving || Boolean(item.document_deleted_at)}
+                    disabled={
+                      Boolean(openingId) ||
+                      saving ||
+                      Boolean(item.document_deleted_at)
+                    }
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >
                     {openingId === item.id ? (
@@ -538,7 +507,9 @@ export default function MunicipalParticipantVerificationsPage() {
                     ) : (
                       <FileText className="h-4 w-4" aria-hidden="true" />
                     )}
-                    {item.document_deleted_at ? "Document Removed" : "View Document"}
+                    {item.document_deleted_at
+                      ? "Document Removed"
+                      : "View Document"}
                   </button>
 
                   {item.status === "pending" && currentProof(item) && (
@@ -642,8 +613,8 @@ export default function MunicipalParticipantVerificationsPage() {
 
             {reviewAction.decision === "approved" ? (
               <p className="mt-4 text-sm leading-6 text-slate-700">
-                Confirm that you reviewed the document and that it supports
-                this verification requirement.
+                Confirm that you reviewed the document and that it supports this
+                verification requirement.
               </p>
             ) : (
               <div className="mt-4">

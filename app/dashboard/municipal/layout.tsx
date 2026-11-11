@@ -1,4 +1,5 @@
 "use client";
+import { EventStaffFlowProvider } from "./components/EventStaffFlow";
 import type { ReactNode } from "react";
 import { useDashboardAccess } from "@/app/components/useDashboardAccess";
 import AccountAccessNotice from "@/app/components/AccountAccessNotice";
@@ -16,12 +17,14 @@ export default function Layout({ children }: { children: ReactNode }) {
     );
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <EventStaffFlowProvider>
       <MunicipalSidebar />
       <div className="min-w-0">
         <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 xl:p-10">
           {children}
         </main>
       </div>
+      </EventStaffFlowProvider>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
+import { offerEventStaff } from "../components/EventStaffFlow";
 import type { MunicipalDeliveryToastData } from "../components/MunicipalDeliveryToast";
 
 import type {
@@ -318,9 +320,11 @@ export default function useMunicipalDashboard() {
   /*
    * FETCH MUNICIPAL DASHBOARD DATA
    */
-  const fetchReceivedEvents = useCallback(async () => {
-    setLoading(true);
-    setVenuesLoading(true);
+  const fetchReceivedEvents = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setVenuesLoading(true);
+    }
 
     try {
       const {
@@ -640,6 +644,10 @@ export default function useMunicipalDashboard() {
     }
   }, []);
 
+  useLiveData({
+    onUpdate: () => fetchReceivedEvents(true),
+    disabled: loading || savingPreparation,
+  });
   useEffect(() => {
     void fetchReceivedEvents();
   }, [fetchReceivedEvents]);
@@ -1237,6 +1245,14 @@ export default function useMunicipalDashboard() {
       closePrepareModal();
 
       await fetchReceivedEvents();
+
+      if (savedStatus === "prepared") {
+        offerEventStaff({
+          assignmentId: selectedEvent.id,
+          title: selectedEvent.event?.title || "Prepared event",
+          prompt: true,
+        });
+      }
 
       /*
        * SUCCESS MESSAGE

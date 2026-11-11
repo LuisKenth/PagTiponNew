@@ -17,7 +17,7 @@ export default function MunicipalDashboardHeader({
     municipality || "Your Municipality";
 
   return (
-    <header className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <header className="relative overflow-hidden rounded-2xl border border-slate-200 border-t-4 border-t-indigo-600 bg-white shadow-sm">
       {/* Decorative background */}
       <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-slate-100" />
 

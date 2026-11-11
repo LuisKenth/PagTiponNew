@@ -1,4 +1,5 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -31,13 +32,17 @@ export default function useMunicipalityDetails(municipalitySlug: string) {
     );
   }, [municipalitySlug]);
 
+  useLiveData({
+    onUpdate: () => setRevision((v) => v + 1),
+    disabled: loading || !municipalityName,
+  });
   useEffect(() => {
     let cancelled = false;
 
     const fetchMunicipalityDetails = async () => {
-      setLoading(true);
+      if (revision === 0) setLoading(true);
       setErrorMessage(null);
-      setData(null);
+      if (revision === 0) setData(null);
 
       if (!municipalityName) {
         setErrorMessage("Municipality not found.");

@@ -1,4 +1,6 @@
+
 "use client";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -41,10 +43,18 @@ type AttendanceTableProps = {
 
 const PARTICIPANTS_PER_PAGE = 5;
 
+// Time-Out will display once the municipal attendance RPC
+// returns checked_out_at for each attendance record.
+type AttendanceWithTimeOut = MunicipalAttendanceRecord & {
+  checked_out_at?: string | null;
+};
+
+function getTimeOut(record: MunicipalAttendanceRecord): string | null {
+  return (record as AttendanceWithTimeOut).checked_out_at ?? null;
+}
+
 function normalizeValue(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function formatEventSchedule(
@@ -54,14 +64,18 @@ function formatEventSchedule(
   if (!startValue) return "Event schedule unavailable";
 
   const start = new Date(startValue);
+
   if (Number.isNaN(start.getTime())) {
     return "Event schedule unavailable";
   }
 
   const dateFormatter = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
     dateStyle: "medium",
   });
+
   const timeFormatter = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
     timeStyle: "short",
   });
 
@@ -71,13 +85,14 @@ function formatEventSchedule(
   if (!endValue) return `${date} · ${startTime}`;
 
   const end = new Date(endValue);
+
   if (Number.isNaN(end.getTime())) {
     return `${date} · ${startTime}`;
   }
 
   const endTime = timeFormatter.format(end);
 
-  return start.toDateString() === end.toDateString()
+  return dateFormatter.format(start) === dateFormatter.format(end)
     ? `${date} · ${startTime}–${endTime}`
     : `${date} ${startTime} – ${dateFormatter.format(end)} ${endTime}`;
 }
@@ -136,9 +151,7 @@ function getEventStatusClasses(status: string) {
 function getEventStatusLabel(status: string) {
   const normalized = normalizeValue(status);
 
-  if (!normalized) {
-    return "Unknown";
-  }
+  if (!normalized) return "Unknown";
 
   return normalized
     .split("_")
@@ -152,35 +165,24 @@ export default function AttendanceTable({
   errorMessage,
 }: AttendanceTableProps) {
   const router = useRouter();
+
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(
     new Set(),
   );
 
-  /*
-   * Each event keeps its own participant
-   * pagination state.
-   */
   const [participantPageByEvent, setParticipantPageByEvent] = useState<
     Record<string, number>
   >({});
 
-  /*
-   * Automatically expand an event when the
-   * current filters return only one event.
-   *
-   * Previously expanded events remain expanded
-   * as long as they are still visible.
-   */
+  // Preserve expanded events when data refreshes.
   useEffect(() => {
     setExpandedEventIds((previousIds) => {
       const visibleEventIds = new Set(
-        eventGroups.map((eventGroup) => eventGroup.eventMunicipalityId),
+        eventGroups.map((group) => group.eventMunicipalityId),
       );
 
       const nextIds = new Set(
-        Array.from(previousIds).filter((eventId) =>
-          visibleEventIds.has(eventId),
-        ),
+        Array.from(previousIds).filter((id) => visibleEventIds.has(id)),
       );
 
       if (eventGroups.length === 1) {
@@ -188,7 +190,6 @@ export default function AttendanceTable({
       }
 
       const previousValues = Array.from(previousIds).sort();
-
       const nextValues = Array.from(nextIds).sort();
 
       const unchanged =
@@ -199,63 +200,50 @@ export default function AttendanceTable({
     });
   }, [eventGroups]);
 
-  /*
-   * Keep every event participant page valid
-   * when filters or attendance records change.
-   */
+  // Keep pagination valid when records change.
   useEffect(() => {
     setParticipantPageByEvent((previousPages) => {
       const nextPages: Record<string, number> = {};
 
-      eventGroups.forEach((eventGroup) => {
-        const totalParticipantPages = Math.max(
+      eventGroups.forEach((group) => {
+        const pages = Math.max(
           1,
-          Math.ceil(eventGroup.records.length / PARTICIPANTS_PER_PAGE),
+          Math.ceil(group.records.length / PARTICIPANTS_PER_PAGE),
         );
 
-        const previousPage = previousPages[eventGroup.eventMunicipalityId] ?? 1;
+        const previousPage =
+          previousPages[group.eventMunicipalityId] ?? 1;
 
-        nextPages[eventGroup.eventMunicipalityId] = Math.min(
+        nextPages[group.eventMunicipalityId] = Math.min(
           Math.max(previousPage, 1),
-          totalParticipantPages,
+          pages,
         );
       });
 
       const previousKeys = Object.keys(previousPages).sort();
-
       const nextKeys = Object.keys(nextPages).sort();
 
       const unchanged =
         previousKeys.length === nextKeys.length &&
         previousKeys.every(
           (key, index) =>
-            key === nextKeys[index] && previousPages[key] === nextPages[key],
+            key === nextKeys[index] &&
+            previousPages[key] === nextPages[key],
         );
 
       return unchanged ? previousPages : nextPages;
     });
   }, [eventGroups]);
 
-  function toggleEvent(eventMunicipalityId: string) {
-    setExpandedEventIds((previousIds) => {
-      const nextIds = new Set(previousIds);
-
-      if (nextIds.has(eventMunicipalityId)) {
-        nextIds.delete(eventMunicipalityId);
-      } else {
-        nextIds.add(eventMunicipalityId);
-      }
-
-      return nextIds;
-    });
-  }
-
   function changeParticipantPage(
     eventMunicipalityId: string,
     requestedPage: number,
     totalPages: number,
   ) {
-    const validPage = Math.min(Math.max(requestedPage, 1), totalPages);
+    const validPage = Math.min(
+      Math.max(requestedPage, 1),
+      totalPages,
+    );
 
     setParticipantPageByEvent((previousPages) => ({
       ...previousPages,
@@ -320,18 +308,18 @@ export default function AttendanceTable({
   return (
     <div className="space-y-4 bg-slate-50/60 p-4 sm:p-5">
       {eventGroups.map((eventGroup) => {
-        const expanded = expandedEventIds.has(eventGroup.eventMunicipalityId);
+        const expanded = expandedEventIds.has(
+          eventGroup.eventMunicipalityId,
+        );
 
         const isCancelled =
           normalizeValue(eventGroup.eventStatus) === "cancelled";
 
-        /*
-         * Participant-level pagination for
-         * this particular event.
-         */
         const totalParticipantPages = Math.max(
           1,
-          Math.ceil(eventGroup.records.length / PARTICIPANTS_PER_PAGE),
+          Math.ceil(
+            eventGroup.records.length / PARTICIPANTS_PER_PAGE,
+          ),
         );
 
         const participantPage = Math.min(
@@ -348,7 +336,9 @@ export default function AttendanceTable({
         );
 
         const firstVisibleParticipant =
-          eventGroup.records.length === 0 ? 0 : participantStartIndex + 1;
+          eventGroup.records.length === 0
+            ? 0
+            : participantStartIndex + 1;
 
         const lastVisibleParticipant = Math.min(
           participantStartIndex + PARTICIPANTS_PER_PAGE,
@@ -402,6 +392,7 @@ export default function AttendanceTable({
                   >
                     {eventGroup.eventTitle}
                   </h3>
+
                   <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
                     <Clock3 className="h-4 w-4 shrink-0" />
                     {formatEventSchedule(
@@ -409,6 +400,7 @@ export default function AttendanceTable({
                       eventGroup.eventEndDate,
                     )}
                   </p>
+
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getEventStatusClasses(
@@ -420,6 +412,7 @@ export default function AttendanceTable({
 
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                       <UsersRound className="h-3.5 w-3.5" />
+
                       {eventGroup.registeredCount}{" "}
                       {eventGroup.registeredCount === 1
                         ? "participant"
@@ -499,6 +492,7 @@ export default function AttendanceTable({
                           "Attendance",
                           "Method",
                           "Time In",
+                          "Time Out",
                           "Checked In By",
                         ].map((heading) => (
                           <th
@@ -529,7 +523,7 @@ export default function AttendanceTable({
                                   {record.participant_name}
                                 </p>
 
-                                <p className="mt-1 text-sm text-slate-500">
+                                <p className="mt-1 break-all text-sm text-slate-500">
                                   {record.participant_email}
                                 </p>
 
@@ -567,6 +561,10 @@ export default function AttendanceTable({
 
                           <td className="px-5 py-4 align-top text-sm text-slate-600">
                             {formatAttendanceDate(record.checked_in_at)}
+                          </td>
+
+                          <td className="px-5 py-4 align-top text-sm text-slate-600">
+                            {formatAttendanceDate(getTimeOut(record))}
                           </td>
 
                           <td className="px-5 py-4 align-top text-sm text-slate-600">
@@ -635,6 +633,16 @@ export default function AttendanceTable({
 
                               <dd className="mt-1 font-semibold text-slate-700">
                                 {formatAttendanceDate(record.checked_in_at)}
+                              </dd>
+                            </div>
+
+                            <div>
+                              <dt className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                                Time Out
+                              </dt>
+
+                              <dd className="mt-1 font-semibold text-slate-700">
+                                {formatAttendanceDate(getTimeOut(record))}
                               </dd>
                             </div>
 

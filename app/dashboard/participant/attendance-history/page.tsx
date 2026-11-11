@@ -1,4 +1,5 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import {
   CheckCircle2,
@@ -6,7 +7,6 @@ import {
   History,
   MapPin,
   QrCode,
-  RefreshCw,
   ScanLine,
   UserCheck,
   UserX,
@@ -486,36 +486,14 @@ export default function ParticipantAttendanceHistoryPage() {
     [],
   );
 
+  useLiveData({
+    onUpdate: () => {
+      return fetchAttendanceHistory("silent");
+    },
+    disabled: loading || refreshing,
+  });
   useEffect(() => {
     void fetchAttendanceHistory("initial");
-
-    const refreshSilently = () => {
-      void fetchAttendanceHistory("silent");
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshSilently();
-      }
-    };
-
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        refreshSilently();
-      }
-    }, 30000);
-
-    window.addEventListener("focus", refreshSilently);
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.clearInterval(intervalId);
-
-      window.removeEventListener("focus", refreshSilently);
-
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, [fetchAttendanceHistory]);
 
   /*
@@ -539,10 +517,15 @@ export default function ParticipantAttendanceHistoryPage() {
       total: attendanceHistory.length,
 
       present: attendanceHistory.filter(
-        (item) => ["present", "late"].includes(normalizeStatus(item.attendance.status)) && Boolean(item.attendance.checked_in_at),
+        (item) =>
+          ["present", "late"].includes(
+            normalizeStatus(item.attendance.status),
+          ) && Boolean(item.attendance.checked_in_at),
       ).length,
 
-      late: attendanceHistory.filter((item) => normalizeStatus(item.attendance.status) === "late").length,
+      late: attendanceHistory.filter(
+        (item) => normalizeStatus(item.attendance.status) === "late",
+      ).length,
 
       absent: attendanceHistory.filter(
         (item) => normalizeStatus(item.attendance.status) === "absent",
@@ -559,10 +542,13 @@ export default function ParticipantAttendanceHistoryPage() {
       return attendanceHistory;
     }
 
-    return attendanceHistory.filter((item) => activeFilter === "present"
-      ? ["present", "late"].includes(normalizeStatus(item.attendance.status)) && Boolean(item.attendance.checked_in_at)
-      : normalizeStatus(item.attendance.status) === activeFilter);
-
+    return attendanceHistory.filter((item) =>
+      activeFilter === "present"
+        ? ["present", "late"].includes(
+            normalizeStatus(item.attendance.status),
+          ) && Boolean(item.attendance.checked_in_at)
+        : normalizeStatus(item.attendance.status) === activeFilter,
+    );
   }, [activeFilter, attendanceHistory]);
 
   const totalPages = Math.max(
@@ -651,19 +637,7 @@ export default function ParticipantAttendanceHistoryPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void fetchAttendanceHistory("refresh")}
-              disabled={refreshing}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw
-                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </button>
+            {null}
           </div>
         </section>
 
@@ -691,7 +665,9 @@ export default function ParticipantAttendanceHistoryPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Present</p>
-                <p className="mt-1 text-xs text-slate-500">Includes late arrivals</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Includes late arrivals
+                </p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-950">
                   {attendanceCounts.present}
@@ -852,45 +828,110 @@ export default function ParticipantAttendanceHistoryPage() {
                   );
 
                   return (
-                    <article key={item.attendance.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <article
+                      key={item.attendance.id}
+                      className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                    >
                       <header className="p-5 sm:p-6">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(item.attendance.status)}`}>{getAttendanceStatusLabel(item.attendance.status)}</span>
-                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(effectiveEventStatus)}`}>{getEventStatusLabel(effectiveEventStatus)}</span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${getAttendanceStatusClasses(item.attendance.status)}`}
+                          >
+                            {getAttendanceStatusLabel(item.attendance.status)}
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${getEventStatusClasses(effectiveEventStatus)}`}
+                          >
+                            {getEventStatusLabel(effectiveEventStatus)}
+                          </span>
                         </div>
-                        <h3 className="mt-3 break-words text-xl font-bold text-slate-950">{item.event.title}</h3>
-                        <p className="mt-2 flex items-start gap-2 text-sm text-slate-600"><MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />{item.venue?.venue_name || "Venue not assigned"} · {item.assignment.municipality}</p>
-                        <p className="mt-2 text-sm text-slate-500">{formatDateTime(item.event.start_at)} – {formatDateTime(item.event.end_at)}</p>
+                        <h3 className="mt-3 break-words text-xl font-bold text-slate-950">
+                          {item.event.title}
+                        </h3>
+                        <p className="mt-2 flex items-start gap-2 text-sm text-slate-600">
+                          <MapPin
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          {item.venue?.venue_name || "Venue not assigned"} ·{" "}
+                          {item.assignment.municipality}
+                        </p>
+                        <p className="mt-2 text-sm text-slate-500">
+                          {formatDateTime(item.event.start_at)} –{" "}
+                          {formatDateTime(item.event.end_at)}
+                        </p>
                       </header>
                       <div className="grid gap-3 border-y border-slate-100 bg-slate-50 p-5 sm:grid-cols-3 sm:p-6">
                         <div className="rounded-xl border border-slate-200 bg-white p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time-in</p>
-                          <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(item.attendance.checked_in_at)}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Time-in
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">
+                            {formatDateTime(item.attendance.checked_in_at)}
+                          </p>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-white p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Time-out</p>
-                          <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(item.attendance.checked_out_at)}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Time-out
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">
+                            {formatDateTime(item.attendance.checked_out_at)}
+                          </p>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-white p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance method</p>
-                          <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-900"><MethodIcon className="h-4 w-4" aria-hidden="true" />{getCheckInMethodLabel(item.attendance.method)}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Attendance method
+                          </p>
+                          <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <MethodIcon
+                              className="h-4 w-4"
+                              aria-hidden="true"
+                            />
+                            {getCheckInMethodLabel(item.attendance.method)}
+                          </p>
                         </div>
                       </div>
                       <div className="p-5 sm:p-6">
-                        {["present", "late"].includes(attendanceStatus) && item.attendance.checked_in_at && (
-                          <p className="flex items-start gap-2 text-sm text-slate-700"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-                            {item.attendance.checked_out_at ? "Your Time-in and Time-out are recorded." : "Your Time-in is recorded. Your Time-out has not been recorded yet."}
+                        {["present", "late"].includes(attendanceStatus) &&
+                          item.attendance.checked_in_at && (
+                            <p className="flex items-start gap-2 text-sm text-slate-700">
+                              <CheckCircle2
+                                className="h-5 w-5 shrink-0 text-emerald-600"
+                                aria-hidden="true"
+                              />
+                              {item.attendance.checked_out_at
+                                ? "Your Time-in and Time-out are recorded."
+                                : "Your Time-in is recorded. Your Time-out has not been recorded yet."}
+                            </p>
+                          )}
+                        {attendanceStatus === "absent" && (
+                          <p className="text-sm text-red-700">
+                            No successful Time-in was recorded for this event.
                           </p>
                         )}
-                        {attendanceStatus === "absent" && <p className="text-sm text-red-700">No successful Time-in was recorded for this event.</p>}
-                        {attendanceStatus === "pending" && <p className="text-sm text-slate-600">Your attendance is awaiting Time-in or finalization.</p>}
+                        {attendanceStatus === "pending" && (
+                          <p className="text-sm text-slate-600">
+                            Your attendance is awaiting Time-in or finalization.
+                          </p>
+                        )}
                         <details className="mt-4 rounded-xl border border-slate-200 p-4">
-                          <summary className="cursor-pointer text-sm font-semibold text-slate-700">Event Details & Instructions</summary>
-                          <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{item.event.description || "No event description provided."}</p>
-                          {item.assignment.local_instructions && <div className="mt-4 rounded-lg bg-amber-50 p-4">
-                            <h4 className="text-sm font-semibold text-amber-900">Participant Instructions</h4>
-                            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900 [overflow-wrap:anywhere]">{item.assignment.local_instructions}</p>
-                          </div>}
+                          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                            Event Details & Instructions
+                          </summary>
+                          <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
+                            {item.event.description ||
+                              "No event description provided."}
+                          </p>
+                          {item.assignment.local_instructions && (
+                            <div className="mt-4 rounded-lg bg-amber-50 p-4">
+                              <h4 className="text-sm font-semibold text-amber-900">
+                                Participant Instructions
+                              </h4>
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-amber-900 [overflow-wrap:anywhere]">
+                                {item.assignment.local_instructions}
+                              </p>
+                            </div>
+                          )}
                         </details>
                       </div>
                     </article>

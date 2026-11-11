@@ -1,12 +1,14 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
+
 import ProvincialPageHeader, {
   provincialHeaderButton,
 } from "@/app/dashboard/provincial/components/ProvincialPageHeader";
 import { FileText as ProvincialHeaderIcon } from "lucide-react";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -118,8 +120,8 @@ export default function ProvincialEventDetailsPage() {
   /*
    * FETCH EVENT DETAILS
    */
-  const fetchEventDetails = async () => {
-    setLoading(true);
+  const fetchEventDetails = async (silent = false) => {
+    if (!silent) setLoading(true);
 
     /*
      * EVENT
@@ -150,6 +152,7 @@ export default function ProvincialEventDetailsPage() {
      * with the database.
      */
     if (
+      !silent &&
       automaticStatus !== eventData.status &&
       automaticStatus !== "draft" &&
       automaticStatus !== "cancelled"
@@ -224,6 +227,10 @@ export default function ProvincialEventDetailsPage() {
     setLoading(false);
   };
 
+  useLiveData({
+    onUpdate: () => fetchEventDetails(true),
+    disabled: loading || publishing || cancelling || deleting,
+  });
   useEffect(() => {
     if (eventId) {
       fetchEventDetails();

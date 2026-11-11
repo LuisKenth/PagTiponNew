@@ -1,3 +1,4 @@
+
 import type {
   MunicipalAttendanceRecord,
 } from "../types/municipalAttendance";
@@ -16,7 +17,13 @@ function escapeCsvValue(
     | null
     | undefined,
 ) {
-  const text = String(value ?? "");
+  let text = String(value ?? "");
+
+  // Prevent spreadsheet formula injection
+  // when opening exported CSV files.
+  if (/^\s*[=+\-@\t\r\n]/.test(text)) {
+    text = `'${text}`;
+  }
 
   return `"${text.replace(/"/g, '""')}"`;
 }
@@ -54,30 +61,37 @@ export function exportAttendanceCsv({
     "Attendance Status",
     "Time-in Method",
     "Time In",
+    "Time Out",
     "Checked In By",
     "Registration Status",
   ];
 
-  const rows = records.map(
-    (record) => [
-      record.participant_name,
-      record.participant_email,
-      record.participant_municipality ??
-        "",
-      record.event_title,
-      getAttendanceStatusLabel(
-        record.attendance_status,
-      ),
-      getAttendanceMethodLabel(
-        record.attendance_method,
-      ),
-      formatAttendanceDate(
-        record.checked_in_at,
-      ),
-      record.checked_in_by_name ?? "",
-      record.registration_status,
-    ],
-  );
+  const rows = records.map((record) => [
+    record.participant_name,
+    record.participant_email,
+    record.participant_municipality ?? "",
+    record.event_title,
+
+    getAttendanceStatusLabel(
+      record.attendance_status,
+    ),
+
+    getAttendanceMethodLabel(
+      record.attendance_method,
+    ),
+
+    record.checked_in_at
+      ? formatAttendanceDate(record.checked_in_at)
+      : "—",
+
+    // Actual Time-Out timestamp from Supabase.
+    record.checked_out_at
+      ? formatAttendanceDate(record.checked_out_at)
+      : "—",
+
+    record.checked_in_by_name ?? "",
+    record.registration_status,
+  ]);
 
   const csvContent = [
     headers.map(escapeCsvValue).join(","),
@@ -93,27 +107,32 @@ export function exportAttendanceCsv({
     },
   );
 
-  const downloadUrl =
-    URL.createObjectURL(csvBlob);
+  const downloadUrl = URL.createObjectURL(csvBlob);
 
   const dateStamp = new Date()
     .toISOString()
     .slice(0, 10);
 
   const eventName = eventTitle
-    ? sanitizeFilename(eventTitle)
+    ? sanitizeFilename(eventTitle) || "event"
     : "all-events";
 
-  const link =
-    document.createElement("a");
+  const link = document.createElement("a");
 
   link.href = downloadUrl;
+
   link.download =
     `municipal-attendance-${eventName}-${dateStamp}.csv`;
 
   document.body.appendChild(link);
+
   link.click();
+
   link.remove();
 
-  URL.revokeObjectURL(downloadUrl);
+  // Allow the browser to finish the download
+  // before releasing the temporary URL.
+  window.setTimeout(() => {
+    URL.revokeObjectURL(downloadUrl);
+  }, 1000);
 }

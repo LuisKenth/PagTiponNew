@@ -1,13 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Activity, Search, SlidersHorizontal } from "lucide-react";
-import { superRequest, message } from "@/lib/super/client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
+import { message, superRequest } from "@/lib/super/client";
 import { auditActions, formatDate, type AuditResult } from "@/lib/super/types";
+import { Activity, Search, SlidersHorizontal } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
-  PageHeader,
-  RefreshButton,
-  Loading,
   ErrorMessage,
+  Loading,
+  PageHeader,
   Pagination,
 } from "../components/ui";
 export default function AuditLogs() {
@@ -75,9 +75,9 @@ export default function AuditLogs() {
         description="Review who changed an administrator account, what happened, and when it was recorded."
         icon={Activity}
       >
-        <RefreshButton
-          busy={loading}
-          onClick={() => setRevision((v) => v + 1)}
+        <BackgroundDataSync
+          onUpdate={() => setRevision((v) => v + 1)}
+          disabled={loading}
         />
       </PageHeader>
       {error && <ErrorMessage>{error}</ErrorMessage>}

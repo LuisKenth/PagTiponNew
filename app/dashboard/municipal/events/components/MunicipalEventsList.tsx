@@ -1,3 +1,4 @@
+import EventStaffAction from "../../components/EventStaffFlow";
 import MunicipalEventTable from "../../components/MunicipalEventTable";
 import { FilterX, Search } from "lucide-react";
 
@@ -91,6 +92,7 @@ export default function MunicipalEventsList({
         ) : (
           <MunicipalEventTable
             items={events}
+            renderActions={(item) => ["upcoming", "published", "ongoing"].includes(item.event?.status || "") ? <EventStaffAction assignmentId={item.id} title={item.event?.title || "Provincial event"} ready={item.municipal_status === "prepared"} /> : null}
             renderDetails={(item, close) => (
               <ReceivedEventCard
                 item={item}

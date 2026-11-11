@@ -80,7 +80,7 @@ export default function MunicipalVenuesPage() {
         totalCapacity={totalCapacity}
         loading={loading}
         refreshing={refreshing}
-        onRefresh={() => void refreshVenues()}
+        onRefresh={() => refreshVenues(true)}
       />
 
       {feedback?.type === "success" && feedback.action === "added" && (

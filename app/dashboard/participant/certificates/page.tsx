@@ -1,7 +1,6 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Award,
@@ -10,8 +9,9 @@ import {
   Clock3,
   Eye,
   Loader2,
-  RefreshCw,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -60,11 +60,7 @@ function getErrorMessage(error: unknown) {
     return error.message;
   }
 
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error
-  ) {
+  if (error && typeof error === "object" && "message" in error) {
     const message = (error as { message?: unknown }).message;
 
     if (typeof message === "string") {
@@ -76,11 +72,7 @@ function getErrorMessage(error: unknown) {
 }
 
 function getErrorHint(error: unknown) {
-  if (
-    error &&
-    typeof error === "object" &&
-    "hint" in error
-  ) {
+  if (error && typeof error === "object" && "hint" in error) {
     const hint = (error as { hint?: unknown }).hint;
 
     if (typeof hint === "string") {
@@ -97,19 +89,14 @@ function getErrorHint(error: unknown) {
  * yet been configured by the Provincial Admin.
  */
 function isMissingSignatoryError(error: unknown) {
-  const errorText = [
-    getErrorMessage(error),
-    getErrorHint(error),
-  ]
+  const errorText = [getErrorMessage(error), getErrorHint(error)]
     .join(" ")
     .toLowerCase();
 
   return (
     errorText.includes("signatory") &&
-    (
-      errorText.includes("not been configured") ||
-      errorText.includes("configure signatory")
-    )
+    (errorText.includes("not been configured") ||
+      errorText.includes("configure signatory"))
   );
 }
 
@@ -122,9 +109,7 @@ export default function ParticipantCertificatesPage() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const [openingEventId, setOpeningEventId] = useState<
-    string | null
-  >(null);
+  const [openingEventId, setOpeningEventId] = useState<string | null>(null);
 
   /*
    * General page/data loading errors.
@@ -138,10 +123,9 @@ export default function ParticipantCertificatesPage() {
    * so a missing signatory does not look like
    * a system failure to the participant.
    */
-  const [
-    certificateWarning,
-    setCertificateWarning,
-  ] = useState<string | null>(null);
+  const [certificateWarning, setCertificateWarning] = useState<string | null>(
+    null,
+  );
 
   const fetchCertificates = useCallback(
     async (isRefresh = false) => {
@@ -169,10 +153,7 @@ export default function ParticipantCertificatesPage() {
           return;
         }
 
-        const {
-          data,
-          error: rpcError,
-        } = await supabase.rpc(
+        const { data, error: rpcError } = await supabase.rpc(
           "get_my_certificate_events",
         );
 
@@ -180,21 +161,13 @@ export default function ParticipantCertificatesPage() {
           throw rpcError;
         }
 
-        setEvents(
-          (data ?? []) as CertificateEvent[],
-        );
+        setEvents((data ?? []) as CertificateEvent[]);
       } catch (err) {
-        console.error(
-          "Certificate events error:",
-          err,
-        );
+        console.error("Certificate events error:", err);
 
         const message = getErrorMessage(err);
 
-        setError(
-          message ||
-            "Unable to load certificates.",
-        );
+        setError(message || "Unable to load certificates.");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -207,9 +180,7 @@ export default function ParticipantCertificatesPage() {
     void fetchCertificates();
   }, [fetchCertificates]);
 
-  async function handleViewCertificate(
-    eventId: string,
-  ) {
+  async function handleViewCertificate(eventId: string) {
     if (openingEventId) {
       return;
     }
@@ -229,14 +200,9 @@ export default function ParticipantCertificatesPage() {
        *
        * We do NOT modify attendance.
        */
-      const {
-        error: issueError,
-      } = await supabase.rpc(
-        "issue_my_certificate",
-        {
-          p_event_id: eventId,
-        },
-      );
+      const { error: issueError } = await supabase.rpc("issue_my_certificate", {
+        p_event_id: eventId,
+      });
 
       if (issueError) {
         throw issueError;
@@ -246,18 +212,13 @@ export default function ParticipantCertificatesPage() {
        * Certificate issuance succeeded.
        * Open the actual certificate page.
        */
-      router.push(
-        `/dashboard/participant/certificates/${eventId}`,
-      );
+      router.push(`/dashboard/participant/certificates/${eventId}`);
     } catch (err) {
       /*
        * Keep the real technical error available
        * for development/debugging.
        */
-      console.error(
-        "Certificate issue error:",
-        err,
-      );
+      console.error("Certificate issue error:", err);
 
       /*
        * Missing certificate signatory is not shown
@@ -276,9 +237,7 @@ export default function ParticipantCertificatesPage() {
        * Any unexpected certificate issuance error
        * receives a safe participant-friendly message.
        */
-      setError(
-        "Unable to open your certificate right now. Please try again.",
-      );
+      setError("Unable to open your certificate right now. Please try again.");
     } finally {
       setOpeningEventId(null);
     }
@@ -300,33 +259,17 @@ export default function ParticipantCertificatesPage() {
               </h1>
 
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                View and download your Certificate of
-                Participation for completed events where
-                both Check-In and Check-Out were recorded.
+                View and download your Certificate of Participation for
+                completed events where both Check-In and Check-Out were
+                recorded.
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
+          <BackgroundDataSync
+            onUpdate={() => fetchCertificates(true)}
             disabled={refreshing}
-            onClick={() =>
-              void fetchCertificates(true)
-            }
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${
-                refreshing
-                  ? "animate-spin"
-                  : ""
-              }`}
-            />
-
-            {refreshing
-              ? "Refreshing..."
-              : "Refresh"}
-          </button>
+          />
         </div>
       </section>
 
@@ -341,10 +284,8 @@ export default function ParticipantCertificatesPage() {
             </p>
 
             <p className="mt-1 text-sm leading-6 text-emerald-800">
-              Certificates become available only
-              after the event is completed and your
-              attendance has both a recorded
-              Check-In and Check-Out.
+              Certificates become available only after the event is completed
+              and your attendance has both a recorded Check-In and Check-Out.
             </p>
           </div>
         </div>
@@ -383,9 +324,7 @@ export default function ParticipantCertificatesPage() {
             Unable to process certificate
           </p>
 
-          <p className="mt-1 text-sm leading-6 text-red-700">
-            {error}
-          </p>
+          <p className="mt-1 text-sm leading-6 text-red-700">{error}</p>
         </section>
       )}
 
@@ -412,20 +351,17 @@ export default function ParticipantCertificatesPage() {
           </h2>
 
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-            Your eligible certificates will appear
-            here after an event has ended and your
-            complete attendance has been recorded.
+            Your eligible certificates will appear here after an event has ended
+            and your complete attendance has been recorded.
           </p>
         </section>
       ) : (
         /* CERTIFICATE CARDS */
         <section className="grid gap-4">
           {events.map((event) => {
-            const isOpening =
-              openingEventId === event.event_id;
+            const isOpening = openingEventId === event.event_id;
 
-            const alreadyIssued =
-              Boolean(event.certificate_id);
+            const alreadyIssued = Boolean(event.certificate_id);
 
             return (
               <article
@@ -439,7 +375,6 @@ export default function ParticipantCertificatesPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-
                           Eligible
                         </span>
 
@@ -464,11 +399,7 @@ export default function ParticipantCertificatesPage() {
                               Event Date
                             </p>
 
-                            <p>
-                              {formatDate(
-                                event.event_start_at,
-                              )}
-                            </p>
+                            <p>{formatDate(event.event_start_at)}</p>
                           </div>
                         </div>
 
@@ -482,15 +413,11 @@ export default function ParticipantCertificatesPage() {
                             </p>
 
                             <p>
-                              {formatTime(
-                                event.checked_in_at,
-                              )}
+                              {formatTime(event.checked_in_at)}
 
                               {" – "}
 
-                              {formatTime(
-                                event.checked_out_at,
-                              )}
+                              {formatTime(event.checked_out_at)}
                             </p>
                           </div>
                         </div>
@@ -504,9 +431,7 @@ export default function ParticipantCertificatesPage() {
                           </p>
 
                           <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
-                            {
-                              event.certificate_number
-                            }
+                            {event.certificate_number}
                           </p>
                         </div>
                       )}
@@ -516,13 +441,9 @@ export default function ParticipantCertificatesPage() {
                     <div className="shrink-0">
                       <button
                         type="button"
-                        disabled={
-                          Boolean(openingEventId)
-                        }
+                        disabled={Boolean(openingEventId)}
                         onClick={() =>
-                          void handleViewCertificate(
-                            event.event_id,
-                          )
+                          void handleViewCertificate(event.event_id)
                         }
                         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
                       >
@@ -532,9 +453,7 @@ export default function ParticipantCertificatesPage() {
                           <Eye className="h-4 w-4" />
                         )}
 
-                        {isOpening
-                          ? "Opening..."
-                          : "View Certificate"}
+                        {isOpening ? "Opening..." : "View Certificate"}
                       </button>
                     </div>
                   </div>

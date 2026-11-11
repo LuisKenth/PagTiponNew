@@ -1,17 +1,17 @@
 "use client";
+import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 
-import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { currentProof, proofLabel } from "@/lib/verificationStatus";
 import {
   AlertCircle,
   CheckCircle2,
   FileText,
   Loader2,
-  RefreshCw,
   ShieldCheck,
   Upload,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { proofLabel, currentProof } from "@/lib/verificationStatus";
+import { useEffect, useState } from "react";
 
 type VerificationType = "residency" | "category";
 type VerificationStatus = "pending" | "approved" | "rejected";
@@ -99,9 +99,7 @@ export default function ParticipantVerificationPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const [files, setFiles] = useState<
-    Record<VerificationType, File | null>
-  >({
+  const [files, setFiles] = useState<Record<VerificationType, File | null>>({
     residency: null,
     category: null,
   });
@@ -121,8 +119,8 @@ export default function ParticipantVerificationPage() {
     category: 0,
   });
 
-  async function loadData() {
-    setLoading(true);
+  async function loadData(silent = false) {
+    if (!silent) setLoading(true);
     setErrorMessage(null);
 
     try {
@@ -137,7 +135,7 @@ export default function ParticipantVerificationPage() {
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select(
-          "id, full_name, role, municipality, participant_category, participant_category_other"
+          "id, full_name, role, municipality, participant_category, participant_category_other",
         )
         .eq("id", user.id)
         .single();
@@ -152,7 +150,7 @@ export default function ParticipantVerificationPage() {
         await supabase
           .from("participant_verifications")
           .select(
-            "id, verification_type, municipality, participant_category, participant_category_other, document_type, document_path, invalidated_at, invalidation_reason, withdrawn_at, document_deleted_at, status, rejection_reason, submitted_at"
+            "id, verification_type, municipality, participant_category, participant_category_other, document_type, document_path, invalidated_at, invalidation_reason, withdrawn_at, document_deleted_at, status, rejection_reason, submitted_at",
           )
           .eq("participant_id", user.id)
           .order("submitted_at", { ascending: false });
@@ -166,7 +164,7 @@ export default function ParticipantVerificationPage() {
       setErrorMessage(
         typeof error === "object" && error !== null && "message" in error
           ? String(error.message)
-          : "Unable to load verification details."
+          : "Unable to load verification details.",
       );
     } finally {
       setLoading(false);
@@ -229,7 +227,9 @@ export default function ParticipantVerificationPage() {
     }
 
     if (!documentType || documentType.length > 100) {
-      setErrorMessage("Please provide a document type of up to 100 characters.");
+      setErrorMessage(
+        "Please provide a document type of up to 100 characters.",
+      );
       return;
     }
 
@@ -278,7 +278,7 @@ export default function ParticipantVerificationPage() {
           p_verification_type: type,
           p_document_type: documentType,
           p_document_path: path,
-        }
+        },
       );
 
       if (submitError) throw submitError;
@@ -293,7 +293,7 @@ export default function ParticipantVerificationPage() {
       await loadData();
 
       setSuccessMessage(
-        "Document submitted. Please wait for your Municipal Admin to review it."
+        "Document submitted. Please wait for your Municipal Admin to review it.",
       );
     } catch (error) {
       /*
@@ -310,7 +310,7 @@ export default function ParticipantVerificationPage() {
           typeof error === "object" && error !== null && "message" in error
             ? String(error.message)
             : "Unable to submit your document."
-        }${submissionAttempted ? " Refresh the page to check the submission before retrying." : ""}`
+        }${submissionAttempted ? " Refresh the page to check the submission before retrying." : ""}`,
       );
     } finally {
       setUploading(null);
@@ -318,22 +318,41 @@ export default function ParticipantVerificationPage() {
   }
 
   async function withdrawSubmission(submission: Submission) {
-    if (uploading || !window.confirm("Withdraw this pending submission? You can then upload a corrected document.")) return;
+    if (
+      uploading ||
+      !window.confirm(
+        "Withdraw this pending submission? You can then upload a corrected document.",
+      )
+    )
+      return;
     setUploading(submission.verification_type);
     try {
-      const {error}=await supabase.rpc("withdraw_participant_verification",{p_submission_id:submission.id});
-      if(error) throw error;
+      const { error } = await supabase.rpc(
+        "withdraw_participant_verification",
+        { p_submission_id: submission.id },
+      );
+      if (error) throw error;
       await loadData();
       setSuccessMessage("Submission withdrawn. You may submit a new document.");
-    } catch(error) {setErrorMessage(typeof error === "object" && error && "message" in error ? String(error.message) : "Unable to withdraw submission.");}
-    finally {setUploading(null);}
+    } catch (error) {
+      setErrorMessage(
+        typeof error === "object" && error && "message" in error
+          ? String(error.message)
+          : "Unable to withdraw submission.",
+      );
+    } finally {
+      setUploading(null);
+    }
   }
 
   async function openDocument(submission: Submission) {
     if (openingId) return;
 
     const documentWindow = window.open("about:blank", "_blank");
-    if (!documentWindow) {setErrorMessage("Please allow pop-ups to view the document.");return;}
+    if (!documentWindow) {
+      setErrorMessage("Please allow pop-ups to view the document.");
+      return;
+    }
     documentWindow.opener = null;
     setOpeningId(submission.id);
     setErrorMessage(null);
@@ -350,7 +369,7 @@ export default function ParticipantVerificationPage() {
     } catch (error) {
       documentWindow.close();
       setErrorMessage(
-        error instanceof Error ? error.message : "Unable to open document."
+        error instanceof Error ? error.message : "Unable to open document.",
       );
     } finally {
       setOpeningId(null);
@@ -359,16 +378,21 @@ export default function ParticipantVerificationPage() {
 
   const latestFor = (type: VerificationType) =>
     profile
-      ? submissions.find(
-          (item) =>
-            item.verification_type === type
-        )
+      ? submissions.find((item) => item.verification_type === type)
       : undefined;
 
   const residencyProof = latestFor("residency");
-  const residencyApproved = Boolean(residencyProof && currentProof(residencyProof) && residencyProof.status === "approved");
+  const residencyApproved = Boolean(
+    residencyProof &&
+    currentProof(residencyProof) &&
+    residencyProof.status === "approved",
+  );
   const categoryProof = latestFor("category");
-  const categoryApproved = Boolean(categoryProof && currentProof(categoryProof) && categoryProof.status === "approved");
+  const categoryApproved = Boolean(
+    categoryProof &&
+    currentProof(categoryProof) &&
+    categoryProof.status === "approved",
+  );
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
@@ -386,23 +410,15 @@ export default function ParticipantVerificationPage() {
               Account Verification
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Submit proof of residency and participant category for review
-              by your Municipal Admin.
+              Submit proof of residency and participant category for review by
+              your Municipal Admin.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void loadData()}
+          <BackgroundDataSync
+            onUpdate={() => loadData(true)}
             disabled={loading || Boolean(uploading)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
-            Refresh
-          </button>
+          />
         </div>
 
         {profile && (
@@ -478,11 +494,17 @@ export default function ParticipantVerificationPage() {
               const pendingSubmission = submissions.find(
                 (item) =>
                   item.verification_type === type &&
-                  item.status === "pending" && currentProof(item)
+                  item.status === "pending" &&
+                  currentProof(item),
               );
 
               const blocked =
-                Boolean(pendingSubmission) || Boolean(latest && currentProof(latest) && latest.status === "approved");
+                Boolean(pendingSubmission) ||
+                Boolean(
+                  latest &&
+                  currentProof(latest) &&
+                  latest.status === "approved",
+                );
 
               const title =
                 type === "residency"
@@ -502,7 +524,9 @@ export default function ParticipantVerificationPage() {
                     <span
                       className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                         latest
-                          ? (currentProof(latest) ? statusStyles[latest.status] : "border-slate-200 bg-slate-50 text-slate-600")
+                          ? currentProof(latest)
+                            ? statusStyles[latest.status]
+                            : "border-slate-200 bg-slate-50 text-slate-600"
                           : "border-slate-200 bg-slate-50 text-slate-600"
                       }`}
                     >
@@ -515,24 +539,31 @@ export default function ParticipantVerificationPage() {
                       ? "Upload your National ID showing your name and address. If the address is outdated, submit a barangay certificate of residency instead."
                       : categoryProofHints[
                           profile.participant_category || ""
-                        ] || "Submit a document supporting your selected category."}
+                        ] ||
+                        "Submit a document supporting your selected category."}
                   </p>
 
                   <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
                     Keep the information needed for review readable. Cover ID
                     numbers, QR codes, and unrelated personal details before
-                    uploading. Files are stored privately and are accessible
-                    to you and authorized Municipal Admin reviewers.
+                    uploading. Files are stored privately and are accessible to
+                    you and authorized Municipal Admin reviewers.
                   </p>
 
-                  {latest?.invalidated_at && (<p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{latest.invalidation_reason}</p>)}
+                  {latest?.invalidated_at && (
+                    <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+                      {latest.invalidation_reason}
+                    </p>
+                  )}
                   {latest?.status === "rejected" && currentProof(latest) && (
                     <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                       <p className="font-semibold">Reason for rejection</p>
                       <p className="mt-1 whitespace-pre-wrap">
                         {latest.rejection_reason}
                       </p>
-                      <p className="mt-2">You may submit a corrected document.</p>
+                      <p className="mt-2">
+                        You may submit a corrected document.
+                      </p>
                     </div>
                   )}
 
@@ -597,10 +628,7 @@ export default function ParticipantVerificationPage() {
                             accept="image/jpeg,image/png,application/pdf"
                             required
                             onChange={(event) =>
-                              selectFile(
-                                type,
-                                event.target.files?.[0] || null
-                              )
+                              selectFile(type, event.target.files?.[0] || null)
                             }
                             className="block w-full rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold file:text-slate-700"
                           />
@@ -687,7 +715,9 @@ export default function ParticipantVerificationPage() {
                       </p>
                       <span
                         className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                          (currentProof(submission) ? statusStyles[submission.status] : "border-slate-200 bg-slate-50 text-slate-600")
+                          currentProof(submission)
+                            ? statusStyles[submission.status]
+                            : "border-slate-200 bg-slate-50 text-slate-600"
                         }`}
                       >
                         {proofLabel(submission)}
@@ -697,7 +727,10 @@ export default function ParticipantVerificationPage() {
                     <button
                       type="button"
                       onClick={() => void openDocument(submission)}
-                      disabled={Boolean(openingId) || Boolean(submission.document_deleted_at)}
+                      disabled={
+                        Boolean(openingId) ||
+                        Boolean(submission.document_deleted_at)
+                      }
                       className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                       {openingId === submission.id ? (
@@ -708,11 +741,21 @@ export default function ParticipantVerificationPage() {
                       ) : (
                         <FileText className="h-4 w-4" aria-hidden="true" />
                       )}
-                      {submission.document_deleted_at ? "Document Removed" : "View Document"}
+                      {submission.document_deleted_at
+                        ? "Document Removed"
+                        : "View Document"}
                     </button>
-                    {submission.status === "pending" && currentProof(submission) && (
-                      <button type="button" disabled={Boolean(uploading)} onClick={()=>void withdrawSubmission(submission)} className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50">Withdraw Submission</button>
-                    )}
+                    {submission.status === "pending" &&
+                      currentProof(submission) && (
+                        <button
+                          type="button"
+                          disabled={Boolean(uploading)}
+                          onClick={() => void withdrawSubmission(submission)}
+                          className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50"
+                        >
+                          Withdraw Submission
+                        </button>
+                      )}
                   </div>
                 ))}
               </div>

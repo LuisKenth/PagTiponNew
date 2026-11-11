@@ -5,8 +5,8 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useState,
   useRef,
+  useState,
 } from "react";
 
 import { supabase } from "@/lib/supabase";
@@ -18,13 +18,13 @@ import type {
   VenueStatus,
 } from "../types/municipalVenues";
 
+import type { SelectedVenuePin } from "@/app/components/VenueMap";
 import {
   cleanLocation,
   locationError,
   photoError,
   VENUE_PHOTO_BUCKET,
 } from "@/lib/venues/location";
-import type { SelectedVenuePin } from "@/app/components/VenueMap";
 
 export type VenueLocationDraft = {
   address: string;
@@ -269,7 +269,9 @@ export default function useMunicipalVenues() {
       }));
 
       setVenues(mappedVenues);
-      const {data:pending}=await supabase.rpc("pending_venue_photo_cleanup");
+      const { data: pending } = await supabase.rpc(
+        "pending_venue_photo_cleanup",
+      );
       setPendingCleanupId(pending ?? null);
     } catch (error) {
       console.error("Municipal venues error:", error);
@@ -697,8 +699,8 @@ export default function useMunicipalVenues() {
     setCurrentPage((previousPage) => Math.min(totalPages, previousPage + 1));
   }
 
-  async function refreshVenues() {
-    setFeedback(null);
+  async function refreshVenues(background = false) {
+    if (!background) setFeedback(null);
 
     await fetchVenues(true);
   }

@@ -1,11 +1,7 @@
 "use client";
+import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
@@ -25,63 +21,60 @@ import {
 function notifyMunicipalSidebarAboutChanges() {
   if (typeof window === "undefined") return;
 
-  window.dispatchEvent(
-    new Event(MUNICIPAL_NOTIFICATION_UPDATE_EVENT),
-  );
+  window.dispatchEvent(new Event(MUNICIPAL_NOTIFICATION_UPDATE_EVENT));
 }
 
 export function useMunicipalNotifications() {
   const router = useRouter();
 
-  const [notifications, setNotifications] =
-    useState<MunicipalNotification[]>([]);
+  const [notifications, setNotifications] = useState<MunicipalNotification[]>(
+    [],
+  );
   const [activeFilter, setActiveFilter] =
     useState<MunicipalNotificationFilter>("all");
-  const [currentUserId, setCurrentUserId] =
-    useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
-  const [updatingId, setUpdatingId] =
-    useState<MunicipalNotificationId | null>(null);
-  const [deletingId, setDeletingId] =
-    useState<MunicipalNotificationId | null>(null);
+  const [updatingId, setUpdatingId] = useState<MunicipalNotificationId | null>(
+    null,
+  );
+  const [deletingId, setDeletingId] = useState<MunicipalNotificationId | null>(
+    null,
+  );
   const [error, setError] = useState("");
 
-  const fetchNotifications = useCallback(
-    async (showRefreshLoader = false) => {
-      try {
-        setError("");
+  const fetchNotifications = useCallback(async (showRefreshLoader = false) => {
+    try {
+      setError("");
 
-        if (showRefreshLoader) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+      if (showRefreshLoader) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-        if (userError) throw userError;
+      if (userError) throw userError;
 
-        if (!user) {
-          setCurrentUserId(null);
-          setNotifications([]);
-          setError(
-            "No signed-in municipal administrator was found.",
-          );
-          return;
-        }
+      if (!user) {
+        setCurrentUserId(null);
+        setNotifications([]);
+        setError("No signed-in municipal administrator was found.");
+        return;
+      }
 
-        setCurrentUserId(user.id);
+      setCurrentUserId(user.id);
 
-        const { data, error: notificationError } = await supabase
-          .from("notifications")
-          .select(
-            `
+      const { data, error: notificationError } = await supabase
+        .from("notifications")
+        .select(
+          `
               id,
               user_id,
               event_id,
@@ -92,103 +85,78 @@ export function useMunicipalNotifications() {
               read,
               created_at
             `,
-          )
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-        if (notificationError) throw notificationError;
+      if (notificationError) throw notificationError;
 
-        const notificationRows =
-          (data as MunicipalNotificationRecord[] | null) ?? [];
+      const notificationRows =
+        (data as MunicipalNotificationRecord[] | null) ?? [];
 
-        const eventIds = Array.from(
-          new Set(
-            notificationRows
-              .map((notification) => notification.event_id)
-              .filter(
-                (eventId): eventId is string =>
-                  typeof eventId === "string" && eventId.length > 0,
-              ),
-          ),
-        );
+      const eventIds = Array.from(
+        new Set(
+          notificationRows
+            .map((notification) => notification.event_id)
+            .filter(
+              (eventId): eventId is string =>
+                typeof eventId === "string" && eventId.length > 0,
+            ),
+        ),
+      );
 
-        const eventTitleMap = new Map<string, string>();
+      const eventTitleMap = new Map<string, string>();
 
-        if (eventIds.length > 0) {
-          const { data: eventData, error: eventError } =
-            await supabase
-              .from("events")
-              .select("id, title")
-              .in("id", eventIds);
+      if (eventIds.length > 0) {
+        const { data: eventData, error: eventError } = await supabase
+          .from("events")
+          .select("id, title")
+          .in("id", eventIds);
 
-          if (eventError) {
-            console.error(
-              "Unable to load municipal notification event titles:",
-              eventError.message,
-            );
-          } else {
-            for (const event of eventData ?? []) {
-              eventTitleMap.set(String(event.id), event.title);
-            }
+        if (eventError) {
+          console.error(
+            "Unable to load municipal notification event titles:",
+            eventError.message,
+          );
+        } else {
+          for (const event of eventData ?? []) {
+            eventTitleMap.set(String(event.id), event.title);
           }
         }
-
-        setNotifications(
-          notificationRows.map((notification) => ({
-            ...notification,
-            eventTitle: notification.event_id
-              ? eventTitleMap.get(notification.event_id) ?? null
-              : null,
-          })),
-        );
-      } catch (fetchError) {
-        const message =
-          fetchError instanceof Error
-            ? fetchError.message
-            : "Unable to load notifications.";
-
-        console.error(
-          "Municipal notification fetch error:",
-          fetchError,
-        );
-
-        setNotifications([]);
-        setError(message);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
       }
-    },
-    [],
-  );
+
+      setNotifications(
+        notificationRows.map((notification) => ({
+          ...notification,
+          eventTitle: notification.event_id
+            ? (eventTitleMap.get(notification.event_id) ?? null)
+            : null,
+        })),
+      );
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Unable to load notifications.";
+
+      console.error("Municipal notification fetch error:", fetchError);
+
+      setNotifications([]);
+      setError(message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     void fetchNotifications();
   }, [fetchNotifications]);
 
-  useEffect(() => {
-    if (!currentUserId) return;
-
-    const notificationChannel = supabase
-      .channel(`municipal-notifications-${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${currentUserId}`,
-        },
-        () => {
-          void fetchNotifications(true);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(notificationChannel);
-    };
-  }, [currentUserId, fetchNotifications]);
+  useLiveData({
+    onUpdate: () => fetchNotifications(true),
+    disabled: loading || refreshing || !currentUserId,
+  });
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.read).length,
@@ -198,10 +166,7 @@ export function useMunicipalNotifications() {
   const filteredNotifications = useMemo(
     () =>
       notifications.filter((notification) =>
-        matchesMunicipalNotificationFilter(
-          notification,
-          activeFilter,
-        ),
+        matchesMunicipalNotificationFilter(notification, activeFilter),
       ),
     [activeFilter, notifications],
   );
@@ -227,9 +192,7 @@ export function useMunicipalNotifications() {
 
         setNotifications((currentNotifications) =>
           currentNotifications.map((item) =>
-            item.id === notificationId
-              ? { ...item, read: true }
-              : item,
+            item.id === notificationId ? { ...item, read: true } : item,
           ),
         );
 
@@ -241,10 +204,7 @@ export function useMunicipalNotifications() {
             ? updateError.message
             : "Unable to mark the notification as read.";
 
-        console.error(
-          "Municipal mark-as-read error:",
-          updateError,
-        );
+        console.error("Municipal mark-as-read error:", updateError);
         setError(message);
         return false;
       } finally {
@@ -283,10 +243,7 @@ export function useMunicipalNotifications() {
           ? updateError.message
           : "Unable to mark all notifications as read.";
 
-      console.error(
-        "Municipal mark-all-as-read error:",
-        updateError,
-      );
+      console.error("Municipal mark-all-as-read error:", updateError);
       setError(message);
     } finally {
       setMarkingAll(false);
@@ -325,10 +282,7 @@ export function useMunicipalNotifications() {
             ? deleteError.message
             : "Unable to delete the notification.";
 
-        console.error(
-          "Municipal notification delete error:",
-          deleteError,
-        );
+        console.error("Municipal notification delete error:", deleteError);
         setError(message);
       } finally {
         setDeletingId(null);
