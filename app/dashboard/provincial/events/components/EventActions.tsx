@@ -32,15 +32,16 @@ export default function EventActions({
 }: EventActionsProps) {
   if (onView)
     return (
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {extraActions?.(event)}
+
         <button
           type="button"
           onClick={() => onView(event)}
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
-          View
+          Open Event
         </button>
-        {extraActions?.(event)}
       </div>
     );
   const isDraft = automaticStatus === "draft";

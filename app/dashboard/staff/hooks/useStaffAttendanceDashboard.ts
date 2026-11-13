@@ -1,4 +1,10 @@
 "use client";
+import {
+  preferredStaffEvent,
+  preserveStaffSelection,
+  staffEventPriority,
+  sortStaffEvents,
+} from "../eventSelection";
 import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -44,15 +50,7 @@ function getRpcRow<T>(data: unknown): T | null {
   return data as T;
 }
 
-/** Remember the selected event in this browser tab for the signed-in Event Staff. */
-function readSavedStaffEvent(key: string): string | null {
-  try {
-    return window.sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
+/** Track the selection for compatibility; fresh loads always re-evaluate priority. */
 function saveSelectedStaffEvent(key: string | null, eventId: string) {
   if (!key) return;
   try {
@@ -101,6 +99,10 @@ export function useStaffAttendanceDashboard() {
 
   // Account-scoped key prevents one staff account from reusing another's event.
   const selectedEventStorageKeyRef = useRef<string | null>(null);
+  const selectedIdRef = useRef("");
+  const assignmentRequestRef = useRef(0);
+  const attendanceRequestRef = useRef(0);
+  const [selectionNotice, setSelectionNotice] = useState("");
 
   // Throttle retries if connectivity is lost when the event ends.
   const autoCloseAttemptAtRef = useRef<Map<string, number>>(new Map());
@@ -158,7 +160,9 @@ export function useStaffAttendanceDashboard() {
 
   const eventStatus = selectedAssignment?.event.status?.toLowerCase() ?? "";
 
-  const isCancelled = eventStatus === "cancelled";
+  const isCancelled =
+    eventStatus === "cancelled" ||
+    selectedAssignment?.municipal_status === "cancelled";
 
   const isCompleted = eventStatus === "completed";
 
@@ -559,6 +563,7 @@ export function useStaffAttendanceDashboard() {
             municipality,
             local_venue_id,
             local_instructions,
+            municipal_status,
 
             check_in_opened_at,
             check_in_closed_at,
@@ -637,6 +642,7 @@ export function useStaffAttendanceDashboard() {
             event_id: assignment.event_id,
 
             municipality: assignment.municipality,
+            municipal_status: assignment.municipal_status ?? null,
             local_venue_id: assignment.local_venue_id ?? null,
             local_instructions: assignment.local_instructions ?? null,
             venue_name:
@@ -719,7 +725,7 @@ export function useStaffAttendanceDashboard() {
         return firstStart - secondStart;
       });
 
-      return normalizedAssignments;
+      return sortStaffEvents(normalizedAssignments, Date.now());
     },
     [],
   );
@@ -732,8 +738,20 @@ export function useStaffAttendanceDashboard() {
 
   const fetchAttendanceRecords = useCallback(
     async (eventMunicipalityId: DatabaseId | "", silent = false) => {
+      if (
+        eventMunicipalityId &&
+        String(eventMunicipalityId) !== selectedIdRef.current
+      )
+        return;
+      const ticket = ++attendanceRequestRef.current;
+      const stillCurrent = () =>
+        ticket === attendanceRequestRef.current &&
+        String(eventMunicipalityId) === selectedIdRef.current;
+      const writeRecords = (rows: AttendanceRecord[]) => {
+        if (stillCurrent()) setAttendanceRecords(rows);
+      };
       if (!eventMunicipalityId) {
-        setAttendanceRecords([]);
+        writeRecords([]);
         return;
       }
 
@@ -775,7 +793,7 @@ export function useStaffAttendanceDashboard() {
         const attendanceRows = (attendanceData ?? []) as AttendanceRecord[];
 
         if (attendanceRows.length === 0) {
-          setAttendanceRecords([]);
+          writeRecords([]);
 
           return;
         }
@@ -789,7 +807,7 @@ export function useStaffAttendanceDashboard() {
         );
 
         if (participantIds.length === 0) {
-          setAttendanceRecords(
+          writeRecords(
             attendanceRows.map((record) => ({
               ...record,
 
@@ -817,7 +835,7 @@ export function useStaffAttendanceDashboard() {
             participantProfilesError.message,
           );
 
-          setAttendanceRecords(
+          writeRecords(
             attendanceRows.map((record) => ({
               ...record,
 
@@ -851,7 +869,7 @@ export function useStaffAttendanceDashboard() {
           };
         });
 
-        setAttendanceRecords(enrichedAttendanceRecords);
+        writeRecords(enrichedAttendanceRecords);
       } catch (error) {
         const errorValue = error as SupabaseErrorLike;
 
@@ -859,12 +877,12 @@ export function useStaffAttendanceDashboard() {
           errorValue.message ?? "Unable to load attendance records.",
         );
 
-        if (!silent) {
-          setAttendanceRecords([]);
+        if (!silent && stillCurrent()) {
+          writeRecords([]);
           showMessage(formatDatabaseError(errorValue), "error");
         }
       } finally {
-        setAttendanceLoading(false);
+        if (stillCurrent()) setAttendanceLoading(false);
       }
     },
     [showMessage],
@@ -877,33 +895,33 @@ export function useStaffAttendanceDashboard() {
    */
 
   const refreshEventAssignments = useCallback(
-    async (preferredAssignmentId?: DatabaseId) => {
+    async (_preferredAssignmentId?: DatabaseId) => {
       if (!municipality) {
         return null;
       }
 
+      const ticket = ++assignmentRequestRef.current;
       const assignments = await loadEventAssignments(municipality);
-
+      if (ticket !== assignmentRequestRef.current) return undefined;
       setEventAssignments(assignments);
-
-      const preferredAssignment =
-        assignments.find(
-          (assignment) =>
-            String(assignment.id) ===
-            String(preferredAssignmentId ?? selectedEventMunicipalityId),
-        ) ??
-        assignments[0] ??
-        null;
-
-      const nextSelectedId = preferredAssignment
-        ? String(preferredAssignment.id)
-        : "";
-      setSelectedEventMunicipalityId(nextSelectedId);
-      saveSelectedStaffEvent(
-        selectedEventStorageKeyRef.current,
-        nextSelectedId,
+      // Never replace the staff's current event during a refresh or scan.
+      const currentId = selectedIdRef.current;
+      const preferredAssignment = preserveStaffSelection(
+        assignments,
+        currentId,
       );
-
+      if (currentId && !preferredAssignment) {
+        selectedIdRef.current = "";
+        attendanceRequestRef.current++;
+        setSelectedEventMunicipalityId("");
+        setAttendanceRecords([]);
+        setAttendanceLoading(false);
+        setAttendanceMode("check_in");
+        saveSelectedStaffEvent(selectedEventStorageKeyRef.current, "");
+        setSelectionNotice(
+          "The selected event is no longer assigned to you. Attendance tools have stopped. Choose another assigned event.",
+        );
+      }
       return preferredAssignment;
     },
     [loadEventAssignments, municipality, selectedEventMunicipalityId],
@@ -932,7 +950,7 @@ export function useStaffAttendanceDashboard() {
     onUpdate: async () => {
       const assignment = await refreshEventAssignments(selectedAssignment?.id);
       if (assignment) await fetchAttendanceRecords(assignment.id, true);
-      else setAttendanceRecords([]);
+      else if (assignment === null) setAttendanceRecords([]);
     },
     disabled:
       loading ||
@@ -980,15 +998,12 @@ export function useStaffAttendanceDashboard() {
       const assignments = await loadEventAssignments(profile.municipality);
       setEventAssignments(assignments);
 
-      // Restore only an event still assigned to the current staff user.
-      // If the old assignment was removed, fall back to the first allowed one.
-      const savedId = readSavedStaffEvent(storageKey);
-      const initialAssignment =
-        assignments.find((assignment) => String(assignment.id) === savedId) ??
-        assignments[0] ??
-        null;
+      // Re-evaluate operational priority on every fresh portal load. Never
+      // restore an obsolete completed event just because it is in storage.
+      const initialAssignment = preferredStaffEvent(assignments, Date.now());
       const initialId = initialAssignment ? String(initialAssignment.id) : "";
-
+      selectedIdRef.current = initialId;
+      setSelectionNotice("");
       setSelectedEventMunicipalityId(initialId);
       saveSelectedStaffEvent(storageKey, initialId);
 
@@ -1182,6 +1197,11 @@ export function useStaffAttendanceDashboard() {
       }
 
       const nextId = String(nextAssignment.id);
+      assignmentRequestRef.current++;
+      attendanceRequestRef.current++;
+      selectedIdRef.current = nextId;
+      setSelectionNotice("");
+      setAttendanceRecords([]);
       setSelectedEventMunicipalityId(nextId);
       saveSelectedStaffEvent(selectedEventStorageKeyRef.current, nextId);
 
@@ -1193,6 +1213,35 @@ export function useStaffAttendanceDashboard() {
     },
     [eventAssignments, fetchAttendanceRecords, showMessage],
   );
+
+  // Called on entry to Event Control, not on background updates. No RPCs
+  // are invoked here: selecting an event never opens a session.
+  const prepareEventControl = useCallback(async () => {
+    if (!municipality) return;
+    const ticket = ++assignmentRequestRef.current;
+    try {
+      const assignments = await loadEventAssignments(municipality);
+      if (ticket !== assignmentRequestRef.current) return;
+      const next = preferredStaffEvent(assignments, Date.now());
+      const nextId = next ? String(next.id) : "";
+      setEventAssignments(assignments);
+      selectedIdRef.current = nextId;
+      attendanceRequestRef.current++;
+      setSelectedEventMunicipalityId(nextId);
+      setAttendanceRecords([]);
+      setAttendanceLoading(false);
+      setAttendanceMode("check_in");
+      setMessage(null);
+      setSelectionNotice("");
+      saveSelectedStaffEvent(selectedEventStorageKeyRef.current, nextId);
+      if (next) await fetchAttendanceRecords(next.id);
+    } catch (error) {
+      setSelectionNotice(
+        "Unable to verify the latest assignments. Choose an event after the connection is restored.",
+      );
+      showMessage(formatDatabaseError(error as SupabaseErrorLike), "error");
+    }
+  }, [municipality, loadEventAssignments, fetchAttendanceRecords, showMessage]);
 
   /*
    * =====================================================
@@ -1784,6 +1833,14 @@ export function useStaffAttendanceDashboard() {
     selectedEventMunicipalityId,
 
     selectedAssignment,
+    prepareEventControl,
+    selectionNotice,
+    recommendedAssignment: preferredStaffEvent(eventAssignments, currentTime),
+    selectedEventIsReferenceOnly: Boolean(
+      selectedAssignment &&
+      currentTime > 0 &&
+      staffEventPriority(selectedAssignment, currentTime) === null,
+    ),
 
     attendanceRecords,
 

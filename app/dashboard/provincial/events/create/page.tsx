@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { MUNICIPALITIES } from "@/lib/municipalities";
 
+import CertificateOption from "@/app/components/certificates/CertificateOption";
 import CreateEventHeader from "./components/CreateEventHeader";
 import EventDetailsSection from "./components/EventDetailsSection";
 import EventScheduleSection from "./components/EventScheduleSection";
@@ -65,6 +66,7 @@ function CreateEventForm({ requested }: { requested: string | null }) {
   const revision = useRef<string | null>(null);
   const saving = useRef(false);
 
+  const [certificatesEnabled, setCertificatesEnabled] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startAt, setStartAt] = useState("");
@@ -113,6 +115,7 @@ function CreateEventForm({ requested }: { requested: string | null }) {
             .toISOString()
             .slice(0, 16);
         };
+        setCertificatesEnabled(e.certificates_enabled === true);
         setTitle(e.title || "");
         setDescription(e.description || "");
         setStartAt(local(e.start_at));
@@ -440,6 +443,7 @@ function CreateEventForm({ requested }: { requested: string | null }) {
       }
 
       const payload = {
+        certificates_enabled: certificatesEnabled,
         title: title.trim(),
         description: description.trim() || null,
         start_at: convertToISO(startAt, "start date and time"),
@@ -621,6 +625,11 @@ function CreateEventForm({ requested }: { requested: string | null }) {
                 description={description}
                 onTitleChange={setTitle}
                 onDescriptionChange={setDescription}
+              />
+              <CertificateOption
+                enabled={certificatesEnabled}
+                onChange={setCertificatesEnabled}
+                disabled={Boolean(submitAction)}
               />
               <EventScheduleSection
                 startAt={startAt}

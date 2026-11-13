@@ -1,3 +1,4 @@
+import { loadStaffSchedules } from "@/lib/event-staff-schedules/server";
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -461,6 +462,12 @@ export async function GET(request: Request) {
     }
 
     const { admin } = authorization;
+    if (new URL(request.url).searchParams.get("view") === "schedules") {
+      return NextResponse.json(await loadStaffSchedules(admin.municipality), {
+        headers: { "Cache-Control": "private, no-store" },
+      });
+    }
+
 
     const [
       staffResult,

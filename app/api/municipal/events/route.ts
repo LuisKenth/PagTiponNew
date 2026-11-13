@@ -97,13 +97,16 @@ export async function POST(request: Request) {
         file_size: file.size,
       };
     }
-    const { data, error } = await supabaseAdmin.rpc("save_municipal_event", {
-      p_actor: actor.id,
-      p_id: id,
-      p_payload: payload,
-      p_document: document,
-      p_expected: form.get("expected") || null,
-    });
+    const { data, error } = await supabaseAdmin.rpc(
+      "save_municipal_event_with_certificates",
+      {
+        p_actor: actor.id,
+        p_id: id,
+        p_payload: payload,
+        p_document: document,
+        p_expected: form.get("expected") || null,
+      },
+    );
     if (error) {
       // Remove only an upload that the transaction did not attach. Never delete on an ambiguous network failure.
       if (

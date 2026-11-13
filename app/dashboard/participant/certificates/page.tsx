@@ -200,18 +200,12 @@ export default function ParticipantCertificatesPage() {
        *
        * We do NOT modify attendance.
        */
-      const { error: issueError } = await supabase.rpc("issue_my_certificate", {
-        p_event_id: eventId,
-      });
-
-      if (issueError) {
-        throw issueError;
+      if (!events.find((event) => event.event_id === eventId)?.certificate_id) {
+        setCertificateWarning(
+          "Your attendance is eligible. Your certificate will be generated automatically once the completed event has its signatories configured.",
+        );
+        return;
       }
-
-      /*
-       * Certificate issuance succeeded.
-       * Open the actual certificate page.
-       */
       router.push(`/dashboard/participant/certificates/${eventId}`);
     } catch (err) {
       /*
@@ -284,8 +278,10 @@ export default function ParticipantCertificatesPage() {
             </p>
 
             <p className="mt-1 text-sm leading-6 text-emerald-800">
-              Certificates become available only after the event is completed
-              and your attendance has both a recorded Check-In and Check-Out.
+              For events with certificates enabled, Present or Late attendance with both
+              Time-in and Time-out is eligible after completion. The system
+              automatically generates your certificate once the organizer has
+              configured the signatories.
             </p>
           </div>
         </div>
@@ -351,8 +347,9 @@ export default function ParticipantCertificatesPage() {
           </h2>
 
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-            Your eligible certificates will appear here after an event has ended
-            and your complete attendance has been recorded.
+            Certificates are generated automatically after an enabled event is
+            completed, signatories are configured, and your eligible attendance
+            has complete Time-in and Time-out records.
           </p>
         </section>
       ) : (
@@ -441,7 +438,7 @@ export default function ParticipantCertificatesPage() {
                     <div className="shrink-0">
                       <button
                         type="button"
-                        disabled={Boolean(openingEventId)}
+                        disabled={Boolean(openingEventId) || !alreadyIssued}
                         onClick={() =>
                           void handleViewCertificate(event.event_id)
                         }
@@ -453,7 +450,11 @@ export default function ParticipantCertificatesPage() {
                           <Eye className="h-4 w-4" />
                         )}
 
-                        {isOpening ? "Opening..." : "View Certificate"}
+                        {isOpening
+                          ? "Opening..."
+                          : alreadyIssued
+                            ? "View Certificate"
+                            : "Generating automatically"}
                       </button>
                     </div>
                   </div>

@@ -736,90 +736,92 @@ export default function useMunicipalDashboard() {
   /*
    * SAVE MUNICIPAL PREPARATION
    */
-  const savePreparation = useCallback(async () => {
-    if (!selectedEvent || savingPreparation) {
-      return;
-    }
+  const savePreparation = useCallback(
+    async (options?: { keepOpen?: boolean; skipStaffPrompt?: boolean }) => {
+      if (!selectedEvent || savingPreparation) {
+        return;
+      }
 
-    setVenueError(null);
-    setDeliveryToast(null);
+      setVenueError(null);
+      setDeliveryToast(null);
 
-    /*
-     * UI lifecycle guard.
-     */
-    const selectedEventLockStatus = getPreparationLockStatus(selectedEvent);
+      /*
+       * UI lifecycle guard.
+       */
+      const selectedEventLockStatus = getPreparationLockStatus(selectedEvent);
 
-    if (selectedEventLockStatus) {
-      alert(getPreparationLockMessage(selectedEventLockStatus));
+      if (selectedEventLockStatus) {
+        alert(getPreparationLockMessage(selectedEventLockStatus));
 
-      setRegistrationOpen(false);
+        setRegistrationOpen(false);
 
-      return;
-    }
+        return;
+      }
 
-    const isMunicipalEvent = selectedEvent.event?.event_origin === "municipal";
-    let trimmedInstructions = localInstructions.trim();
-    if (!isMunicipalEvent && trimmedInstructions.length > 2000) {
-      alert("Local instructions must not exceed 2,000 characters.");
-      return;
-    }
+      const isMunicipalEvent =
+        selectedEvent.event?.event_origin === "municipal";
+      let trimmedInstructions = localInstructions.trim();
+      if (!isMunicipalEvent && trimmedInstructions.length > 2000) {
+        alert("Local instructions must not exceed 2,000 characters.");
+        return;
+      }
 
-    if (preparationStatus !== "pending" && !trimmedInstructions) {
-      alert(
-        "Please enter local instructions before marking the event as preparing or prepared.",
-      );
-
-      return;
-    }
-
-    /*
-     * Prepared requires venue.
-     */
-    if (preparationStatus === "prepared" && !selectedVenueId) {
-      setVenueError(
-        "Please select a local venue before marking this event as Prepared.",
-      );
-
-      return;
-    }
-
-    /*
-     * Prepared requires schedule.
-     */
-    if (
-      preparationStatus === "prepared" &&
-      (!selectedEvent.event?.start_at || !selectedEvent.event?.end_at)
-    ) {
-      setVenueError(
-        "This provincial event does not have a complete schedule. A venue cannot be finalized until the event start and end time are available.",
-      );
-
-      return;
-    }
-
-    setSavingPreparation(true);
-
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        alert("User not found. Please login again.");
+      if (preparationStatus !== "pending" && !trimmedInstructions) {
+        alert(
+          "Please enter local instructions before marking the event as preparing or prepared.",
+        );
 
         return;
       }
 
       /*
-       * Re-read assignment to protect against
-       * stale UI data.
+       * Prepared requires venue.
        */
-      const { data: latestAssignmentData, error: latestAssignmentError } =
-        await supabase
-          .from("event_municipalities")
-          .select(
-            `
+      if (preparationStatus === "prepared" && !selectedVenueId) {
+        setVenueError(
+          "Please select a local venue before marking this event as Prepared.",
+        );
+
+        return;
+      }
+
+      /*
+       * Prepared requires schedule.
+       */
+      if (
+        preparationStatus === "prepared" &&
+        (!selectedEvent.event?.start_at || !selectedEvent.event?.end_at)
+      ) {
+        setVenueError(
+          "This provincial event does not have a complete schedule. A venue cannot be finalized until the event start and end time are available.",
+        );
+
+        return;
+      }
+
+      setSavingPreparation(true);
+
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          alert("User not found. Please login again.");
+
+          return;
+        }
+
+        /*
+         * Re-read assignment to protect against
+         * stale UI data.
+         */
+        const { data: latestAssignmentData, error: latestAssignmentError } =
+          await supabase
+            .from("event_municipalities")
+            .select(
+              `
               id,
               event_id,
               municipal_status,
@@ -827,343 +829,372 @@ export default function useMunicipalDashboard() {
               local_venue_id,
               local_instructions
             `,
-          )
-          .eq("id", selectedEvent.id)
-          .maybeSingle();
+            )
+            .eq("id", selectedEvent.id)
+            .maybeSingle();
 
-      if (latestAssignmentError) {
-        console.error(
-          "Latest municipal assignment error:",
-          latestAssignmentError.message,
-        );
+        if (latestAssignmentError) {
+          console.error(
+            "Latest municipal assignment error:",
+            latestAssignmentError.message,
+          );
 
-        alert("Unable to verify the latest municipal event status.");
+          alert("Unable to verify the latest municipal event status.");
 
-        return;
-      }
+          return;
+        }
 
-      if (!latestAssignmentData) {
-        alert("This municipal event assignment could not be found.");
+        if (!latestAssignmentData) {
+          alert("This municipal event assignment could not be found.");
 
-        closePrepareModal();
+          closePrepareModal();
 
-        await fetchReceivedEvents();
+          await fetchReceivedEvents();
 
-        return;
-      }
+          return;
+        }
 
-      const latestAssignment = latestAssignmentData as LatestAssignmentRow;
-      if (isMunicipalEvent)
-        trimmedInstructions = latestAssignment.local_instructions?.trim() ?? "";
+        const latestAssignment = latestAssignmentData as LatestAssignmentRow;
+        if (isMunicipalEvent)
+          trimmedInstructions =
+            latestAssignment.local_instructions?.trim() ?? "";
 
-      /*
-       * Re-read provincial event.
-       */
-      const { data: latestEventData, error: latestEventError } = await supabase
-        .from("events")
-        .select(
-          `
+        /*
+         * Re-read provincial event.
+         */
+        const { data: latestEventData, error: latestEventError } =
+          await supabase
+            .from("events")
+            .select(
+              `
               id,
               status
             `,
-        )
-        .eq("id", latestAssignment.event_id)
-        .maybeSingle();
+            )
+            .eq("id", latestAssignment.event_id)
+            .maybeSingle();
 
-      if (latestEventError) {
-        console.error(
-          "Latest provincial event status error:",
-          latestEventError.message,
+        if (latestEventError) {
+          console.error(
+            "Latest provincial event status error:",
+            latestEventError.message,
+          );
+
+          alert("Unable to verify the latest provincial event status.");
+
+          return;
+        }
+
+        if (!latestEventData) {
+          alert(
+            "The provincial event connected to this assignment could not be found.",
+          );
+
+          closePrepareModal();
+
+          await fetchReceivedEvents();
+
+          return;
+        }
+
+        const latestEvent = latestEventData as LatestEventStatusRow;
+
+        /*
+         * Latest lifecycle guard.
+         */
+        const latestMunicipalStatus = normalizeStatus(
+          latestAssignment.municipal_status,
         );
 
-        alert("Unable to verify the latest provincial event status.");
+        const latestProvincialStatus = normalizeStatus(latestEvent.status);
 
-        return;
-      }
+        let latestLockStatus: PreparationLockStatus | null = null;
 
-      if (!latestEventData) {
-        alert(
-          "The provincial event connected to this assignment could not be found.",
-        );
+        if (
+          latestMunicipalStatus === "cancelled" ||
+          latestProvincialStatus === "cancelled"
+        ) {
+          latestLockStatus = "cancelled";
+        } else if (latestProvincialStatus === "completed") {
+          latestLockStatus = "completed";
+        } else if (latestProvincialStatus === "ongoing") {
+          latestLockStatus = "ongoing";
+        }
 
-        closePrepareModal();
+        if (latestLockStatus) {
+          alert(getPreparationLockMessage(latestLockStatus));
 
-        await fetchReceivedEvents();
+          setRegistrationOpen(false);
 
-        return;
-      }
+          closePrepareModal();
 
-      const latestEvent = latestEventData as LatestEventStatusRow;
+          await fetchReceivedEvents();
 
-      /*
-       * Latest lifecycle guard.
-       */
-      const latestMunicipalStatus = normalizeStatus(
-        latestAssignment.municipal_status,
-      );
+          return;
+        }
 
-      const latestProvincialStatus = normalizeStatus(latestEvent.status);
-
-      let latestLockStatus: PreparationLockStatus | null = null;
-
-      if (
-        latestMunicipalStatus === "cancelled" ||
-        latestProvincialStatus === "cancelled"
-      ) {
-        latestLockStatus = "cancelled";
-      } else if (latestProvincialStatus === "completed") {
-        latestLockStatus = "completed";
-      } else if (latestProvincialStatus === "ongoing") {
-        latestLockStatus = "ongoing";
-      }
-
-      if (latestLockStatus) {
-        alert(getPreparationLockMessage(latestLockStatus));
-
-        setRegistrationOpen(false);
-
-        closePrepareModal();
-
-        await fetchReceivedEvents();
-
-        return;
-      }
-
-      /*
-       * VENUE OWNERSHIP + LATEST STATUS GUARD
-       */
-      if (selectedVenueId) {
-        const { data: selectedVenueData, error: selectedVenueError } =
-          await supabase
-            .from("venues")
-            .select(
-              `
+        /*
+         * VENUE OWNERSHIP + LATEST STATUS GUARD
+         */
+        if (selectedVenueId) {
+          const { data: selectedVenueData, error: selectedVenueError } =
+            await supabase
+              .from("venues")
+              .select(
+                `
                 id,
                 venue_name,
                 municipality,
                 capacity,
                 status
               `,
-            )
-            .eq("id", selectedVenueId)
-            .maybeSingle();
+              )
+              .eq("id", selectedVenueId)
+              .maybeSingle();
 
-        if (selectedVenueError) {
-          console.error(
-            "Selected venue verification error:",
-            selectedVenueError.message,
-          );
-
-          setVenueError(
-            "Unable to verify the selected municipal venue. Please try again.",
-          );
-
-          return;
-        }
-
-        if (!selectedVenueData) {
-          setVenueError(
-            "The selected venue could not be found. Please choose another venue.",
-          );
-
-          return;
-        }
-
-        const selectedVenue = selectedVenueData as VenueRow;
-
-        if (
-          normalizeMunicipality(selectedVenue.municipality) !==
-          normalizeMunicipality(municipality)
-        ) {
-          setVenueError(
-            "The selected venue does not belong to your municipality.",
-          );
-
-          return;
-        }
-
-        /*
-         * Latest inactive venue protection.
-         */
-        if (!isVenueActiveStatus(selectedVenue.status)) {
-          const venueName = selectedVenue.venue_name ?? "The selected venue";
-
-          const message = `${venueName} is currently inactive and cannot be assigned to this event. Please select an active venue.`;
-
-          setVenueError(`Venue Unavailable: ${message}`);
-
-          alert(`Venue Unavailable\n\n${message}`);
-
-          await fetchReceivedEvents();
-
-          return;
-        }
-      }
-
-      const savedStatus = preparationStatus;
-
-      const databasePreparationStatus =
-        savedStatus === "preparing"
-          ? "in_progress"
-          : savedStatus === "prepared"
-            ? "ready"
-            : "pending";
-
-      /*
-       * SAVE
-       */
-      const { data: updatedRows, error: updateError } = await supabase
-        .from("event_municipalities")
-        .update({
-          municipal_status: savedStatus,
-
-          preparation_status: databasePreparationStatus,
-
-          local_venue_id: selectedVenueId || null,
-
-          ...(!isMunicipalEvent
-            ? { local_instructions: trimmedInstructions || null }
-            : {}),
-
-          registration_open:
-            savedStatus === "prepared" ? registrationOpen : false,
-
-          prepared_by: savedStatus === "prepared" ? user.id : null,
-
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedEvent.id)
-        .neq("municipal_status", "cancelled")
-        .select("id");
-
-      if (updateError) {
-        /*
-         * Inactive venue DB trigger error.
-         */
-        if (isVenueUnavailableError(updateError.message)) {
-          const message =
-            "The selected venue is currently inactive and cannot be assigned to this event. Please select an active venue.";
-
-          console.warn(
-            "Inactive venue assignment prevented:",
-            updateError.message,
-          );
-
-          setVenueError(`Venue Unavailable: ${message}`);
-
-          alert(`Venue Unavailable\n\n${message}`);
-
-          await fetchReceivedEvents();
-
-          return;
-        }
-
-        /*
-         * Existing schedule-conflict DB protection.
-         */
-        if (isVenueScheduleConflictError(updateError.message)) {
-          const message =
-            "This venue is already assigned to another event during the selected schedule. Please select another venue or use a non-overlapping schedule.";
-
-          console.warn(
-            "Venue schedule conflict prevented:",
-            updateError.message,
-          );
-
-          setVenueError(`Venue Schedule Conflict: ${message}`);
-
-          alert(`Venue Schedule Conflict\n\n${message}`);
-
-          return;
-        }
-
-        console.error("Preparation update error:", updateError);
-
-        alert(`Unable to update event preparation: ${updateError.message}`);
-
-        return;
-      }
-
-      if (!updatedRows || updatedRows.length === 0) {
-        alert(
-          "The event could not be updated because it has already been cancelled or locked.",
-        );
-
-        setRegistrationOpen(false);
-
-        closePrepareModal();
-
-        await fetchReceivedEvents();
-
-        return;
-      }
-
-      /*
-       * PARTICIPANT EMAIL NOTIFICATIONS
-       *
-       * Registration Open:
-       * CLOSED -> OPEN only.
-       *
-       * Local Instructions:
-       * Email registered participants only when
-       * the instructions actually changed.
-       *
-       * The Edge Function + delivery-log table
-       * provides the final duplicate protection.
-       */
-      const previousInstructions = normalizeInstructionText(
-        latestAssignment.local_instructions,
-      );
-
-      const currentInstructions = normalizeInstructionText(trimmedInstructions);
-
-      const shouldNotifyRegistrationOpen =
-        savedStatus === "prepared" &&
-        registrationOpen === true &&
-        latestAssignment.registration_open !== true;
-
-      const shouldNotifyInstructionUpdate =
-        !isMunicipalEvent &&
-        savedStatus === "prepared" &&
-        previousInstructions.length > 0 &&
-        currentInstructions.length > 0 &&
-        previousInstructions !== currentInstructions;
-
-      const previousVenueId = String(
-        latestAssignment.local_venue_id ?? "",
-      ).trim();
-
-      const currentVenueId = String(selectedVenueId ?? "").trim();
-
-      const shouldNotifyVenueUpdate =
-        savedStatus === "prepared" &&
-        previousVenueId.length > 0 &&
-        currentVenueId.length > 0 &&
-        previousVenueId !== currentVenueId;
-
-      /*
-       * Shared Edge Function caller.
-       */
-      const sendParticipantNotification = async (
-        notificationType: ParticipantEmailNotificationType,
-      ) => {
-        try {
-          const { data, error } =
-            await supabase.functions.invoke<ParticipantEmailResult>(
-              "send-participant-event-email",
-              {
-                body: {
-                  eventMunicipalityId: selectedEvent.id,
-
-                  notificationType,
-                },
-              },
+          if (selectedVenueError) {
+            console.error(
+              "Selected venue verification error:",
+              selectedVenueError.message,
             );
 
-          if (error) {
+            setVenueError(
+              "Unable to verify the selected municipal venue. Please try again.",
+            );
+
+            return;
+          }
+
+          if (!selectedVenueData) {
+            setVenueError(
+              "The selected venue could not be found. Please choose another venue.",
+            );
+
+            return;
+          }
+
+          const selectedVenue = selectedVenueData as VenueRow;
+
+          if (
+            normalizeMunicipality(selectedVenue.municipality) !==
+            normalizeMunicipality(municipality)
+          ) {
+            setVenueError(
+              "The selected venue does not belong to your municipality.",
+            );
+
+            return;
+          }
+
+          /*
+           * Latest inactive venue protection.
+           */
+          if (!isVenueActiveStatus(selectedVenue.status)) {
+            const venueName = selectedVenue.venue_name ?? "The selected venue";
+
+            const message = `${venueName} is currently inactive and cannot be assigned to this event. Please select an active venue.`;
+
+            setVenueError(`Venue Unavailable: ${message}`);
+
+            alert(`Venue Unavailable\n\n${message}`);
+
+            await fetchReceivedEvents();
+
+            return;
+          }
+        }
+
+        const savedStatus = preparationStatus;
+
+        const databasePreparationStatus =
+          savedStatus === "preparing"
+            ? "in_progress"
+            : savedStatus === "prepared"
+              ? "ready"
+              : "pending";
+
+        /*
+         * SAVE
+         */
+        const { data: updatedRows, error: updateError } = await supabase
+          .from("event_municipalities")
+          .update({
+            municipal_status: savedStatus,
+
+            preparation_status: databasePreparationStatus,
+
+            local_venue_id: selectedVenueId || null,
+
+            ...(!isMunicipalEvent
+              ? { local_instructions: trimmedInstructions || null }
+              : {}),
+
+            registration_open:
+              savedStatus === "prepared" ? registrationOpen : false,
+
+            prepared_by: savedStatus === "prepared" ? user.id : null,
+
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", selectedEvent.id)
+          .neq("municipal_status", "cancelled")
+          .select("id");
+
+        if (updateError) {
+          /*
+           * Inactive venue DB trigger error.
+           */
+          if (isVenueUnavailableError(updateError.message)) {
+            const message =
+              "The selected venue is currently inactive and cannot be assigned to this event. Please select an active venue.";
+
             console.warn(
-              `Participant email notification failed (${notificationType}):`,
-              error.message,
+              "Inactive venue assignment prevented:",
+              updateError.message,
+            );
+
+            setVenueError(`Venue Unavailable: ${message}`);
+
+            alert(`Venue Unavailable\n\n${message}`);
+
+            await fetchReceivedEvents();
+
+            return;
+          }
+
+          /*
+           * Existing schedule-conflict DB protection.
+           */
+          if (isVenueScheduleConflictError(updateError.message)) {
+            const message =
+              "This venue is already assigned to another event during the selected schedule. Please select another venue or use a non-overlapping schedule.";
+
+            console.warn(
+              "Venue schedule conflict prevented:",
+              updateError.message,
+            );
+
+            setVenueError(`Venue Schedule Conflict: ${message}`);
+
+            alert(`Venue Schedule Conflict\n\n${message}`);
+
+            return;
+          }
+
+          console.error("Preparation update error:", updateError);
+
+          alert(`Unable to update event preparation: ${updateError.message}`);
+
+          return;
+        }
+
+        if (!updatedRows || updatedRows.length === 0) {
+          alert(
+            "The event could not be updated because it has already been cancelled or locked.",
+          );
+
+          setRegistrationOpen(false);
+
+          closePrepareModal();
+
+          await fetchReceivedEvents();
+
+          return;
+        }
+
+        /*
+         * PARTICIPANT EMAIL NOTIFICATIONS
+         *
+         * Registration Open:
+         * CLOSED -> OPEN only.
+         *
+         * Local Instructions:
+         * Email registered participants only when
+         * the instructions actually changed.
+         *
+         * The Edge Function + delivery-log table
+         * provides the final duplicate protection.
+         */
+        const previousInstructions = normalizeInstructionText(
+          latestAssignment.local_instructions,
+        );
+
+        const currentInstructions =
+          normalizeInstructionText(trimmedInstructions);
+
+        const shouldNotifyRegistrationOpen =
+          savedStatus === "prepared" &&
+          registrationOpen === true &&
+          latestAssignment.registration_open !== true;
+
+        const shouldNotifyInstructionUpdate =
+          !isMunicipalEvent &&
+          savedStatus === "prepared" &&
+          previousInstructions.length > 0 &&
+          currentInstructions.length > 0 &&
+          previousInstructions !== currentInstructions;
+
+        const previousVenueId = String(
+          latestAssignment.local_venue_id ?? "",
+        ).trim();
+
+        const currentVenueId = String(selectedVenueId ?? "").trim();
+
+        const shouldNotifyVenueUpdate =
+          savedStatus === "prepared" &&
+          previousVenueId.length > 0 &&
+          currentVenueId.length > 0 &&
+          previousVenueId !== currentVenueId;
+
+        /*
+         * Shared Edge Function caller.
+         */
+        const sendParticipantNotification = async (
+          notificationType: ParticipantEmailNotificationType,
+        ) => {
+          try {
+            const { data, error } =
+              await supabase.functions.invoke<ParticipantEmailResult>(
+                "send-participant-event-email",
+                {
+                  body: {
+                    eventMunicipalityId: selectedEvent.id,
+
+                    notificationType,
+                  },
+                },
+              );
+
+            if (error) {
+              console.warn(
+                `Participant email notification failed (${notificationType}):`,
+                error.message,
+              );
+
+              return {
+                result: null as ParticipantEmailResult | null,
+
+                requestFailed: true,
+              };
+            }
+
+            const result = data ?? null;
+
+            if (Array.isArray(result?.failed) && result.failed.length > 0) {
+              console.warn(
+                `Some participant emails failed (${notificationType}):`,
+                result.failed,
+              );
+            }
+
+            return {
+              result,
+              requestFailed: false,
+            };
+          } catch (emailError) {
+            console.warn(
+              `Unexpected participant email notification error (${notificationType}):`,
+              emailError,
             );
 
             return {
@@ -1172,291 +1203,285 @@ export default function useMunicipalDashboard() {
               requestFailed: true,
             };
           }
+        };
 
-          const result = data ?? null;
+        let registrationEmail: {
+          result: ParticipantEmailResult | null;
 
-          if (Array.isArray(result?.failed) && result.failed.length > 0) {
-            console.warn(
-              `Some participant emails failed (${notificationType}):`,
-              result.failed,
-            );
-          }
+          requestFailed: boolean;
+        } | null = null;
 
-          return {
-            result,
-            requestFailed: false,
-          };
-        } catch (emailError) {
-          console.warn(
-            `Unexpected participant email notification error (${notificationType}):`,
-            emailError,
-          );
+        let instructionEmail: {
+          result: ParticipantEmailResult | null;
 
-          return {
-            result: null as ParticipantEmailResult | null,
+          requestFailed: boolean;
+        } | null = null;
 
-            requestFailed: true,
-          };
+        let venueEmail: {
+          result: ParticipantEmailResult | null;
+
+          requestFailed: boolean;
+        } | null = null;
+
+        /*
+         * REGISTRATION OPEN EMAIL
+         */
+        if (shouldNotifyRegistrationOpen) {
+          registrationEmail =
+            await sendParticipantNotification("registration_open");
         }
-      };
 
-      let registrationEmail: {
-        result: ParticipantEmailResult | null;
+        /*
+         * LOCAL INSTRUCTIONS UPDATED EMAIL
+         */
+        if (shouldNotifyInstructionUpdate) {
+          instructionEmail = await sendParticipantNotification(
+            "local_instructions_updated",
+          );
+        }
 
-        requestFailed: boolean;
-      } | null = null;
+        /*
+         * VENUE UPDATED EMAIL
+         */
+        if (shouldNotifyVenueUpdate) {
+          venueEmail = await sendParticipantNotification("venue_updated");
+        }
 
-      let instructionEmail: {
-        result: ParticipantEmailResult | null;
+        if (options?.keepOpen) {
+          setSelectedEvent((current) =>
+            current?.id === selectedEvent.id
+              ? {
+                  ...current,
+                  municipal_status: savedStatus,
+                  local_venue_id: selectedVenueId || null,
+                  local_instructions: trimmedInstructions || null,
+                  registration_open:
+                    savedStatus === "prepared" && registrationOpen,
+                }
+              : current,
+          );
+        } else {
+          closePrepareModal();
+        }
 
-        requestFailed: boolean;
-      } | null = null;
+        await fetchReceivedEvents(Boolean(options?.keepOpen));
 
-      let venueEmail: {
-        result: ParticipantEmailResult | null;
+        if (savedStatus === "prepared" && !options?.skipStaffPrompt) {
+          offerEventStaff({
+            assignmentId: selectedEvent.id,
+            title: selectedEvent.event?.title || "Prepared event",
+            prompt: true,
+          });
+        }
 
-        requestFailed: boolean;
-      } | null = null;
+        /*
+         * SUCCESS MESSAGE
+         */
+        const successMessages: string[] = [
+          `Event preparation status updated to ${getPreparationStatusLabel(
+            savedStatus,
+          )}.`,
+        ];
 
-      /*
-       * REGISTRATION OPEN EMAIL
-       */
-      if (shouldNotifyRegistrationOpen) {
-        registrationEmail =
-          await sendParticipantNotification("registration_open");
-      }
+        /*
+         * REGISTRATION EMAIL RESULT
+         */
+        if (shouldNotifyRegistrationOpen) {
+          if (registrationEmail?.requestFailed) {
+            successMessages.push(
+              "Registration is now open, but the registration-open email notification could not be processed.",
+            );
+          } else {
+            const result = registrationEmail?.result;
 
-      /*
-       * LOCAL INSTRUCTIONS UPDATED EMAIL
-       */
-      if (shouldNotifyInstructionUpdate) {
-        instructionEmail = await sendParticipantNotification(
-          "local_instructions_updated",
+            const totalRecipients = result?.totalRecipients ?? 0;
+
+            const sentCount = result?.sent ?? 0;
+
+            const alreadySentCount = result?.skippedAlreadySent ?? 0;
+
+            const inProgressCount = result?.skippedInProgress ?? 0;
+
+            const failedCount = Array.isArray(result?.failed)
+              ? result.failed.length
+              : 0;
+
+            if (totalRecipients === 0) {
+              successMessages.push(
+                "Registration is now open. No approved participants with email addresses were found for this municipality.",
+              );
+            } else {
+              const details = [
+                `${sentCount} sent`,
+                `${alreadySentCount} already notified`,
+              ];
+
+              if (inProgressCount > 0) {
+                details.push(`${inProgressCount} already being processed`);
+              }
+
+              if (failedCount > 0) {
+                details.push(`${failedCount} failed`);
+              }
+
+              successMessages.push(
+                `Registration-open email: ${details.join(", ")}.`,
+              );
+            }
+          }
+        }
+
+        /*
+         * LOCAL INSTRUCTIONS EMAIL RESULT
+         */
+        if (shouldNotifyInstructionUpdate) {
+          if (instructionEmail?.requestFailed) {
+            successMessages.push(
+              "Local instructions were updated, but the participant instruction-update email could not be processed.",
+            );
+          } else {
+            const result = instructionEmail?.result;
+
+            const totalRecipients = result?.totalRecipients ?? 0;
+
+            const sentCount = result?.sent ?? 0;
+
+            const alreadySentCount = result?.skippedAlreadySent ?? 0;
+
+            const inProgressCount = result?.skippedInProgress ?? 0;
+
+            const failedCount = Array.isArray(result?.failed)
+              ? result.failed.length
+              : 0;
+
+            if (totalRecipients === 0) {
+              successMessages.push(
+                "Local instructions were updated. No registered participants with email addresses were found for this event.",
+              );
+            } else {
+              const details = [
+                `${sentCount} sent`,
+                `${alreadySentCount} already notified`,
+              ];
+
+              if (inProgressCount > 0) {
+                details.push(`${inProgressCount} already being processed`);
+              }
+
+              if (failedCount > 0) {
+                details.push(`${failedCount} failed`);
+              }
+
+              successMessages.push(
+                `Instructions-update email: ${details.join(", ")}.`,
+              );
+            }
+          }
+        }
+
+        /*
+         * VENUE UPDATE EMAIL RESULT
+         */
+        if (shouldNotifyVenueUpdate) {
+          if (venueEmail?.requestFailed) {
+            successMessages.push(
+              "The event venue was updated, but the participant venue-update email could not be processed.",
+            );
+          } else {
+            const result = venueEmail?.result;
+
+            const totalRecipients = result?.totalRecipients ?? 0;
+
+            const sentCount = result?.sent ?? 0;
+
+            const alreadySentCount = result?.skippedAlreadySent ?? 0;
+
+            const inProgressCount = result?.skippedInProgress ?? 0;
+
+            const failedCount = Array.isArray(result?.failed)
+              ? result.failed.length
+              : 0;
+
+            if (totalRecipients === 0) {
+              successMessages.push(
+                "The event venue was updated. No registered participants with email addresses were found for this event.",
+              );
+            } else {
+              const details = [
+                `${sentCount} sent`,
+                `${alreadySentCount} already notified`,
+              ];
+
+              if (inProgressCount > 0) {
+                details.push(`${inProgressCount} already being processed`);
+              }
+
+              if (failedCount > 0) {
+                details.push(`${failedCount} failed`);
+              }
+
+              successMessages.push(
+                `Venue-update email: ${details.join(", ")}.`,
+              );
+            }
+          }
+        }
+        const emailResults = [
+          registrationEmail,
+          instructionEmail,
+          venueEmail,
+        ].filter(
+          (result): result is NonNullable<typeof result> => result !== null,
         );
-      }
 
-      /*
-       * VENUE UPDATED EMAIL
-       */
-      if (shouldNotifyVenueUpdate) {
-        venueEmail = await sendParticipantNotification("venue_updated");
-      }
+        const hasEmailDeliveryWarning = emailResults.some((emailResult) => {
+          const failedCount = Array.isArray(emailResult.result?.failed)
+            ? emailResult.result.failed.length
+            : 0;
 
-      closePrepareModal();
-
-      await fetchReceivedEvents();
-
-      if (savedStatus === "prepared") {
-        offerEventStaff({
-          assignmentId: selectedEvent.id,
-          title: selectedEvent.event?.title || "Prepared event",
-          prompt: true,
+          return (
+            emailResult.requestFailed ||
+            failedCount > 0 ||
+            Boolean(emailResult.result?.error)
+          );
         });
-      }
 
-      /*
-       * SUCCESS MESSAGE
-       */
-      const successMessages: string[] = [
-        `Event preparation status updated to ${getPreparationStatusLabel(
-          savedStatus,
-        )}.`,
-      ];
+        setDeliveryToast({
+          id: `${selectedEvent.id}-${Date.now()}`,
 
-      /*
-       * REGISTRATION EMAIL RESULT
-       */
-      if (shouldNotifyRegistrationOpen) {
-        if (registrationEmail?.requestFailed) {
-          successMessages.push(
-            "Registration is now open, but the registration-open email notification could not be processed.",
-          );
-        } else {
-          const result = registrationEmail?.result;
+          variant: hasEmailDeliveryWarning ? "warning" : "success",
 
-          const totalRecipients = result?.totalRecipients ?? 0;
+          title: hasEmailDeliveryWarning
+            ? "Preparation Saved With Email Issues"
+            : "Preparation Saved Successfully",
 
-          const sentCount = result?.sent ?? 0;
+          message: successMessages.join("\n\n"),
+        });
+        return true;
+      } catch (error) {
+        console.error("Unexpected preparation update error:", error);
 
-          const alreadySentCount = result?.skippedAlreadySent ?? 0;
-
-          const inProgressCount = result?.skippedInProgress ?? 0;
-
-          const failedCount = Array.isArray(result?.failed)
-            ? result.failed.length
-            : 0;
-
-          if (totalRecipients === 0) {
-            successMessages.push(
-              "Registration is now open. No approved participants with email addresses were found for this municipality.",
-            );
-          } else {
-            const details = [
-              `${sentCount} sent`,
-              `${alreadySentCount} already notified`,
-            ];
-
-            if (inProgressCount > 0) {
-              details.push(`${inProgressCount} already being processed`);
-            }
-
-            if (failedCount > 0) {
-              details.push(`${failedCount} failed`);
-            }
-
-            successMessages.push(
-              `Registration-open email: ${details.join(", ")}.`,
-            );
-          }
-        }
-      }
-
-      /*
-       * LOCAL INSTRUCTIONS EMAIL RESULT
-       */
-      if (shouldNotifyInstructionUpdate) {
-        if (instructionEmail?.requestFailed) {
-          successMessages.push(
-            "Local instructions were updated, but the participant instruction-update email could not be processed.",
-          );
-        } else {
-          const result = instructionEmail?.result;
-
-          const totalRecipients = result?.totalRecipients ?? 0;
-
-          const sentCount = result?.sent ?? 0;
-
-          const alreadySentCount = result?.skippedAlreadySent ?? 0;
-
-          const inProgressCount = result?.skippedInProgress ?? 0;
-
-          const failedCount = Array.isArray(result?.failed)
-            ? result.failed.length
-            : 0;
-
-          if (totalRecipients === 0) {
-            successMessages.push(
-              "Local instructions were updated. No registered participants with email addresses were found for this event.",
-            );
-          } else {
-            const details = [
-              `${sentCount} sent`,
-              `${alreadySentCount} already notified`,
-            ];
-
-            if (inProgressCount > 0) {
-              details.push(`${inProgressCount} already being processed`);
-            }
-
-            if (failedCount > 0) {
-              details.push(`${failedCount} failed`);
-            }
-
-            successMessages.push(
-              `Instructions-update email: ${details.join(", ")}.`,
-            );
-          }
-        }
-      }
-
-      /*
-       * VENUE UPDATE EMAIL RESULT
-       */
-      if (shouldNotifyVenueUpdate) {
-        if (venueEmail?.requestFailed) {
-          successMessages.push(
-            "The event venue was updated, but the participant venue-update email could not be processed.",
-          );
-        } else {
-          const result = venueEmail?.result;
-
-          const totalRecipients = result?.totalRecipients ?? 0;
-
-          const sentCount = result?.sent ?? 0;
-
-          const alreadySentCount = result?.skippedAlreadySent ?? 0;
-
-          const inProgressCount = result?.skippedInProgress ?? 0;
-
-          const failedCount = Array.isArray(result?.failed)
-            ? result.failed.length
-            : 0;
-
-          if (totalRecipients === 0) {
-            successMessages.push(
-              "The event venue was updated. No registered participants with email addresses were found for this event.",
-            );
-          } else {
-            const details = [
-              `${sentCount} sent`,
-              `${alreadySentCount} already notified`,
-            ];
-
-            if (inProgressCount > 0) {
-              details.push(`${inProgressCount} already being processed`);
-            }
-
-            if (failedCount > 0) {
-              details.push(`${failedCount} failed`);
-            }
-
-            successMessages.push(`Venue-update email: ${details.join(", ")}.`);
-          }
-        }
-      }
-      const emailResults = [
-        registrationEmail,
-        instructionEmail,
-        venueEmail,
-      ].filter(
-        (result): result is NonNullable<typeof result> => result !== null,
-      );
-
-      const hasEmailDeliveryWarning = emailResults.some((emailResult) => {
-        const failedCount = Array.isArray(emailResult.result?.failed)
-          ? emailResult.result.failed.length
-          : 0;
-
-        return (
-          emailResult.requestFailed ||
-          failedCount > 0 ||
-          Boolean(emailResult.result?.error)
+        alert(
+          error instanceof Error
+            ? `Unable to update event preparation: ${error.message}`
+            : "An unexpected error occurred while updating the event.",
         );
-      });
-
-      setDeliveryToast({
-        id: `${selectedEvent.id}-${Date.now()}`,
-
-        variant: hasEmailDeliveryWarning ? "warning" : "success",
-
-        title: hasEmailDeliveryWarning
-          ? "Preparation Saved With Email Issues"
-          : "Preparation Saved Successfully",
-
-        message: successMessages.join("\n\n"),
-      });
-    } catch (error) {
-      console.error("Unexpected preparation update error:", error);
-
-      alert(
-        error instanceof Error
-          ? `Unable to update event preparation: ${error.message}`
-          : "An unexpected error occurred while updating the event.",
-      );
-    } finally {
-      setSavingPreparation(false);
-    }
-  }, [
-    closePrepareModal,
-    fetchReceivedEvents,
-    localInstructions,
-    municipality,
-    preparationStatus,
-    registrationOpen,
-    savingPreparation,
-    selectedEvent,
-    selectedVenueId,
-  ]);
+      } finally {
+        setSavingPreparation(false);
+      }
+    },
+    [
+      closePrepareModal,
+      fetchReceivedEvents,
+      localInstructions,
+      municipality,
+      preparationStatus,
+      registrationOpen,
+      savingPreparation,
+      selectedEvent,
+      selectedVenueId,
+    ],
+  );
 
   const summary = useMemo(
     () => getMunicipalDashboardSummary(receivedEvents),

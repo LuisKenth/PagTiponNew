@@ -32,7 +32,7 @@ type ParticipantNavigationItem = {
 
 const participantNavigation: ParticipantNavigationItem[] = [
   { label: "Home", href: "/dashboard/participant", icon: LayoutDashboard },
-  { label: "Find Events", href: "/dashboard/participant/events", icon: CalendarDays },
+  { label: "Available Events", href: "/dashboard/participant/events", icon: CalendarDays },
   { label: "My Events", href: "/dashboard/participant/my-events", icon: TicketCheck, requiresVerification: true },
   { label: "My Account", href: "/dashboard/participant/account", icon: UserRound },
   { label: "Notifications", href: "/dashboard/participant/notifications", icon: Bell, showUnreadBadge: true },
@@ -339,7 +339,7 @@ export default function ParticipantSidebar() {
         {participantNavigation.slice(0, 4).map((item) => {
           const Icon = item.icon;
           const active = isNavigationItemActive(navigationGroup(pathname), item.href);
-          return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-semibold ${active ? "bg-violet-50 text-violet-700" : "text-slate-600"}`}><Icon className="size-5" aria-hidden="true" /><span>{item.label === "Find Events" ? "Events" : item.label === "My Account" ? "Account" : item.label}</span></Link>;
+          return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-semibold ${active ? "bg-violet-50 text-violet-700" : "text-slate-600"}`}><Icon className="size-5" aria-hidden="true" /><span>{item.label === "Available Events" ? "Events" : item.label === "My Account" ? "Account" : item.label}</span></Link>;
         })}
       </nav>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-slate-200 bg-white lg:block">

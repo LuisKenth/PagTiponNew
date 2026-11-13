@@ -1,10 +1,16 @@
 "use client";
+import CertificateOption from "@/app/components/certificates/CertificateOption";
 import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  ClipboardCheck,
+  UsersRound,
+  X,
   CalendarPlus,
   MapPin,
   FileText,
@@ -49,6 +55,7 @@ export default function MunicipalEventForm({
     [end, setEnd] = useState(""),
     [venueId, setVenueId] = useState(""),
     [instructions, setInstructions] = useState("");
+  const [certificatesEnabled, setCertificatesEnabled] = useState(false);
   const [audience, setAudience] = useState<"all" | "categories" | null>(null),
     [categories, setCategories] = useState<string[]>([]),
     [other, setOther] = useState("");
@@ -91,6 +98,7 @@ export default function MunicipalEventForm({
         if (!e) throw new Error("Event is unavailable in your municipality.");
         setRecord(e);
         setTitle(e.title);
+        setCertificatesEnabled(e.certificates_enabled === true);
         setDescription(e.description || "");
         setStart(phInput(e.start_at));
         setEnd(phInput(e.end_at));
@@ -144,6 +152,7 @@ export default function MunicipalEventForm({
     try {
       id.current ??= crypto.randomUUID();
       const payload: EventPayload = {
+        certificates_enabled: certificatesEnabled,
         action,
         title: title.trim().toUpperCase(),
         description,
@@ -265,6 +274,11 @@ export default function MunicipalEventForm({
                   description={description}
                   onTitleChange={setTitle}
                   onDescriptionChange={setDescription}
+                />
+                <CertificateOption
+                  enabled={certificatesEnabled}
+                  onChange={setCertificatesEnabled}
+                  disabled={busy || readOnly}
                 />
                 <EventScheduleSection
                   scope="municipal"
@@ -492,29 +506,159 @@ export default function MunicipalEventForm({
       )}
       <dialog
         ref={successDialog}
-        className="m-auto max-w-md rounded-2xl p-6 shadow-xl backdrop:bg-slate-950/50"
+        className="m-auto max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto rounded-3xl border-0 bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/60"
         style={{ width: "calc(100% - 2rem)" }}
         aria-labelledby="municipal-save-success"
+        aria-describedby="municipal-save-description"
+        onCancel={(event) => {
+          if (record && record.status !== "draft") {
+            event.preventDefault();
+            successDialog.current?.close();
+            router.push("/dashboard/municipal/local-events");
+          }
+        }}
       >
-        <h2 id="municipal-save-success" className="text-xl font-bold">
-          {record?.status === "draft" ? "Draft saved" : "Event published"}
-        </h2>
-        <p role="status" className="my-4 text-slate-600">
-          {success}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          {record?.status !== "draft" && record?.id && <Link className="rounded-xl bg-indigo-600 px-4 py-2 text-white" href={`/dashboard/municipal/local-events?prepareEvent=${encodeURIComponent(record.id)}`}>Continue to Preparation</Link>}
+        <div className="relative border-b border-slate-100 px-5 pb-6 pt-7 sm:px-7">
           <button
             type="button"
-            autoFocus
-            className="rounded-xl border px-4 py-2"
-            onClick={() => successDialog.current?.close()}
+            aria-label={
+              record?.status === "draft"
+                ? "Close and continue editing"
+                : "Close and view municipal events"
+            }
+            className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            onClick={() => {
+              successDialog.current?.close();
+
+              if (record?.status !== "draft") {
+                router.push("/dashboard/municipal/local-events");
+              }
+            }}
           >
-            OK
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
+
+          <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+            <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
+          </span>
+
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">
+            Saved successfully
+          </p>
+
+          <h2
+            id="municipal-save-success"
+            className="mt-2 pr-7 text-2xl font-bold tracking-tight"
+          >
+            {record?.status === "draft"
+              ? "Your draft is saved"
+              : "Your event is published"}
+          </h2>
+
+          <p
+            id="municipal-save-description"
+            role="status"
+            className="mt-3 text-sm leading-6 text-slate-600"
+          >
+            {record?.status === "draft"
+              ? "You can continue editing now or return to Municipal Events later."
+              : "Continue with preparation, then assign staff to manage attendance."}
+          </p>
+        </div>
+
+        <div className="space-y-5 px-5 py-5 sm:px-7">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Municipal event
+              {municipality ? ` · ${municipality}` : ""}
+            </p>
+
+            <p className="mt-2 break-words text-base font-bold leading-6 text-slate-950">
+              {record?.title || title}
+            </p>
+
+            <span
+              className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                record?.status === "draft"
+                  ? "bg-slate-200 text-slate-700"
+                  : "bg-indigo-50 text-indigo-700"
+              }`}
+            >
+              {record?.status === "draft"
+                ? "Draft · Not published"
+                : "Published · Registration closed"}
+            </span>
+          </div>
+
+          {record?.status !== "draft" && (
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">What’s next?</h3>
+
+              <ol className="mt-3 space-y-4">
+                <li className="flex items-start gap-3">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
+                  </span>
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      1. Complete event preparation
+                    </p>
+
+                    <p className="mt-1 text-sm leading-5 text-slate-500">
+                      Review the venue and instructions, mark the event Ready,
+                      and manage registration.
+                    </p>
+                  </div>
+                </li>
+
+                <li className="flex items-start gap-3">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                    <UsersRound className="h-5 w-5" aria-hidden="true" />
+                  </span>
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      2. Assign Event Staff
+                    </p>
+
+                    <p className="mt-1 text-sm leading-5 text-slate-500">
+                      Choose staff to handle participant Time-in and Time-out.
+                      Staff assignment follows preparation.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 space-y-3 border-t border-slate-200 bg-white px-5 py-5 sm:px-7">
+          {record?.status !== "draft" && record?.id ? (
+            <Link
+              autoFocus
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              href={`/dashboard/municipal/local-events?prepareEvent=${encodeURIComponent(record.id)}`}
+              onClick={() => successDialog.current?.close()}
+            >
+              Continue to Preparation
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              autoFocus
+              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              onClick={() => successDialog.current?.close()}
+            >
+              Continue Editing
+            </button>
+          )}
+
           <Link
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-white"
+            className="flex min-h-12 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             href="/dashboard/municipal/local-events"
+            onClick={() => successDialog.current?.close()}
           >
             View Municipal Events
           </Link>

@@ -1,181 +1,188 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { NOTIFICATION_UPDATE_EVENT } from "../notifications/utils";
 
+function isMissingSession(error: unknown) {
+  const value = error as { name?: string; code?: string } | null;
+
+  return (
+    value?.name === "AuthSessionMissingError" ||
+    value?.code === "session_not_found"
+  );
+}
+
 export function useUnreadNotificationCount() {
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loadingUnreadCount, setLoadingUnreadCount] =
-    useState(true);
+  const [loadingUnreadCount, setLoadingUnreadCount] = useState(true);
+
+  const mounted = useRef(false);
+  const generation = useRef(0);
+  const channel = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const subscribedUser = useRef("");
+
+  const stopChannel = useCallback(() => {
+    const previous = channel.current;
+
+    channel.current = null;
+    subscribedUser.current = "";
+
+    if (previous) {
+      void supabase.removeChannel(previous);
+    }
+  }, []);
 
   const fetchUnreadCount = useCallback(
-    async (providedUserId?: string) => {
+    async (_providedUserId?: string) => {
+      if (!mounted.current) return;
+
+      const ticket = ++generation.current;
+      const current = () =>
+        mounted.current && ticket === generation.current;
+
       try {
-        let userId = providedUserId;
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
 
-        if (!userId) {
-          const {
-            data: { user },
-            error: userError,
-          } = await supabase.auth.getUser();
+        if (!current()) return;
 
-          if (userError) {
-            throw userError;
-          }
-
-          if (!user) {
-            setUnreadCount(0);
-            return;
-          }
-
-          userId = user.id;
+        if (sessionError && !isMissingSession(sessionError)) {
+          throw sessionError;
         }
 
-        const { count, error: countError } =
-          await supabase
-            .from("notifications")
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq("user_id", userId)
-            .eq("read", false);
-
-        if (countError) {
-          throw countError;
+        if (!sessionData.session || sessionError) {
+          stopChannel();
+          setUnreadCount(0);
+          return;
         }
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (!current()) return;
+
+        if (userError && !isMissingSession(userError)) {
+          throw userError;
+        }
+
+        if (!user || userError) {
+          stopChannel();
+          setUnreadCount(0);
+          return;
+        }
+
+        if (subscribedUser.current !== user.id) {
+          stopChannel();
+          setUnreadCount(0);
+          subscribedUser.current = user.id;
+
+          channel.current = supabase
+            .channel(`provincial-sidebar-notifications-${user.id}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "*",
+                schema: "public",
+                table: "notifications",
+                filter: `user_id=eq.${user.id}`,
+              },
+              () => {
+                void fetchUnreadCount();
+              },
+            )
+            .subscribe();
+        }
+
+        const { count, error } = await supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("read", false);
+
+        if (!current()) return;
+        if (error) throw error;
 
         setUnreadCount(count ?? 0);
       } catch (error) {
-        console.error(
-          "Unread notification count error:",
-          error,
-        );
+        if (!current()) return;
+
+        if (!isMissingSession(error)) {
+          console.error("Unread notification count error:", error);
+        } else {
+          stopChannel();
+        }
 
         setUnreadCount(0);
       } finally {
-        setLoadingUnreadCount(false);
+        if (current()) {
+          setLoadingUnreadCount(false);
+        }
       }
     },
-    [],
+    [stopChannel],
   );
 
   useEffect(() => {
-    let notificationChannel:
-      | ReturnType<typeof supabase.channel>
-      | null = null;
+    mounted.current = true;
+    void fetchUnreadCount();
 
-    let isMounted = true;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Ignore requests started before logout or an account change.
+      generation.current++;
 
-    async function setupNotificationListener() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      if (!session || session.user.id !== subscribedUser.current) {
+        stopChannel();
 
-      if (userError) {
-        console.error(
-          "Notification user fetch error:",
-          userError.message,
-        );
+        if (mounted.current) {
+          setUnreadCount(0);
+        }
+      }
 
+      if (!session && mounted.current) {
         setLoadingUnreadCount(false);
-        return;
       }
 
-      if (!user || !isMounted) {
-        setUnreadCount(0);
-        setLoadingUnreadCount(false);
-        return;
+      // Run auth requests outside the auth callback.
+      if (session) {
+        queueMicrotask(() => {
+          if (mounted.current) {
+            void fetchUnreadCount();
+          }
+        });
       }
+    });
 
-      await fetchUnreadCount(user.id);
-
-      if (!isMounted) {
-        return;
-      }
-
-      notificationChannel = supabase
-        .channel(
-          `provincial-sidebar-notifications-${user.id}`,
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            void fetchUnreadCount(user.id);
-          },
-        )
-        .subscribe();
-    }
-
-    function handleNotificationUpdate() {
+    const refresh = () => {
       void fetchUnreadCount();
-    }
+    };
 
-    function handleWindowFocus() {
-      void fetchUnreadCount();
-    }
-
-    function handleVisibilityChange() {
+    const visible = () => {
       if (document.visibilityState === "visible") {
-        void fetchUnreadCount();
-      }
-    }
-
-    void setupNotificationListener();
-
-    window.addEventListener(
-      NOTIFICATION_UPDATE_EVENT,
-      handleNotificationUpdate,
-    );
-
-    window.addEventListener(
-      "focus",
-      handleWindowFocus,
-    );
-
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange,
-    );
-
-    return () => {
-      isMounted = false;
-
-      window.removeEventListener(
-        NOTIFICATION_UPDATE_EVENT,
-        handleNotificationUpdate,
-      );
-
-      window.removeEventListener(
-        "focus",
-        handleWindowFocus,
-      );
-
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
-
-      if (notificationChannel) {
-        void supabase.removeChannel(
-          notificationChannel,
-        );
+        refresh();
       }
     };
-  }, [fetchUnreadCount]);
+
+    window.addEventListener(NOTIFICATION_UPDATE_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", visible);
+
+    return () => {
+      mounted.current = false;
+      generation.current++;
+
+      subscription.unsubscribe();
+      stopChannel();
+
+      window.removeEventListener(NOTIFICATION_UPDATE_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [fetchUnreadCount, stopChannel]);
 
   return {
     unreadCount,

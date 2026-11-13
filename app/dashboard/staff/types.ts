@@ -14,6 +14,9 @@ export type EventAssignment = {
   event_id: DatabaseId;
   municipality: string;
 
+  municipal_status?: string | null;
+  check_out_deadline_at?: string | null;
+
   // Local event preparation details
   local_venue_id?: string | null;
   local_instructions?: string | null;
@@ -40,6 +43,9 @@ export type RawEventAssignment = {
   id: DatabaseId;
   event_id: DatabaseId;
   municipality: string;
+
+  municipal_status?: string | null;
+  check_out_deadline_at?: string | null;
 
   // Local event preparation details
   local_venue_id?: string | null;

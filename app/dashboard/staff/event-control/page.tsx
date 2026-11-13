@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CalendarCheck, ClipboardList } from "lucide-react";
 
 import EventAttendanceControl from "../components/EventAttendanceControl";
@@ -11,8 +12,22 @@ import { useStaffAttendanceContext } from "../context/StaffAttendanceContext";
 /** One Event Staff workspace: event → session → scanner, without page changes. */
 export default function StaffEventControlPage() {
   const dashboard = useStaffAttendanceContext();
-  const activeSession = dashboard.isCheckInOpen ||
-    (dashboard.isCheckOutOpen && !dashboard.isCheckOutExpired);
+  const [entryReady, setEntryReady] = useState(false);
+  const { loading, prepareEventControl } = dashboard;
+  useEffect(() => {
+    if (loading) return;
+    let current = true;
+    void prepareEventControl().finally(() => {
+      if (current) setEntryReady(true);
+    });
+    return () => {
+      current = false;
+    };
+  }, [loading, prepareEventControl]);
+  const activeSession =
+    !dashboard.selectedEventIsReferenceOnly &&
+    (dashboard.isCheckInOpen ||
+      (dashboard.isCheckOutOpen && !dashboard.isCheckOutExpired));
 
   return (
     <div className="space-y-5">
@@ -22,12 +37,15 @@ export default function StaffEventControlPage() {
             <CalendarCheck className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Event Staff</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Event Staff
+            </p>
             <h1 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">
               Event Control &amp; Attendance
             </h1>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Choose an event, open Time-in or Time-out, and scan participants here.
+              Choose an event, open Time-in or Time-out, and scan participants
+              here.
             </p>
           </div>
         </div>
@@ -40,11 +58,51 @@ export default function StaffEventControlPage() {
         </Link>
       </header>
 
+      {!dashboard.loading &&
+        (dashboard.selectionNotice ||
+          dashboard.selectedEventIsReferenceOnly ||
+          !dashboard.selectedAssignment) && (
+          <div
+            role="status"
+            className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"
+          >
+            <p>
+              {dashboard.selectionNotice ||
+                (dashboard.selectedEventIsReferenceOnly
+                  ? "This event is now reference-only. Attendance tools are stopped. Choose an active event to continue."
+                  : dashboard.recommendedAssignment
+                    ? "Choose an assigned event to continue."
+                    : "No active events to manage. Past attendance remains available in Attendance Records.")}
+            </p>
+            {dashboard.recommendedAssignment &&
+              String(dashboard.recommendedAssignment.id) !==
+                dashboard.selectedEventMunicipalityId && (
+                <button
+                  type="button"
+                  disabled={
+                    dashboard.attendanceLoading ||
+                    dashboard.controlLoading !== null ||
+                    dashboard.checkOutControlLoading !== null
+                  }
+                  onClick={() =>
+                    void dashboard.selectEvent(
+                      String(dashboard.recommendedAssignment!.id),
+                    )
+                  }
+                  className="min-h-11 rounded-xl border border-amber-400 bg-white px-4 py-2 font-semibold disabled:opacity-50"
+                >
+                  Select recommended event:{" "}
+                  {dashboard.recommendedAssignment.event.title}
+                </button>
+              )}
+          </div>
+        )}
+
       <EventAttendanceControl
         assignments={dashboard.eventAssignments}
         selectedId={dashboard.selectedEventMunicipalityId}
         selectedAssignment={dashboard.selectedAssignment}
-        loading={dashboard.loading}
+        loading={dashboard.loading || !entryReady}
         controlLoading={dashboard.controlLoading}
         isCheckInOpen={dashboard.isCheckInOpen}
         wasCheckInOpened={dashboard.wasCheckInOpened}
@@ -70,7 +128,7 @@ export default function StaffEventControlPage() {
 
       {/* When active, the workspace automatically scrolls into view after
           Open/Reopen Time-in or Time-out and remains on this route. */}
-      <InlineAttendanceWorkspace />
+      {entryReady && <InlineAttendanceWorkspace />}
 
       {/* Display control errors or confirmations while no scanner is active;
           the QR component displays messages during active sessions. */}

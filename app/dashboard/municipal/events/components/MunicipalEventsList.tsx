@@ -92,11 +92,23 @@ export default function MunicipalEventsList({
         ) : (
           <MunicipalEventTable
             items={events}
-            renderActions={(item) => ["upcoming", "published", "ongoing"].includes(item.event?.status || "") ? <EventStaffAction assignmentId={item.id} title={item.event?.title || "Provincial event"} ready={item.municipal_status === "prepared"} /> : null}
+            renderActions={(item) =>
+              ["upcoming", "published", "ongoing"].includes(
+                item.event?.status || "",
+              ) ? (
+                <EventStaffAction
+                  statusOnly
+                  assignmentId={item.id}
+                  title={item.event?.title || "Provincial event"}
+                  ready={item.municipal_status === "prepared"}
+                />
+              ) : null
+            }
             renderDetails={(item, close) => (
               <ReceivedEventCard
                 item={item}
                 venues={venues}
+                onBeforeStaff={close}
                 onPrepare={(item) => {
                   close();
                   onPrepare(item);

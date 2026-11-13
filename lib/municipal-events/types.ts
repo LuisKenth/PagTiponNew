@@ -1,4 +1,5 @@
 export type MunicipalEvent = {
+  certificates_enabled: boolean;
   id: string;
   title: string;
   description: string | null;
@@ -29,6 +30,7 @@ export type EventVenue = {
   status: string;
 };
 export type EventPayload = {
+  certificates_enabled?: boolean;
   action: "draft" | "published" | "cancelled";
   title: string;
   description: string;

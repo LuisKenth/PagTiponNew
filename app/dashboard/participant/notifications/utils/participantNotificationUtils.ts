@@ -1,33 +1,29 @@
 import {
-    Bell,
-    CalendarDays,
-    CheckCircle2,
-    TicketCheck,
-    UserCheck,
-    XCircle,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  TicketCheck,
+  UserCheck,
+  XCircle,
 } from "lucide-react";
 
 import type { NotificationRow } from "../types/participantNotifications";
 
-export function normalizeNotificationType(
-    value: string | null | undefined,
-) {
-    return value?.trim().toLowerCase() ?? "";
+export function normalizeNotificationType(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
-export function formatNotificationDateTime(
-    value: string,
-) {
-    const date = new Date(value);
+export function formatNotificationDateTime(value: string) {
+  const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) {
-        return "Unknown date";
-    }
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
 
-    return date.toLocaleString("en-PH", {
-        dateStyle: "medium",
-        timeStyle: "short",
-    });
+  return date.toLocaleString("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 /*
@@ -36,13 +32,8 @@ export function formatNotificationDateTime(
  * Used when a prepared municipal event
  * becomes open for participant registration.
  */
-export function isInvitationNotification(
-    type: string | null,
-) {
-    return (
-        normalizeNotificationType(type) ===
-        "event_invitation"
-    );
+export function isInvitationNotification(type: string | null) {
+  return normalizeNotificationType(type) === "event_invitation";
 }
 
 /*
@@ -50,246 +41,191 @@ export function isInvitationNotification(
  *
  * Kept separate from event invitations.
  */
-export function isRegistrationNotification(
-    type: string | null,
-) {
-    const normalizedType =
-        normalizeNotificationType(type);
+export function isRegistrationNotification(type: string | null) {
+  const normalizedType = normalizeNotificationType(type);
 
-    return (
-        normalizedType ===
-            "registration_confirmation" ||
-        normalizedType.includes("registration") ||
-        normalizedType.includes("rsvp")
-    );
+  return (
+    normalizedType === "registration_confirmation" ||
+    normalizedType.includes("registration") ||
+    normalizedType.includes("rsvp")
+  );
 }
 
-export function isCancellationNotification(
-    type: string | null,
-) {
-    const normalizedType =
-        normalizeNotificationType(type);
+export function isCancellationNotification(type: string | null) {
+  const normalizedType = normalizeNotificationType(type);
 
-    return (
-        normalizedType === "event_cancelled" ||
-        normalizedType.includes("cancel")
-    );
+  return (
+    normalizedType === "event_cancelled" || normalizedType.includes("cancel")
+  );
 }
 
-export function isAttendanceNotification(
-    type: string | null,
-) {
-    const normalizedType =
-        normalizeNotificationType(type);
+export function isAttendanceNotification(type: string | null) {
+  const normalizedType = normalizeNotificationType(type);
 
-    return (
-        normalizedType ===
-            "attendance_confirmation" ||
-        normalizedType === "attendance_absent" ||
-        normalizedType.includes("attendance") ||
-        normalizedType.includes("check_in") ||
-        normalizedType.includes("check-in") ||
-        normalizedType.includes("present") ||
-        normalizedType.includes("absent")
-    );
+  return (
+    normalizedType === "attendance_confirmation" ||
+    normalizedType === "attendance_absent" ||
+    normalizedType.includes("attendance") ||
+    normalizedType.includes("check_in") ||
+    normalizedType.includes("check-in") ||
+    normalizedType.includes("present") ||
+    normalizedType.includes("absent")
+  );
 }
 
-export function isEventUpdateNotification(
-    type: string | null,
-) {
-    return (
-        normalizeNotificationType(type) ===
-        "event_updated"
-    );
+export function isEventUpdateNotification(type: string | null) {
+  return normalizeNotificationType(type) === "event_updated";
 }
 
-export function isGeneralEventNotification(
-    type: string | null,
-) {
-    const normalizedType =
-        normalizeNotificationType(type);
+export function isGeneralEventNotification(type: string | null) {
+  const normalizedType = normalizeNotificationType(type);
 
-    return [
-        "event_invitation",
-        "event_reminder",
-        "event_updated",
-    ].includes(normalizedType);
+  return ["event_invitation", "event_reminder", "event_updated"].includes(
+    normalizedType,
+  );
 }
 
-export function getNotificationIcon(
-    type: string | null,
-) {
-    const normalizedType =
-        normalizeNotificationType(type);
+export function getNotificationIcon(type: string | null) {
+  const normalizedType = normalizeNotificationType(type);
 
-    if (isCancellationNotification(type)) {
-        return XCircle;
-    }
+  if (isCancellationNotification(type)) {
+    return XCircle;
+  }
 
-    if (isRegistrationNotification(type)) {
-        return TicketCheck;
-    }
+  if (isRegistrationNotification(type)) {
+    return TicketCheck;
+  }
 
-    if (
-        normalizedType === "attendance_absent" ||
-        normalizedType.includes("absent")
-    ) {
-        return XCircle;
-    }
+  if (
+    normalizedType === "attendance_absent" ||
+    normalizedType.includes("absent")
+  ) {
+    return XCircle;
+  }
 
-    if (
-        normalizedType ===
-            "attendance_confirmation" ||
-        normalizedType.includes("present")
-    ) {
-        return CheckCircle2;
-    }
+  if (
+    normalizedType === "attendance_confirmation" ||
+    normalizedType.includes("present")
+  ) {
+    return CheckCircle2;
+  }
 
-    if (isAttendanceNotification(type)) {
-        return UserCheck;
-    }
+  if (isAttendanceNotification(type)) {
+    return UserCheck;
+  }
 
-    if (
-        isInvitationNotification(type) ||
-        isGeneralEventNotification(type)
-    ) {
-        return CalendarDays;
-    }
+  if (isInvitationNotification(type) || isGeneralEventNotification(type)) {
+    return CalendarDays;
+  }
 
-    return Bell;
+  return Bell;
 }
 
-export function getNotificationIconClasses(
-    type: string | null,
-) {
-    const normalizedType =
-        normalizeNotificationType(type);
+export function getNotificationIconClasses(type: string | null) {
+  const normalizedType = normalizeNotificationType(type);
 
-    if (
-        isCancellationNotification(type) ||
-        normalizedType === "attendance_absent" ||
-        normalizedType.includes("absent")
-    ) {
-        return "bg-red-100 text-red-700";
-    }
+  if (
+    isCancellationNotification(type) ||
+    normalizedType === "attendance_absent" ||
+    normalizedType.includes("absent")
+  ) {
+    return "bg-red-100 text-red-700";
+  }
 
-    if (isRegistrationNotification(type)) {
-        return "bg-violet-100 text-violet-700";
-    }
+  if (isRegistrationNotification(type)) {
+    return "bg-violet-100 text-violet-700";
+  }
 
-    if (
-        normalizedType ===
-            "attendance_confirmation" ||
-        normalizedType.includes("present")
-    ) {
-        return "bg-green-100 text-green-700";
-    }
+  if (
+    normalizedType === "attendance_confirmation" ||
+    normalizedType.includes("present")
+  ) {
+    return "bg-green-100 text-green-700";
+  }
 
-    if (isAttendanceNotification(type)) {
-        return "bg-amber-100 text-amber-700";
-    }
+  if (isAttendanceNotification(type)) {
+    return "bg-amber-100 text-amber-700";
+  }
 
-    /*
-     * Event invitations and event notices
-     * use blue styling.
-     */
-    if (
-        isInvitationNotification(type) ||
-        isGeneralEventNotification(type)
-    ) {
-        return "bg-blue-100 text-blue-700";
-    }
+  /*
+   * Event invitations and event notices
+   * use blue styling.
+   */
+  if (isInvitationNotification(type) || isGeneralEventNotification(type)) {
+    return "bg-blue-100 text-blue-700";
+  }
 
-    return "bg-slate-100 text-slate-700";
+  return "bg-slate-100 text-slate-700";
 }
 
-export function getNotificationRoute(
-    notification: NotificationRow,
-) {
-    const normalizedType =
-        normalizeNotificationType(
-            notification.type,
-        );
+export function getNotificationRoute(notification: NotificationRow) {
+  if (
+    notification.type === "system" &&
+    notification.title === "Certificate available" &&
+    notification.event_id
+  )
+    return `/dashboard/participant/certificates/${encodeURIComponent(notification.event_id)}`;
+  const normalizedType = normalizeNotificationType(notification.type);
 
-    /*
-     * New event invitation:
-     * participant should go directly
-     * to Available Events.
-     */
-    if (
-        isInvitationNotification(
-            notification.type,
-        )
-    ) {
-        return "/dashboard/participant/events";
-    }
+  /*
+   * New event invitation:
+   * participant should go directly
+   * to Available Events.
+   */
+  if (isInvitationNotification(notification.type)) {
+    return "/dashboard/participant/events";
+  }
 
-    /*
-     * Attendance pass / check-in related
-     * notifications.
-     */
-    if (
-        normalizedType.includes(
-            "attendance_pass",
-        ) ||
-        normalizedType.includes("check_in") ||
-        normalizedType.includes("check-in")
-    ) {
-        return "/dashboard/participant/attendance-pass";
-    }
+  /*
+   * Attendance pass / check-in related
+   * notifications.
+   */
+  if (
+    normalizedType.includes("attendance_pass") ||
+    normalizedType.includes("check_in") ||
+    normalizedType.includes("check-in")
+  ) {
+    return "/dashboard/participant/attendance-pass";
+  }
 
-    /*
-     * Attendance results.
-     */
-    if (
-        isAttendanceNotification(
-            notification.type,
-        )
-    ) {
-        return "/dashboard/participant/attendance-history";
-    }
+  /*
+   * Attendance results.
+   */
+  if (isAttendanceNotification(notification.type)) {
+    return "/dashboard/participant/attendance-history";
+  }
 
-    /*
-     * Registration confirmation.
-     */
-    if (
-        isRegistrationNotification(
-            notification.type,
-        )
-    ) {
-        return "/dashboard/participant/registrations";
-    }
+  /*
+   * Registration confirmation.
+   */
+  if (isRegistrationNotification(notification.type)) {
+    return "/dashboard/participant/registrations";
+  }
 
-    /*
-     * Event updates and cancellations are
-     * only sent to registered participants,
-     * so My Registrations is the most
-     * appropriate destination.
-     */
-    if (
-        isEventUpdateNotification(
-            notification.type,
-        ) ||
-        isCancellationNotification(
-            notification.type,
-        )
-    ) {
-        return "/dashboard/participant/registrations";
-    }
+  /*
+   * Event updates and cancellations are
+   * only sent to registered participants,
+   * so My Registrations is the most
+   * appropriate destination.
+   */
+  if (
+    isEventUpdateNotification(notification.type) ||
+    isCancellationNotification(notification.type)
+  ) {
+    return "/dashboard/participant/registrations";
+  }
 
-    /*
-     * General reminders / event-related
-     * notifications.
-     */
-    if (
-        isGeneralEventNotification(
-            notification.type,
-        ) ||
-        notification.event_id ||
-        notification.event_municipality_id
-    ) {
-        return "/dashboard/participant/events";
-    }
+  /*
+   * General reminders / event-related
+   * notifications.
+   */
+  if (
+    isGeneralEventNotification(notification.type) ||
+    notification.event_id ||
+    notification.event_municipality_id
+  ) {
+    return "/dashboard/participant/events";
+  }
 
-    return "/dashboard/participant";
+  return "/dashboard/participant";
 }

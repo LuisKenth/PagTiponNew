@@ -27,6 +27,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import StaffSchedulesPanel from "./components/StaffSchedulesPanel";
 import CheckOutDeadlineExtensionPanel from "./components/CheckOutDeadlineExtensionPanel";
 
 type EventStaffProfile = {
@@ -376,7 +377,7 @@ export default function EventStaffManagementPage() {
         <MunicipalPageHeader
           icon={<ShieldCheck className="h-6 w-6" />}
           title="Event Staff"
-          description="Assign staff to events and manage staff accounts."
+          description="Manage staff accounts and review event schedules."
           actions={
             <>
               <button
@@ -544,7 +545,7 @@ export default function EventStaffManagementPage() {
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
           Assign or manage staff from the event's Assign Staff / Manage Staff
           button in Municipal Events or Provincial Events. This page manages
-          staff accounts.
+          staff accounts and displays schedules.
         </div>
 
         {/* Authorized Check-Out Extension */}
@@ -768,6 +769,7 @@ export default function EventStaffManagementPage() {
             </>
           )}
         </section>
+        <StaffSchedulesPanel />
       </div>
       {/* Add Event Staff dialog */}
       {dialogOpen && (

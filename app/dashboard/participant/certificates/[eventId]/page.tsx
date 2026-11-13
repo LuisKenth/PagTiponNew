@@ -1,13 +1,14 @@
 "use client";
 import { useLiveData } from "@/app/components/live/BackgroundDataSync";
 
-import { ArrowLeft, Award, Download, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Printer } from "lucide-react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useParams, useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
+import CertificateDocument from "./CertificateDocument";
 
 type CertificateSignatory = {
   position: number;
@@ -16,6 +17,9 @@ type CertificateSignatory = {
 };
 
 type CertificateData = {
+  issuer_name?: string;
+  municipality?: string;
+  event_origin?: string;
   certificate_id: string;
   certificate_number: string;
   issued_at: string;
@@ -33,29 +37,6 @@ type CertificateData = {
 
   signatories: CertificateSignatory[];
 };
-
-function formatEventDate(startValue: string, endValue: string) {
-  const start = new Date(startValue);
-  const end = new Date(endValue);
-
-  const sameDay =
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() === end.getDate();
-
-  const formatter = new Intl.DateTimeFormat("en-PH", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "Asia/Manila",
-  });
-
-  if (sameDay) {
-    return formatter.format(start);
-  }
-
-  return `${formatter.format(start)} – ${formatter.format(end)}`;
-}
 
 export default function ParticipantCertificatePage() {
   const router = useRouter();
@@ -86,30 +67,8 @@ export default function ParticipantCertificatePage() {
       setError(null);
 
       try {
-        /*
-         * Make sure certificate exists.
-         *
-         * If already issued, the RPC returns
-         * the existing certificate.
-         */
-        if (!silent) {
-          const { error: issueError } = await supabase.rpc(
-            "issue_my_certificate",
-            {
-              p_event_id: eventId,
-            },
-          );
-
-          if (issueError) {
-            throw issueError;
-          }
-        }
-
-        /*
-         * Get full certificate information.
-         */
         const { data, error: certificateError } = await supabase.rpc(
-          "get_my_certificate",
+          "get_my_certificate_details",
           {
             p_event_id: eventId,
           },
@@ -122,7 +81,9 @@ export default function ParticipantCertificatePage() {
         const result = Array.isArray(data) ? data[0] : data;
 
         if (!result) {
-          throw new Error("Certificate could not be found.");
+          throw new Error(
+            "Your certificate is awaiting automatic generation. The event must be completed with signatories configured and eligible attendance recorded.",
+          );
         }
 
         setCertificate(result as CertificateData);
@@ -170,10 +131,17 @@ export default function ParticipantCertificatePage() {
 
       const element = certificateRef.current;
 
+      await document.fonts.ready;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#fffefa",
+        windowWidth: 1400,
+        width: 1120,
+        height: 792,
       });
 
       const image = canvas.toDataURL("image/png", 1.0);
@@ -188,7 +156,7 @@ export default function ParticipantCertificatePage() {
 
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      const margin = 8;
+      const margin = 0;
 
       const availableWidth = pageWidth - margin * 2;
 
@@ -266,15 +234,6 @@ export default function ParticipantCertificatePage() {
     return null;
   }
 
-  const eventDate = formatEventDate(
-    certificate.event_start_at,
-    certificate.event_end_at,
-  );
-
-  const signatories = Array.isArray(certificate.signatories)
-    ? certificate.signatories
-    : [];
-
   return (
     <>
       {/*
@@ -324,7 +283,7 @@ export default function ParticipantCertificatePage() {
             max-height: 210mm !important;
 
             margin: 0 !important;
-            padding: 5mm !important;
+            padding: 0 !important;
 
             box-sizing: border-box !important;
             overflow: hidden !important;
@@ -397,136 +356,15 @@ export default function ParticipantCertificatePage() {
           </div>
         )}
 
-        {/* Certificate viewer */}
+        <p className="text-sm text-slate-500">
+          A4 landscape preview. On smaller screens, scroll sideways to view the
+          full certificate.
+        </p>
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100 p-4 sm:p-6">
-          <div
-            ref={certificateRef}
-            id="certificate-print-area"
-            className="relative mx-auto aspect-[1.414/1] min-w-[900px] max-w-[1120px] overflow-hidden bg-[#fffdf7] p-5 shadow-xl"
-          >
-            {/* Outer frame */}
-            <div className="relative h-full border-[6px] border-slate-900 p-2">
-              {/* Inner frame */}
-              <div className="relative flex h-full flex-col border-2 border-amber-700 px-16 py-10 text-center">
-                {/* Corner decoration */}
-                <div className="absolute left-4 top-4 h-16 w-16 border-l-2 border-t-2 border-amber-700" />
-
-                <div className="absolute right-4 top-4 h-16 w-16 border-r-2 border-t-2 border-amber-700" />
-
-                <div className="absolute bottom-4 left-4 h-16 w-16 border-b-2 border-l-2 border-amber-700" />
-
-                <div className="absolute bottom-4 right-4 h-16 w-16 border-b-2 border-r-2 border-amber-700" />
-
-                {/* Header */}
-                <div>
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-900">
-                    <Award className="h-9 w-9 text-slate-900" />
-                  </div>
-
-                  <p className="mt-4 text-sm font-bold uppercase tracking-[0.35em] text-slate-700">
-                    PagTipon
-                  </p>
-
-                  <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                    Provincial-to-Municipal Event Management and Attendance
-                    Processing System
-                  </p>
-
-                  <h2 className="mt-7 font-serif text-4xl font-bold uppercase tracking-[0.09em] text-slate-950">
-                    Certificate of Participation
-                  </h2>
-                </div>
-
-                {/* Certificate body */}
-                <div className="flex flex-1 flex-col justify-center py-5">
-                  <p className="font-serif text-lg italic text-slate-600">
-                    This certificate is proudly presented to
-                  </p>
-
-                  <h1 className="mx-auto mt-5 max-w-4xl border-b border-slate-400 px-8 pb-2 font-serif text-4xl font-bold uppercase tracking-wide text-slate-950">
-                    {certificate.participant_name}
-                  </h1>
-
-                  <p className="mx-auto mt-6 max-w-3xl font-serif text-lg leading-8 text-slate-700">
-                    for successfully participating in
-                  </p>
-
-                  <h3 className="mt-2 font-serif text-2xl font-bold uppercase tracking-wide text-slate-950">
-                    {certificate.event_title}
-                  </h3>
-
-                  <p className="mt-4 font-serif text-lg leading-8 text-slate-700">
-                    held on{" "}
-                    <span className="font-semibold text-slate-900">
-                      {eventDate}
-                    </span>
-                  </p>
-                </div>
-
-                {/* Signatories */}
-                <div
-                  className={`mx-auto grid w-full max-w-4xl gap-12 ${
-                    signatories.length >= 3
-                      ? "grid-cols-3"
-                      : signatories.length === 2
-                        ? "grid-cols-2"
-                        : "grid-cols-1"
-                  }`}
-                >
-                  {signatories.length > 0 ? (
-                    signatories.map((signatory) => (
-                      <div key={signatory.position} className="text-center">
-                        <div className="mx-auto mb-2 h-px w-56 bg-slate-700" />
-
-                        <p className="font-serif text-base font-bold uppercase text-slate-900">
-                          {signatory.name}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-600">
-                          {signatory.title}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="mx-auto w-64 text-center">
-                      <div className="mb-2 h-px bg-slate-700" />
-
-                      <p className="font-serif text-sm font-semibold uppercase text-slate-600">
-                        Authorized Signatory
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        Signatory not yet configured
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="mt-8 flex items-end justify-between border-t border-slate-200 pt-4 text-left">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                      Certificate Number
-                    </p>
-
-                    <p className="mt-1 font-mono text-xs font-bold text-slate-900">
-                      {certificate.certificate_number}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500">
-                      Issued by PagTipon
-                    </p>
-
-                    <p className="mt-1 text-xs font-medium text-slate-700">
-                      Certificate of Participation
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <CertificateDocument
+            certificate={certificate}
+            documentRef={certificateRef}
+          />
         </div>
       </div>
     </>

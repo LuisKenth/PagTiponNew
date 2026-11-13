@@ -15,12 +15,14 @@ import {
   Search,
   X,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import {
+  preferredStaffEvent,
+  staffEventPriority,
+  staffEventStatus,
+  sortStaffEvents,
+} from "../eventSelection";
 import type { EventAssignment } from "../types";
 import { formatDateTime } from "../utils";
 
@@ -32,33 +34,11 @@ type EventAssignmentPickerProps = {
   onSelect: (id: string) => Promise<void>;
 };
 
-type EventFilter =
-  | "active"
-  | "upcoming"
-  | "history"
-  | "all";
-
-const ACTIVE_STATUSES = [
-  "ongoing",
-  "upcoming",
-  "published",
-];
-
-const UPCOMING_STATUSES = [
-  "upcoming",
-  "published",
-];
-
-const HISTORY_STATUSES = [
-  "completed",
-  "cancelled",
-];
+type EventFilter = "active" | "upcoming" | "history" | "all";
 
 const EVENTS_PER_PAGE = 5;
 
-function normalizeStatus(
-  value: string | null | undefined
-) {
+function normalizeStatus(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
 }
 
@@ -70,15 +50,28 @@ export default function EventAssignmentPicker({
   onSelect,
 }: EventAssignmentPickerProps) {
   const [open, setOpen] = useState(false);
-  const [searchQuery, setSearchQuery] =
-    useState("");
-  const [filter, setFilter] =
-    useState<EventFilter>("active");
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const first = window.setTimeout(tick, 0);
+    const timer = window.setInterval(tick, 5_000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
+  }, []);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = useState<EventFilter>("active");
   const [currentPage, setCurrentPage] = useState(1);
-  const [detailsAssignmentId, setDetailsAssignmentId] = useState<string | null>(null);
+  const [detailsAssignmentId, setDetailsAssignmentId] = useState<string | null>(
+    null,
+  );
 
   const detailsAssignment = useMemo(
-    () => assignments.find((assignment) => String(assignment.id) === detailsAssignmentId) ?? null,
+    () =>
+      assignments.find(
+        (assignment) => String(assignment.id) === detailsAssignmentId,
+      ) ?? null,
     [assignments, detailsAssignmentId],
   );
 
@@ -87,50 +80,18 @@ export default function EventAssignmentPicker({
     setDetailsAssignmentId(String(assignment.id));
   }
 
-  const eventCounts = useMemo(() => {
-    let active = 0;
-    let upcoming = 0;
-    let history = 0;
-
-    for (const assignment of assignments) {
-      const status = normalizeStatus(
-        assignment.event.status
-      );
-
-      if (ACTIVE_STATUSES.includes(status)) {
-        active += 1;
-      }
-
-      if (UPCOMING_STATUSES.includes(status)) {
-        upcoming += 1;
-      }
-
-      if (HISTORY_STATUSES.includes(status)) {
-        history += 1;
-      }
-    }
-
-    return {
-      active,
-      upcoming,
-      history,
+  const eventCounts = useMemo(
+    () => ({
+      active: assignments.filter((a) => staffEventPriority(a, now) !== null)
+        .length,
+      upcoming: assignments.filter((a) => staffEventPriority(a, now) === 3)
+        .length,
+      history: assignments.filter((a) => staffEventPriority(a, now) === null)
+        .length,
       all: assignments.length,
-    };
-  }, [assignments]);
-
-  useEffect(() => {
-    if (
-      filter === "active" &&
-      eventCounts.active === 0 &&
-      assignments.length > 0
-    ) {
-      setFilter("all");
-    }
-  }, [
-    assignments.length,
-    eventCounts.active,
-    filter,
-  ]);
+    }),
+    [assignments, now],
+  );
 
   useEffect(() => {
     setOpen(false);
@@ -147,16 +108,10 @@ export default function EventAssignmentPicker({
       }
     }
 
-    window.addEventListener(
-      "keydown",
-      handleEscape
-    );
+    window.addEventListener("keydown", handleEscape);
 
     return () => {
-      window.removeEventListener(
-        "keydown",
-        handleEscape
-      );
+      window.removeEventListener("keydown", handleEscape);
     };
   }, [open]);
 
@@ -172,22 +127,17 @@ export default function EventAssignmentPicker({
   }, [detailsAssignmentId]);
 
   const filteredAssignments = useMemo(() => {
-    const normalizedSearch =
-      searchQuery.trim().toLowerCase();
+    const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    return assignments.filter((assignment) => {
-      const status = normalizeStatus(
-        assignment.event.status
-      );
+    return sortStaffEvents(assignments, now).filter((assignment) => {
+      const status = staffEventStatus(assignment, now);
+      const priority = staffEventPriority(assignment, now);
 
       const matchesFilter =
         filter === "all" ||
-        (filter === "active" &&
-          ACTIVE_STATUSES.includes(status)) ||
-        (filter === "upcoming" &&
-          UPCOMING_STATUSES.includes(status)) ||
-        (filter === "history" &&
-          HISTORY_STATUSES.includes(status));
+        (filter === "active" && priority !== null) ||
+        (filter === "upcoming" && priority === 3) ||
+        (filter === "history" && priority === null);
 
       if (!matchesFilter) {
         return false;
@@ -198,17 +148,11 @@ export default function EventAssignmentPicker({
       }
 
       return (
-        assignment.event.title
-          .toLowerCase()
-          .includes(normalizedSearch) ||
+        assignment.event.title.toLowerCase().includes(normalizedSearch) ||
         status.includes(normalizedSearch)
       );
     });
-  }, [
-    assignments,
-    filter,
-    searchQuery,
-  ]);
+  }, [assignments, filter, searchQuery, now]);
 
   // Paginate the filtered list, not the full assignment list.
   // Clamp the page in case assignments change after a refresh.
@@ -222,8 +166,7 @@ export default function EventAssignmentPicker({
     firstIndex,
     firstIndex + EVENTS_PER_PAGE,
   );
-  const showingFrom =
-    filteredAssignments.length === 0 ? 0 : firstIndex + 1;
+  const showingFrom = filteredAssignments.length === 0 ? 0 : firstIndex + 1;
   const showingTo = Math.min(
     firstIndex + EVENTS_PER_PAGE,
     filteredAssignments.length,
@@ -236,7 +179,7 @@ export default function EventAssignmentPicker({
   }[] = [
     {
       value: "active",
-      label: "Active",
+      label: "Active / Upcoming",
       count: eventCounts.active,
     },
     {
@@ -246,7 +189,7 @@ export default function EventAssignmentPicker({
     },
     {
       value: "history",
-      label: "History",
+      label: "Past Events",
       count: eventCounts.history,
     },
     {
@@ -259,15 +202,10 @@ export default function EventAssignmentPicker({
   return (
     <div>
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-semibold text-slate-700">
-          Assigned Event
-        </p>
+        <p className="text-sm font-semibold text-slate-700">Assigned Event</p>
 
         <span className="text-xs font-medium text-slate-500">
-          {assignments.length}{" "}
-          {assignments.length === 1
-            ? "event"
-            : "events"}
+          {assignments.length} {assignments.length === 1 ? "event" : "events"}
         </span>
       </div>
 
@@ -291,7 +229,10 @@ export default function EventAssignmentPicker({
         {selectedAssignment ? (
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white sm:h-14 sm:w-14">
-              <CalendarDays className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden="true" />
+              <CalendarDays
+                className="h-6 w-6 sm:h-7 sm:w-7"
+                aria-hidden="true"
+              />
             </div>
 
             <div className="min-w-0 flex-1">
@@ -299,7 +240,15 @@ export default function EventAssignmentPicker({
                 <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
                   Currently Selected Event
                 </span>
-                <EventStatusBadge status={selectedAssignment.event.status} />
+                <EventStatusBadge
+                  status={staffEventStatus(selectedAssignment, now)}
+                />
+                {staffEventStatus(selectedAssignment, now) === "completed" &&
+                  staffEventPriority(selectedAssignment, now) !== null && (
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                      Time-out available
+                    </span>
+                  )}
               </div>
 
               <h2 className="mt-2 break-words text-xl font-extrabold leading-tight tracking-tight text-slate-950 sm:text-2xl lg:text-[28px]">
@@ -330,7 +279,11 @@ export default function EventAssignmentPicker({
                 <CalendarDays className="h-6 w-6" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-lg font-bold text-slate-900">Select an Assigned Event</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {preferredStaffEvent(assignments, now)
+                    ? "Select an Assigned Event"
+                    : "No active events to manage"}
+                </p>
                 <p className="mt-1 text-sm text-slate-500">
                   Choose an event to manage attendance.
                 </p>
@@ -397,8 +350,7 @@ export default function EventAssignmentPicker({
 
             <div className="mt-3 flex flex-wrap gap-2">
               {filterOptions.map((option) => {
-                const active =
-                  filter === option.value;
+                const active = filter === option.value;
 
                 return (
                   <button
@@ -417,9 +369,7 @@ export default function EventAssignmentPicker({
                     {option.label}
                     <span
                       className={`ml-1.5 ${
-                        active
-                          ? "text-emerald-100"
-                          : "text-slate-400"
+                        active ? "text-emerald-100" : "text-slate-400"
                       }`}
                     >
                       {option.count}
@@ -433,9 +383,7 @@ export default function EventAssignmentPicker({
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
             <p className="text-xs font-medium text-slate-500">
               {filteredAssignments.length}{" "}
-              {filteredAssignments.length === 1
-                ? "result"
-                : "results"}
+              {filteredAssignments.length === 1 ? "result" : "results"}
             </p>
 
             <button
@@ -457,78 +405,89 @@ export default function EventAssignmentPicker({
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Try another search term or select a
-                  different status filter.
+                  Try another search term or select a different status filter.
                 </p>
               </div>
             ) : (
               <div className="space-y-1">
-                {paginatedAssignments.map(
-                  (assignment) => {
-                    const selected =
-                      String(assignment.id) ===
-                      String(selectedId);
+                {paginatedAssignments.map((assignment) => {
+                  const selected = String(assignment.id) === String(selectedId);
 
-                    return (
-                      <div
-                        key={String(assignment.id)}
-                        className="flex flex-col gap-2 rounded-xl sm:flex-row sm:items-center"
+                  return (
+                    <div
+                      key={String(assignment.id)}
+                      className="flex flex-col gap-2 rounded-xl sm:flex-row sm:items-center"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          void onSelect(String(assignment.id));
+                        }}
+                        className={`flex min-w-0 flex-1 items-start justify-between gap-4 rounded-xl px-4 py-3 text-left transition ${
+                          selected
+                            ? "bg-emerald-50 ring-1 ring-emerald-200"
+                            : "hover:bg-slate-50"
+                        }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpen(false);
-                            void onSelect(String(assignment.id));
-                          }}
-                          className={`flex min-w-0 flex-1 items-start justify-between gap-4 rounded-xl px-4 py-3 text-left transition ${
-                            selected
-                              ? "bg-emerald-50 ring-1 ring-emerald-200"
-                              : "hover:bg-slate-50"
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className={`break-words text-base font-bold ${
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p
+                              className={`break-words text-base font-bold ${
                                 selected ? "text-emerald-950" : "text-slate-900"
-                              }`}>
-                                {assignment.event.title}
-                              </p>
-                              <EventStatusBadge status={assignment.event.status} />
-                            </div>
-
-                            <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                              <span>{formatDateTime(assignment.event.start_at)}</span>
-                            </div>
+                              }`}
+                            >
+                              {assignment.event.title}
+                            </p>
+                            <EventStatusBadge
+                              status={staffEventStatus(assignment, now)}
+                            />
+                            {staffEventStatus(assignment, now) ===
+                              "completed" &&
+                              staffEventPriority(assignment, now) !== null && (
+                                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                                  Time-out available
+                                </span>
+                              )}
                           </div>
 
-                          {selected && (
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                              <Check className="h-4 w-4" />
-                            </div>
-                          )}
-                        </button>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                            <span>
+                              {formatDateTime(assignment.event.start_at)}
+                            </span>
+                          </div>
+                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() => viewDetails(assignment)}
-                          aria-label={`View details for ${assignment.event.title}`}
-                          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 self-end rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 sm:self-auto"
-                        >
-                          <Eye className="h-4 w-4" aria-hidden="true" />
-                          Details
-                        </button>
-                      </div>
-                    );
-                  }
-                )}
+                        {selected && (
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                            <Check className="h-4 w-4" />
+                          </div>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => viewDetails(assignment)}
+                        aria-label={`View details for ${assignment.event.title}`}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 self-end rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 sm:self-auto"
+                      >
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        Details
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Page controls always stay below the event list. */}
           <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-medium text-slate-600" aria-live="polite">
+            <p
+              className="text-xs font-medium text-slate-600"
+              aria-live="polite"
+            >
               Showing {showingFrom}–{showingTo} of {filteredAssignments.length}
             </p>
 
@@ -585,7 +544,10 @@ export default function EventAssignmentPicker({
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Assigned Event Details
                 </p>
-                <h2 id="staff-event-details-title" className="mt-2 break-words text-xl font-extrabold text-slate-950 sm:text-2xl">
+                <h2
+                  id="staff-event-details-title"
+                  className="mt-2 break-words text-xl font-extrabold text-slate-950 sm:text-2xl"
+                >
                   {detailsAssignment.event.title}
                 </h2>
                 <div className="mt-3">
@@ -686,17 +648,13 @@ type EventStatusBadgeProps = {
   status: string | null | undefined;
 };
 
-function EventStatusBadge({
-  status,
-}: EventStatusBadgeProps) {
-  const normalizedStatus =
-    normalizeStatus(status);
+function EventStatusBadge({ status }: EventStatusBadgeProps) {
+  const normalizedStatus = normalizeStatus(status);
 
   const statusClassName =
     normalizedStatus === "ongoing"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : normalizedStatus === "upcoming" ||
-          normalizedStatus === "published"
+      : normalizedStatus === "upcoming" || normalizedStatus === "published"
         ? "border-blue-200 bg-blue-50 text-blue-700"
         : normalizedStatus === "completed"
           ? "border-slate-200 bg-slate-100 text-slate-600"

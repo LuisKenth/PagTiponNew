@@ -371,6 +371,7 @@ export default function MunicipalEventList({
                     key={e.id}
                     item={toReceivedEvent(e)}
                     venues={venues}
+                    onBeforeStaff={close}
                     showParticipantCount={false}
                     onPrepare={() => {
                       close();
@@ -383,19 +384,6 @@ export default function MunicipalEventList({
                     }}
                     extraActions={
                       <>
-                        {["published", "upcoming", "ongoing"].includes(
-                          e.status,
-                        ) && (
-                          <EventStaffAction
-                            eventId={e.id}
-                            assignmentId={e.event_municipalities[0]?.id}
-                            title={e.title}
-                            ready={
-                              e.event_municipalities[0]?.municipal_status ===
-                              "prepared"
-                            }
-                          />
-                        )}
                         {["draft", "published", "upcoming"].includes(
                           e.status,
                         ) && (

@@ -1,882 +1,659 @@
 "use client";
 
-import { useEffect } from "react";
-
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import {
-  Ban,
-  Building2,
-  CalendarClock,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
   CheckCircle2,
   ClipboardList,
-  Clock3,
-  FileText,
   LoaderCircle,
-  LockKeyhole,
   MapPin,
-  Save,
-  TriangleAlert,
-  UsersRound,
   X,
-  type LucideIcon,
 } from "lucide-react";
-
 import type {
   MunicipalVenue,
   PreparationStatus,
   ReceivedEvent,
 } from "../types/municipalDashboard";
+import EventStaffManager from "./EventStaffManager";
+import {
+  formatStaffDate,
+  staffButton,
+  staffPrimaryButton,
+} from "./eventStaffData";
+import {
+  preparationIssue,
+  preparationLabels,
+  preparationLock,
+  type PreparationSaveOptions,
+} from "./preparationWizard";
 
-type PrepareEventModalProps = {
+type Props = {
   selectedEvent: ReceivedEvent | null;
   preparationStatus: PreparationStatus;
   localInstructions: string;
   registrationOpen: boolean;
   saving: boolean;
-
   venues: MunicipalVenue[];
   venuesLoading: boolean;
   selectedVenueId: string;
   venueError: string | null;
-
   onStatusChange: (value: PreparationStatus) => void;
-
   onVenueChange: (value: string) => void;
-
   onInstructionsChange: (value: string) => void;
-
   onRegistrationChange: (value: boolean) => void;
-
   onClose: () => void;
-
-  onSave: () => void | Promise<void>;
+  onSave: (
+    options?: PreparationSaveOptions,
+  ) => void | boolean | Promise<void | boolean>;
 };
 
-type StatusOption = {
-  value: PreparationStatus;
-  label: string;
-  description: string;
-  icon: LucideIcon;
-  activeClass: string;
-  iconClass: string;
-};
-
-const statusOptions: StatusOption[] = [
-  {
-    value: "pending",
-    label: "Pending",
-    description: "Local preparation has not started.",
-    icon: Clock3,
-    activeClass: "border-amber-300 bg-amber-50 ring-2 ring-amber-100",
-    iconClass: "bg-amber-100 text-amber-700",
-  },
-  {
-    value: "preparing",
-    label: "Preparing",
-    description: "Municipal preparation is in progress.",
-    icon: LoaderCircle,
-    activeClass: "border-blue-300 bg-blue-50 ring-2 ring-blue-100",
-    iconClass: "bg-blue-100 text-blue-700",
-  },
-  {
-    value: "prepared",
-    label: "Prepared",
-    description: "The municipality is ready for the event.",
-    icon: CheckCircle2,
-    activeClass: "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100",
-    iconClass: "bg-emerald-100 text-emerald-700",
-  },
-];
-
-function formatEventDateTime(value: string | null | undefined) {
-  if (!value) {
-    return "Schedule not available";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Schedule not available";
-  }
-
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+export default function PrepareEventModal(props: Props) {
+  return props.selectedEvent ? (
+    <PreparationWizard
+      key={props.selectedEvent.id}
+      {...props}
+      selectedEvent={props.selectedEvent}
+    />
+  ) : null;
 }
 
-function formatCapacity(capacity: number | null) {
-  if (capacity === null || !Number.isFinite(capacity)) {
-    return "Capacity not set";
-  }
-
-  return `${capacity.toLocaleString()} capacity`;
-}
-
-function normalizeVenueStatus(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function isVenueActive(venue: MunicipalVenue) {
-  return normalizeVenueStatus(venue.status) === "active";
-}
-
-export default function PrepareEventModal({
+function PreparationWizard({
   selectedEvent,
   preparationStatus,
   localInstructions,
   registrationOpen,
   saving,
-
   venues,
   venuesLoading,
   selectedVenueId,
   venueError,
-
   onStatusChange,
   onVenueChange,
   onInstructionsChange,
   onRegistrationChange,
   onClose,
   onSave,
-}: PrepareEventModalProps) {
-  const isMunicipalEvent = selectedEvent?.event?.event_origin === "municipal";
-  const municipalStatus = String(selectedEvent?.municipal_status ?? "")
-    .trim()
-    .toLowerCase();
-
-  const provincialStatus = String(selectedEvent?.event?.status ?? "")
-    .trim()
-    .toLowerCase();
-
-  /*
-   * EVENT LIFECYCLE
-   *
-   * Only upcoming events remain editable.
-   * Ongoing, completed, and cancelled events
-   * are view-only.
-   */
-  const isCancelled =
-    municipalStatus === "cancelled" || provincialStatus === "cancelled";
-
-  const isOngoing = provincialStatus === "ongoing";
-
-  const isCompleted = provincialStatus === "completed";
-
-  const isLocked = isCancelled || isOngoing || isCompleted;
-
-  const controlsDisabled = saving || isLocked;
-
-  const isPrepared = preparationStatus === "prepared";
-
-  const selectedVenue =
-    venues.find((venue) => venue.id === selectedVenueId) ?? null;
-
-  const selectedVenueIsInactive = selectedVenue
-    ? !isVenueActive(selectedVenue)
-    : false;
-
-  const activeVenueCount = venues.filter(isVenueActive).length;
+}: Props & { selectedEvent: ReceivedEvent }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [completion, setCompletion] = useState<{
+    ready: boolean;
+    count: number;
+    warning: string;
+  } | null>(null);
+  const [issue, setIssue] = useState("");
+  const [staffBusy, setStaffBusy] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const dialog = useRef<HTMLDialogElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const saveInFlight = useRef(false);
+  const snapshot = () =>
+    JSON.stringify([
+      preparationStatus,
+      selectedVenueId,
+      localInstructions,
+      registrationOpen,
+    ]);
+  const savedSnapshot = useRef(snapshot());
+  const municipal = selectedEvent.event?.event_origin === "municipal";
+  const lock = preparationLock(selectedEvent, now);
+  const busy = saving || staffBusy || submitting;
+  const venue = venues.find((v) => v.id === selectedVenueId) ?? null;
+  const ready = preparationStatus === "prepared";
+  const effectiveOpen = ready && registrationOpen && !lock;
 
   useEffect(() => {
-    if (!selectedEvent) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-
+    const previous = document.activeElement as HTMLElement | null;
+    const bodyOverflow = document.body.style.overflow,
+      htmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !saving) {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape);
-
+    document.documentElement.style.overflow = "hidden";
+    const node = dialog.current;
+    node?.showModal();
+    const clock = window.setInterval(() => setNow(Date.now()), 15_000);
     return () => {
-      document.body.style.overflow = previousOverflow;
-
-      window.removeEventListener("keydown", handleEscape);
+      window.clearInterval(clock);
+      node?.close();
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = htmlOverflow;
+      if (previous?.isConnected) previous.focus();
     };
-  }, [selectedEvent, saving, onClose]);
+  }, []);
+  useEffect(() => {
+    content.current?.scrollTo({ top: 0 });
+    heading.current?.focus({ preventScroll: true });
+  }, [step, completion]);
 
-  if (!selectedEvent) {
-    return null;
+  function close() {
+    if (busy) return;
+    if (
+      !lock &&
+      !completion &&
+      savedSnapshot.current !== snapshot() &&
+      !window.confirm("Discard unsaved preparation changes?")
+    )
+      return;
+    onClose();
   }
-
-  function handleStatusSelection(value: PreparationStatus) {
-    if (controlsDisabled) {
+  function next() {
+    setIssue("");
+    setStep(2);
+  }
+  async function save() {
+    if (busy || saveInFlight.current || lock) return;
+    const invalid = preparationIssue({
+      status: preparationStatus,
+      venue,
+      instructions: localInstructions,
+      municipal,
+      venueError,
+      event: selectedEvent,
+    });
+    if (invalid) {
+      setIssue(invalid.message);
+      setStep(invalid.step);
       return;
     }
-
-    onStatusChange(value);
-
-    if (value !== "prepared" && registrationOpen) {
-      onRegistrationChange(false);
+    saveInFlight.current = true;
+    setSubmitting(true);
+    setIssue("");
+    try {
+      const success = await onSave({ keepOpen: true, skipStaffPrompt: true });
+      if (success !== true) {
+        setIssue(
+          "Preparation was not saved. Review the validation message and try again.",
+        );
+        return;
+      }
+      savedSnapshot.current = snapshot();
+      if (ready) setStep(3);
+      else setCompletion({ ready: false, count: 0, warning: "" });
+    } catch (e) {
+      setIssue(
+        e instanceof Error
+          ? e.message
+          : "Unable to save preparation. Please try again.",
+      );
+    } finally {
+      saveInFlight.current = false;
+      setSubmitting(false);
     }
   }
-
-  function handleOverlayClick() {
-    if (!saving) {
-      onClose();
-    }
-  }
-
+  const field =
+    "mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100 sm:text-sm";
+  const returnHref =
+    selectedEvent.event?.event_origin === "municipal"
+      ? "/dashboard/municipal/local-events"
+      : "/dashboard/municipal/events";
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={dialog}
       aria-labelledby="prepare-event-title"
-      className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-sm"
-      onMouseDown={handleOverlayClick}
+      onCancel={(e) => {
+        e.preventDefault();
+        close();
+      }}
+      className="m-auto h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden border-0 bg-white p-0 text-slate-900 shadow-2xl open:flex sm:h-[min(46rem,90dvh)] sm:max-h-[90dvh] sm:w-[calc(100%_-_2rem)] sm:max-w-2xl sm:rounded-2xl backdrop:bg-slate-950/55 backdrop:backdrop-blur-sm"
     >
-      <div className="flex min-h-full items-center justify-center py-4">
-        <div
-          className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          {/* HEADER */}
-          <div
-            className={`relative border-b px-5 py-5 sm:px-6 ${
-              isCancelled
-                ? "border-red-200 bg-red-50"
-                : isOngoing
-                  ? "border-amber-200 bg-amber-50"
-                  : isCompleted
-                    ? "border-slate-300 bg-slate-100"
-                    : "border-slate-200 bg-white"
-            }`}
-          >
-            <div className="flex items-start gap-4 pr-10">
-              <div
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-                  isCancelled
-                    ? "bg-red-100 text-red-700"
-                    : isOngoing
-                      ? "bg-amber-100 text-amber-700"
-                      : isCompleted
-                        ? "bg-slate-200 text-slate-700"
-                        : "bg-slate-950 text-white"
-                }`}
+      <header className="shrink-0 border-b p-4 sm:px-5 sm:py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+              <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2
+                ref={heading}
+                tabIndex={-1}
+                id="prepare-event-title"
+                className="text-xl font-bold outline-none"
               >
-                {isCancelled ? (
-                  <Ban className="h-6 w-6" />
-                ) : isLocked ? (
-                  <LockKeyhole className="h-6 w-6" />
-                ) : (
-                  <ClipboardList className="h-6 w-6" />
-                )}
-              </div>
-
-              <div className="min-w-0">
-                <p
-                  className={`text-xs font-bold uppercase tracking-[0.14em] ${
-                    isCancelled
-                      ? "text-red-500"
-                      : isOngoing
-                        ? "text-amber-600"
-                        : isCompleted
-                          ? "text-slate-500"
-                          : "text-slate-400"
-                  }`}
-                >
-                  Municipal Event Assignment
-                </p>
-
-                <h2
-                  id="prepare-event-title"
-                  className={`mt-1 text-xl font-bold sm:text-2xl ${
-                    isCancelled
-                      ? "text-red-950"
-                      : isOngoing
-                        ? "text-amber-950"
-                        : "text-slate-950"
-                  }`}
-                >
-                  {isCancelled
-                    ? "Cancelled Event"
-                    : isOngoing
-                      ? "Ongoing Event — View Only"
-                      : isCompleted
-                        ? "Completed Event — View Only"
-                        : "Manage Event Preparation"}
-                </h2>
-
-                <p
-                  className={`mt-1 text-sm leading-6 ${
-                    isCancelled
-                      ? "text-red-700"
-                      : isOngoing
-                        ? "text-amber-700"
-                        : "text-slate-500"
-                  }`}
-                >
-                  {isCancelled
-                    ? "This event was cancelled. Existing municipal preparation information is retained for reference only."
-                    : isOngoing
-                      ? "This event is already ongoing. Municipal preparation details are now read-only."
-                      : isCompleted
-                        ? "This event has been completed. Municipal preparation details are retained for reference only."
-                        : isMunicipalEvent
-                          ? "Assign a local venue, update preparation status, and control participant registration."
-                          : "Assign a local venue, update the preparation status, add instructions, and control participant registration."}
-                </p>
-              </div>
+                {lock
+                  ? "Event Preparation · View Only"
+                  : completion
+                    ? "Preparation Saved"
+                    : "Prepare Event"}
+              </h2>
+              <p className="mt-1 break-words text-sm font-semibold text-slate-700">
+                {selectedEvent.event?.title || "Untitled event"}
+              </p>
             </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Close event preparation"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+            disabled={busy}
+            onClick={close}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          {formatStaffDate(selectedEvent.event?.start_at || null)} –{" "}
+          {formatStaffDate(selectedEvent.event?.end_at || null)} (PH)
+        </p>
+        {!lock && !completion && (
+          <ol
+            aria-label="Preparation steps"
+            className="mt-3 grid grid-cols-3 gap-2"
+          >
+            {["Venue", "Readiness", "Staff"].map((label, index) => (
+              <li
+                key={label}
+                aria-current={step === index + 1 ? "step" : undefined}
+                className={`flex min-h-10 items-center justify-center gap-2 rounded-xl px-2 text-xs font-semibold ${step === index + 1 ? "bg-indigo-600 text-white" : step > index + 1 ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-500"}`}
+              >
+                <span aria-hidden="true">
+                  {step > index + 1 ? <Check className="h-4 w-4" /> : index + 1}
+                </span>
+                {label}
+              </li>
+            ))}
+          </ol>
+        )}
+      </header>
 
+      {lock ? (
+        <>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+            <p
+              role="status"
+              className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              This event is {lock}. Preparation and staff assignment are
+              read-only.
+            </p>
+            <Summary
+              venue={venue?.venue_name || "Not selected"}
+              status={preparationLabels[preparationStatus]}
+              registration="Closed"
+            />
+            <h3 className="text-sm font-bold">Participant instructions</h3>
+            <p className="whitespace-pre-wrap break-words text-sm text-slate-600">
+              {localInstructions || "No instructions recorded."}
+            </p>
+          </div>
+          <footer className="shrink-0 border-t p-4">
+            <button type="button" className={staffButton} onClick={onClose}>
+              Close
+            </button>
+          </footer>
+        </>
+      ) : completion ? (
+        <>
+          <div
+            ref={content}
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5"
+          >
+            <div className="rounded-2xl bg-emerald-50 p-5 text-center">
+              <CheckCircle2
+                aria-hidden="true"
+                className="mx-auto h-10 w-10 text-emerald-600"
+              />
+              <h3 className="mt-3 text-lg font-bold text-emerald-950">
+                {completion.ready
+                  ? "Event is ready"
+                  : "Preparation progress saved"}
+              </h3>
+              <p className="mt-2 text-sm text-emerald-800">
+                {completion.ready
+                  ? completion.count
+                    ? `${completion.count} staff assigned.`
+                    : "Staff assignment can be completed later from the event list."
+                  : "Return to this event when you are ready to continue."}
+              </p>
+            </div>
+            <Summary
+              venue={venue?.venue_name || "Not selected"}
+              status={preparationLabels[preparationStatus]}
+              registration={effectiveOpen ? "Open" : "Closed"}
+            />
+            {completion.ready && completion.count === 0 && (
+              <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                No staff assigned yet. Use Assign Staff on this event before
+                attendance processing.
+              </p>
+            )}
+            {completion.warning && (
+              <p
+                role="status"
+                className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
+              >
+                {completion.warning}
+              </p>
+            )}
+          </div>
+          <footer className="flex shrink-0 justify-end gap-2 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <Link href={returnHref} className={staffButton} onClick={onClose}>
+              View Events
+            </Link>
             <button
               type="button"
+              className={staffPrimaryButton}
               onClick={onClose}
-              disabled={saving}
-              aria-label="Close event preparation modal"
-              className={`absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                isCancelled
-                  ? "text-red-500 hover:bg-red-100 hover:text-red-700"
-                  : isOngoing
-                    ? "text-amber-600 hover:bg-amber-100 hover:text-amber-800"
-                    : "text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-              }`}
             >
-              <X className="h-5 w-5" />
+              Done
             </button>
-          </div>
-
-          <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-5 py-5 sm:px-6">
-            {/* EVENT INFORMATION */}
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200">
-                  <FileText className="h-5 w-5" />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                    Provincial Event
+          </footer>
+        </>
+      ) : step === 3 ? (
+        <EventStaffManager
+          assignmentId={selectedEvent.id}
+          wizard
+          onClose={onClose}
+          onBack={() => {
+            setIssue("");
+            setStep(2);
+          }}
+          onBusyChange={setStaffBusy}
+          onComplete={(count, warning) =>
+            setCompletion({ ready: true, count, warning })
+          }
+        />
+      ) : (
+        <>
+          <div
+            ref={content}
+            className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5"
+          >
+            {selectedEvent.event?.description && (
+              <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <summary className="cursor-pointer text-sm font-semibold">
+                  Event description
+                </summary>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
+                  {selectedEvent.event.description}
+                </p>
+              </details>
+            )}
+            {issue && (
+              <p
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+              >
+                {issue}
+              </p>
+            )}
+            {step === 1 ? (
+              <>
+                <section>
+                  <label
+                    htmlFor="municipal-local-venue"
+                    className="flex items-center gap-2 text-sm font-bold"
+                  >
+                    <MapPin
+                      className="h-4 w-4 text-indigo-600"
+                      aria-hidden="true"
+                    />
+                    Local venue
+                  </label>
+                  <select
+                    id="municipal-local-venue"
+                    className={field}
+                    value={selectedVenueId}
+                    disabled={busy || venuesLoading}
+                    aria-invalid={Boolean(venueError)}
+                    aria-describedby="preparation-venue-help"
+                    onChange={(e) => {
+                      setIssue("");
+                      onVenueChange(e.target.value);
+                    }}
+                  >
+                    <option value="">
+                      {venuesLoading
+                        ? "Loading venues…"
+                        : "Select a local venue"}
+                    </option>
+                    {venues.map((v) => (
+                      <option
+                        key={v.id}
+                        value={v.id}
+                        disabled={v.status?.trim().toLowerCase() !== "active"}
+                      >
+                        {v.venue_name}
+                        {v.status?.trim().toLowerCase() !== "active"
+                          ? " (Inactive)"
+                          : ""}
+                        {v.capacity != null ? ` · Capacity: ${v.capacity}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p
+                    id="preparation-venue-help"
+                    className="mt-2 text-xs leading-5 text-slate-500"
+                  >
+                    Required for Ready. Availability is checked when selecting a
+                    venue and again when saving.
                   </p>
-
-                  <p className="mt-1 break-words text-base font-bold text-slate-900">
-                    {selectedEvent.event?.title || "Untitled Event"}
-                  </p>
-
-                  {selectedEvent.event?.description && (
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                      {selectedEvent.event.description}
+                  {venueError && (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded-xl bg-red-50 p-3 text-sm text-red-800"
+                    >
+                      <AlertTriangle className="mr-1 inline h-4 w-4" />
+                      {venueError}
                     </p>
                   )}
-
-                  <div className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-500">
-                    <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
-
-                    <div>
-                      <p>
-                        <span className="font-semibold text-slate-700">
-                          Starts:
-                        </span>{" "}
-                        {formatEventDateTime(selectedEvent.event?.start_at)}
-                      </p>
-
-                      <p>
-                        <span className="font-semibold text-slate-700">
-                          Ends:
-                        </span>{" "}
-                        {formatEventDateTime(selectedEvent.event?.end_at)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* EVENT LIFECYCLE WARNING */}
-            {isLocked && (
-              <section
-                className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${
-                  isCancelled
-                    ? "border-red-200 bg-red-50"
-                    : isOngoing
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-slate-300 bg-slate-100"
-                }`}
-              >
-                <TriangleAlert
-                  className={`mt-0.5 h-5 w-5 shrink-0 ${
-                    isCancelled
-                      ? "text-red-700"
-                      : isOngoing
-                        ? "text-amber-700"
-                        : "text-slate-600"
-                  }`}
-                />
-
-                <div>
-                  <p
-                    className={`text-sm font-bold ${
-                      isCancelled
-                        ? "text-red-900"
-                        : isOngoing
-                          ? "text-amber-900"
-                          : "text-slate-900"
-                    }`}
-                  >
-                    {isCancelled
-                      ? "Event cancelled"
-                      : isOngoing
-                        ? "Event already ongoing"
-                        : "Event completed"}
-                  </p>
-
-                  <p
-                    className={`mt-1 text-sm leading-6 ${
-                      isCancelled
-                        ? "text-red-700"
-                        : isOngoing
-                          ? "text-amber-700"
-                          : "text-slate-600"
-                    }`}
-                  >
-                    {isCancelled
-                      ? "Municipal preparation and participant registration have been stopped. Existing preparation details are retained for reference."
-                      : isOngoing
-                        ? "The event has already started. Venue assignment, preparation status, local instructions, and registration controls can no longer be changed."
-                        : "The event has already ended. Existing municipal preparation details are retained for historical reference."}
-                  </p>
-                </div>
-              </section>
-            )}
-
-            {/* LOCAL VENUE */}
-            <section className="mt-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-                  <MapPin className="h-5 w-5" />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Local Venue
-                  </h3>
-
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    {isLocked
-                      ? "Review the venue previously assigned to this municipal event."
-                      : "Assign a venue from your municipality. The system automatically prevents overlapping bookings."}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <label htmlFor="municipal-local-venue" className="sr-only">
-                  Local venue
-                </label>
-
-                <select
-                  id="municipal-local-venue"
-                  value={selectedVenueId}
-                  disabled={controlsDisabled || venuesLoading}
-                  onChange={(event) => onVenueChange(event.target.value)}
-                  className={`min-h-12 w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition ${
-                    venueError
-                      ? "border-red-300 text-slate-700 focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                      : "border-slate-300 text-slate-700 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                  } disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500`}
-                >
-                  <option value="">
-                    {venuesLoading
-                      ? "Loading municipal venues..."
-                      : "Select a local venue"}
-                  </option>
-
-                  {venues.map((venue) => {
-                    const venueIsActive = isVenueActive(venue);
-
-                    return (
-                      <option
-                        key={venue.id}
-                        value={venue.id}
-                        disabled={!venueIsActive}
-                      >
-                        {venue.venue_name}
-
-                        {!venueIsActive ? " (Inactive)" : ""}
-
-                        {typeof venue.capacity === "number"
-                          ? ` — Capacity: ${venue.capacity.toLocaleString()}`
-                          : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* NO ACTIVE VENUES */}
-              {!venuesLoading && activeVenueCount === 0 && !isLocked && (
-                <div className="mt-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-
-                  <div>
-                    <p className="text-sm font-bold text-amber-900">
-                      No active municipal venues available
+                  {venue && !venueError && (
+                    <p className="mt-2 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-900">
+                      {venue.venue_name}
+                      {venue.capacity != null
+                        ? ` · ${venue.capacity} capacity`
+                        : ""}
                     </p>
-
-                    <p className="mt-1 text-xs leading-5 text-amber-700">
-                      Add or activate a venue in the Municipal Venues page
-                      before marking this event as Prepared.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* SELECTED VENUE INFO */}
-              {selectedVenue && (
-                <div
-                  className={`mt-3 rounded-xl border p-4 ${
-                    selectedVenueIsInactive
-                      ? "border-red-200 bg-red-50"
-                      : "border-violet-200 bg-violet-50"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {selectedVenueIsInactive ? (
-                      <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
-                    ) : (
-                      <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" />
+                  )}
+                  {!venuesLoading &&
+                    !venues.some(
+                      (v) => v.status?.trim().toLowerCase() === "active",
+                    ) && (
+                      <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                        No active venues available. Add or activate a venue from
+                        Municipal Venues before marking this event Ready.
+                      </p>
                     )}
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p
-                          className={`text-sm font-bold ${
-                            selectedVenueIsInactive
-                              ? "text-red-950"
-                              : "text-violet-950"
-                          }`}
-                        >
-                          {selectedVenue.venue_name}
-                        </p>
-
-                        {selectedVenueIsInactive && (
-                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-red-700">
-                            Inactive
-                          </span>
-                        )}
-                      </div>
-
-                      <p
-                        className={`mt-1 text-xs ${
-                          selectedVenueIsInactive
-                            ? "text-red-700"
-                            : "text-violet-700"
-                        }`}
-                      >
-                        {formatCapacity(selectedVenue.capacity)}
-                      </p>
-
-                      {selectedVenueIsInactive && (
-                        <p className="mt-2 text-xs leading-5 text-red-700">
-                          {isLocked
-                            ? "This venue is currently inactive. The previous venue assignment is retained for reference."
-                            : "This venue can no longer be assigned. Please select an active venue before saving."}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <p className="mt-2 text-xs leading-5 text-slate-400">
-                {isLocked
-                  ? "The assigned venue is retained for reference and can no longer be changed."
-                  : "Venue selection is required before the event can be marked as Prepared. Inactive venues are shown for reference but cannot be selected."}
-              </p>
-            </section>
-
-            {/* PREPARATION STATUS */}
-            <section className="mt-5">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Preparation Status
-                </h3>
-
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  {isLocked
-                    ? "Review the final recorded municipal preparation progress."
-                    : "Select the municipality's current preparation progress."}
-                </p>
-              </div>
-
-              <div
-                role="radiogroup"
-                aria-label="Preparation status"
-                className="mt-3 grid gap-3 sm:grid-cols-3"
-              >
-                {statusOptions.map((option) => {
-                  const Icon = option.icon;
-
-                  const active = preparationStatus === option.value;
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      disabled={controlsDisabled}
-                      onClick={() => handleStatusSelection(option.value)}
-                      className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed ${
-                        active
-                          ? option.activeClass
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      } ${
-                        isLocked ? "disabled:opacity-80" : "disabled:opacity-60"
-                      }`}
-                    >
-                      <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                          active
-                            ? option.iconClass
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        <Icon
-                          className={`h-4 w-4 ${
-                            option.value === "preparing" && active && !isLocked
-                              ? "animate-spin"
-                              : ""
-                          }`}
-                        />
-                      </div>
-
-                      <p className="mt-3 text-sm font-bold text-slate-900">
-                        {option.label}
-                      </p>
-
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
-                        {option.description}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {isLocked && (
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  This preparation status is retained for reference and can no
-                  longer be changed.
-                </p>
-              )}
-            </section>
-
-            {/* LOCAL INSTRUCTIONS */}
-            {!isMunicipalEvent && (
-              <section className="mt-5">
-                <label
-                  htmlFor="municipal-local-instructions"
-                  className="text-sm font-bold text-slate-900"
-                >
-                  Local Instructions
-                </label>
-
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  {isLocked
-                    ? "Review the municipal instructions recorded before the event was locked."
-                    : "Add municipal reminders, requirements, or arrival instructions for participants."}
-                </p>
-
-                <textarea
-                  id="municipal-local-instructions"
-                  value={localInstructions}
-                  maxLength={2000}
-                  aria-describedby="municipal-instruction-count"
-                  disabled={controlsDisabled}
-                  onChange={(event) => onInstructionsChange(event.target.value)}
-                  rows={5}
-                  placeholder={
-                    isLocked
-                      ? "Local instructions are locked because this event is no longer available for preparation changes."
-                      : "Example: Participants must arrive 30 minutes before the event and bring a valid ID."
-                  }
-                  className={`mt-3 w-full resize-none rounded-xl border px-4 py-3 text-sm leading-6 outline-none transition ${
-                    isLocked
-                      ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
-                      : "border-slate-300 bg-white text-slate-700 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                  }`}
-                />
-
-                <div className="mt-1.5 flex items-center justify-between gap-3 text-xs">
-                  <span
-                    className={
-                      isCancelled
-                        ? "text-red-600"
-                        : isLocked
-                          ? "text-slate-500"
-                          : "text-slate-400"
-                    }
-                  >
-                    {isLocked
-                      ? "Instructions are retained for reference only."
-                      : "Keep the instructions clear and specific."}
-                  </span>
-
-                  <span
-                    id="municipal-instruction-count"
-                    className="shrink-0 text-slate-400"
-                  >
-                    {localInstructions.length} / 2,000 characters
-                  </span>
-                </div>
-              </section>
-            )}
-
-            {/* REGISTRATION CONTROL */}
-            <section className="mt-5">
-              <div
-                className={`rounded-xl border p-4 transition ${
-                  isCancelled
-                    ? "border-red-200 bg-red-50"
-                    : isLocked
-                      ? "border-slate-300 bg-slate-100"
-                      : isPrepared
-                        ? registrationOpen
-                          ? "border-emerald-300 bg-emerald-50"
-                          : "border-slate-200 bg-white"
-                        : "border-slate-200 bg-slate-50"
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                      isCancelled
-                        ? "bg-red-100 text-red-700"
-                        : isLocked
-                          ? "bg-slate-200 text-slate-700"
-                          : registrationOpen && isPrepared
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {isLocked || !registrationOpen ? (
-                      <LockKeyhole className="h-5 w-5" />
-                    ) : (
-                      <UsersRound className="h-5 w-5" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-sm font-bold ${
-                        isCancelled ? "text-red-900" : "text-slate-900"
-                      }`}
-                    >
-                      Participant Registration
-                    </p>
-
-                    <p
-                      className={`mt-1 text-xs leading-5 ${
-                        isCancelled ? "text-red-600" : "text-slate-500"
-                      }`}
-                    >
-                      {isCancelled
-                        ? "Registration is permanently closed for this cancelled event."
-                        : isOngoing
-                          ? "Registration is closed because the event is already ongoing."
-                          : isCompleted
-                            ? "Registration is closed because the event has already been completed."
-                            : isPrepared
-                              ? "Allow participants from this municipality to register for the event."
-                              : "The event must be marked as Prepared before registration can be opened."}
-                    </p>
-                  </div>
-
+                </section>
+                <section>
                   <label
-                    className={`relative inline-flex shrink-0 items-center ${
-                      isLocked || saving || !isPrepared
-                        ? "cursor-not-allowed opacity-60"
-                        : "cursor-pointer"
-                    }`}
+                    htmlFor="municipal-local-instructions"
+                    className="text-sm font-bold"
                   >
-                    <input
-                      type="checkbox"
-                      checked={!isLocked && isPrepared && registrationOpen}
-                      disabled={isLocked || saving || !isPrepared}
-                      onChange={(event) =>
-                        onRegistrationChange(event.target.checked)
-                      }
-                      className="peer sr-only"
-                    />
-
-                    <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-emerald-600 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-300 peer-disabled:cursor-not-allowed after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:after:translate-x-5" />
+                    Participant instructions
                   </label>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          {/* FOOTER */}
-          <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
-            {venueError && (
-              <div
-                role="alert"
-                className="mb-3 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4"
-              >
-                <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
-
-                <div>
-                  <p className="text-sm font-bold text-red-900">
-                    Venue Required
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {municipal
+                      ? "These instructions were set when the municipal event was created. Update them from Municipal Events."
+                      : "Explain arrival time, requirements or what participants should bring."}
                   </p>
-
-                  <p className="mt-1 text-sm leading-6 text-red-700">
-                    {venueError.replace(
-                      /^(Venue Schedule Conflict|Venue Unavailable):\s*/i,
-                      "",
-                    )}
+                  <textarea
+                    id="municipal-local-instructions"
+                    className={`${field} resize-none leading-6`}
+                    rows={4}
+                    value={localInstructions}
+                    maxLength={2000}
+                    readOnly={municipal}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setIssue("");
+                      onInstructionsChange(e.target.value);
+                    }}
+                    placeholder="Example: Arrive 30 minutes early and bring a valid ID."
+                    aria-describedby="preparation-instruction-count"
+                  />
+                  <p
+                    id="preparation-instruction-count"
+                    className="mt-1 text-right text-xs text-slate-500"
+                  >
+                    {localInstructions.length} / 2,000
                   </p>
-                </div>
-              </div>
+                </section>
+              </>
+            ) : (
+              <>
+                <fieldset disabled={busy}>
+                  <legend className="text-sm font-bold">
+                    Preparation status
+                  </legend>
+                  <div className="mt-3 grid gap-2">
+                    {(
+                      [
+                        "pending",
+                        "preparing",
+                        "prepared",
+                      ] as PreparationStatus[]
+                    ).map((value) => (
+                      <label
+                        key={value}
+                        className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm ${preparationStatus === value ? "border-indigo-500 bg-indigo-50 text-indigo-950" : "border-slate-200 text-slate-700"}`}
+                      >
+                        <input
+                          className="h-5 w-5 accent-indigo-600"
+                          type="radio"
+                          name="preparation-status"
+                          value={value}
+                          checked={preparationStatus === value}
+                          onChange={() => {
+                            setIssue("");
+                            onStatusChange(value);
+                            if (value !== "prepared")
+                              onRegistrationChange(false);
+                          }}
+                        />
+                        <span className="flex-1 font-semibold">
+                          {preparationLabels[value]}
+                        </span>
+                        {preparationStatus === value && (
+                          <Check className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset disabled={busy || !ready}>
+                  <legend className="text-sm font-bold">
+                    Participant registration
+                  </legend>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {ready
+                      ? "Choose whether participants can register for this event."
+                      : "Registration stays closed until the event is Ready."}
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {[false, true].map((open) => (
+                      <label
+                        key={String(open)}
+                        className={`flex min-h-12 items-center gap-2 rounded-xl border px-3 py-3 text-sm ${registrationOpen === open && (ready || !open) ? "border-indigo-500 bg-indigo-50" : "border-slate-200"} ${!ready ? "opacity-60" : "cursor-pointer"}`}
+                      >
+                        <input
+                          type="radio"
+                          name="preparation-registration"
+                          className="h-5 w-5 accent-indigo-600"
+                          checked={ready ? registrationOpen === open : !open}
+                          onChange={() => onRegistrationChange(open)}
+                        />
+                        {open ? "Open" : "Closed"}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <Summary
+                  venue={venue?.venue_name || "Not selected"}
+                  status={preparationLabels[preparationStatus]}
+                  registration={effectiveOpen ? "Open" : "Closed"}
+                />
+                {ready && (
+                  <p className="text-xs leading-5 text-slate-500">
+                    Save & Continue saves preparation first, then opens staff
+                    selection. Participant notifications use the existing save
+                    process.
+                  </p>
+                )}
+              </>
             )}
-
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          </div>
+          <footer className="shrink-0 border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
+            <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className={staffButton}
+                disabled={busy}
+                onClick={
+                  step === 1
+                    ? close
+                    : () => {
+                        setIssue("");
+                        setStep(1);
+                      }
+                }
               >
-                {isLocked ? "Close" : "Cancel"}
+                {step === 1 ? (
+                  "Cancel"
+                ) : (
+                  <>
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </>
+                )}
               </button>
-
-              {!isLocked && (
-                <button
-                  type="button"
-                  onClick={() => void onSave()}
-                  disabled={saving || selectedVenueIsInactive}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? (
-                    <>
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                      Saving Preparation...
-                    </>
-                  ) : selectedVenueIsInactive ? (
-                    <>
-                      <TriangleAlert className="h-4 w-4" />
-                      Choose an Active Venue
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Save Preparation
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                className={staffPrimaryButton}
+                disabled={busy || venuesLoading}
+                onClick={step === 1 ? next : () => void save()}
+              >
+                {busy ? (
+                  <>
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : step === 1 ? (
+                  <>
+                    Next
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                ) : ready ? (
+                  "Save & Continue"
+                ) : (
+                  "Save Progress"
+                )}
+              </button>
             </div>
-          </div>
-        </div>
+          </footer>
+        </>
+      )}
+    </dialog>
+  );
+}
+function Summary({
+  venue,
+  status,
+  registration,
+}: {
+  venue: string;
+  status: string;
+  registration: string;
+}) {
+  return (
+    <dl className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="flex justify-between gap-3">
+        <dt className="text-slate-500">Venue</dt>
+        <dd className="min-w-0 break-words text-right font-semibold">
+          {venue}
+        </dd>
       </div>
-    </div>
+      <div className="flex justify-between gap-3">
+        <dt className="text-slate-500">Status</dt>
+        <dd className="font-semibold">{status}</dd>
+      </div>
+      <div className="flex justify-between gap-3">
+        <dt className="text-slate-500">Registration</dt>
+        <dd className="font-semibold">{registration}</dd>
+      </div>
+    </dl>
   );
 }

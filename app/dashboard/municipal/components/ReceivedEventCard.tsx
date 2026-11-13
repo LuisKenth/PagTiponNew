@@ -1,4 +1,8 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import EventStaffAction from "./EventStaffFlow";
+import { eventActionState } from "./eventActionState";
 import Link from "next/link";
 
 import {
@@ -34,6 +38,7 @@ type ReceivedEventCardProps = {
   item: ReceivedEvent;
   venues?: MunicipalVenue[];
   onPrepare: (item: ReceivedEvent) => void;
+  onBeforeStaff?: () => void;
   showActions?: boolean;
   compact?: boolean;
   extraActions?: ReactNode;
@@ -44,6 +49,7 @@ export default function ReceivedEventCard({
   item,
   venues,
   onPrepare,
+  onBeforeStaff,
   showActions = true,
   compact = false,
   extraActions,
@@ -53,31 +59,22 @@ export default function ReceivedEventCard({
     item.event?.event_origin === "municipal"
       ? "Municipal Event"
       : "Provincial Event";
-  const municipalStatus = String(item.municipal_status ?? "")
-    .trim()
-    .toLowerCase();
-
-  const provincialStatus = String(item.event?.status ?? "")
-    .trim()
-    .toLowerCase();
-
-  /*
-   * EVENT LIFECYCLE
-   *
-   * Municipal preparation is editable only
-   * while the provincial event is upcoming.
-   */
-  const isCancelled =
-    municipalStatus === "cancelled" || provincialStatus === "cancelled";
-
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const first = window.setTimeout(tick, 0);
+    const timer = window.setInterval(tick, 30_000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
+  }, []);
+  const actions = eventActionState(item, now);
+  const provincialStatus = actions.status;
+  const isCancelled = provincialStatus === "cancelled";
   const isOngoing = provincialStatus === "ongoing";
-
   const isCompleted = provincialStatus === "completed";
-
-  const isUpcoming = provincialStatus === "upcoming";
-
-  const isPreparationEditable = isUpcoming && !isCancelled;
-
+  const isPreparationEditable = actions.editable;
   const isPreparationLocked = !isPreparationEditable;
 
   const getEventStatusLabel = () => {
@@ -167,14 +164,7 @@ export default function ReceivedEventCard({
             ? "bg-blue-500"
             : "bg-amber-500";
 
-  const preparationActionLabel =
-    provincialStatus === "draft"
-      ? "Continue Draft"
-      : isCancelled
-        ? "View Cancellation"
-        : isPreparationEditable
-          ? "Manage Preparation"
-          : "View Preparation";
+  const preparationActionLabel = actions.preparationLabel;
 
   const preparationActionDescription = isCancelled
     ? "Preparation and registration controls are locked because this event was cancelled."
@@ -660,7 +650,7 @@ export default function ReceivedEventCard({
                       isCancelled ? "text-red-900" : "text-slate-900"
                     }`}
                   >
-                    Event Actions
+                    Manage Event
                   </p>
 
                   <p
@@ -669,24 +659,29 @@ export default function ReceivedEventCard({
                     }`}
                   >
                     {isPreparationEditable
-                      ? "Review or manage"
+                      ? "Continue event setup"
                       : "Review event details"}
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                {extraActions}
+                {actions.canAssign && (
+                  <EventStaffAction
+                    assignmentId={item.id}
+                    eventId={item.event_id}
+                    title={item.event?.title || "Event"}
+                    ready
+                    presentation="panel"
+                    beforeOpen={onBeforeStaff}
+                  />
+                )}
                 {item.event?.memo_url && (
                   <a
                     href={item.event.memo_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition ${
-                      isCancelled
-                        ? "bg-red-800 hover:bg-red-700"
-                        : "bg-slate-950 hover:bg-slate-800"
-                    }`}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
                     <FileText className="h-4 w-4" />
                     View Memo
@@ -697,12 +692,14 @@ export default function ReceivedEventCard({
                 <button
                   type="button"
                   onClick={() => onPrepare(item)}
-                  className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold transition ${
-                    isCancelled
-                      ? "border-red-300 text-red-700 hover:bg-red-100"
-                      : isPreparationLocked
-                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
-                        : "border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950"
+                  className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    isPreparationEditable && !isPrepared
+                      ? "border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
+                      : isCancelled
+                        ? "border-red-300 bg-white text-red-700 hover:bg-red-100"
+                        : isPreparationLocked
+                          ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                          : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950"
                   }`}
                 >
                   {isCancelled ? (
@@ -715,6 +712,32 @@ export default function ReceivedEventCard({
 
                   {preparationActionLabel}
                 </button>
+                {actions.canViewRegistrations && (
+                  <Link
+                    href={`/dashboard/municipal/registrations/${encodeURIComponent(item.id)}`}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    <UsersRound className="h-4 w-4" /> View Registrations
+                  </Link>
+                )}
+                {actions.canViewAttendance && (
+                  <Link
+                    href={`/dashboard/municipal/attendance/${encodeURIComponent(item.id)}`}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    <ClipboardList className="h-4 w-4" /> View Attendance
+                  </Link>
+                )}
+                {actions.canViewRegistrations && !isCancelled && (
+                  <Link
+                    href={`/dashboard/municipal/certificates?assignmentId=${encodeURIComponent(item.id)}`}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Certificates
+                  </Link>
+                )}
+                {extraActions}
               </div>
 
               <p

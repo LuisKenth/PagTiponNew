@@ -1,4 +1,5 @@
 "use client";
+import CertificateOption from "@/app/components/certificates/CertificateOption";
 import ProvincialPageHeader, {
   provincialHeaderButton,
 } from "@/app/dashboard/provincial/components/ProvincialPageHeader";
@@ -39,6 +40,7 @@ function getStoragePathFromPublicUrl(url: string | null) {
 }
 
 type EventItem = {
+  certificates_enabled?: boolean;
   id: string;
   title: string | null;
   description: string | null;
@@ -82,6 +84,7 @@ export default function EditProvincialEventPage() {
   /*
    * EVENT DETAILS
    */
+  const [certificatesEnabled, setCertificatesEnabled] = useState(false);
   const [title, setTitle] = useState("");
 
   const [description, setDescription] = useState("");
@@ -158,6 +161,7 @@ export default function EditProvincialEventPage() {
     }
 
     const event = eventData as EventItem;
+    setCertificatesEnabled(event.certificates_enabled === true);
     if (event.status === "draft") {
       router.replace(
         `/dashboard/provincial/events/create?id=${encodeURIComponent(eventId)}`,
@@ -531,6 +535,7 @@ export default function EditProvincialEventPage() {
       const { error: eventError } = await supabase
         .from("events")
         .update({
+          certificates_enabled: certificatesEnabled,
           audience_type: audienceType,
           audience_categories:
             audienceType === "categories" ? selectedCategories : [],
@@ -1105,6 +1110,11 @@ export default function EditProvincialEventPage() {
             </div>
           </div>
 
+          <CertificateOption
+            enabled={certificatesEnabled}
+            onChange={setCertificatesEnabled}
+            disabled={saving || Boolean(lockedStatus)}
+          />
           {/* ACTIONS */}
           <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5">
             <button
