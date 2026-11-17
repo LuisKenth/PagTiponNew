@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description:
     "Event coordination, registration, and attendance management for Antique.",
   icons: {
-    icon: "/pagtipon-icon.png",
-    apple: "/pagtipon-icon.png",
+    icon: "/PagTipon-Icon-256.png",
+    apple: "/PagTipon-Icon-256.png",
   },
   appleWebApp: {
     capable: true,
