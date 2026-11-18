@@ -9,7 +9,8 @@ const corsHeaders = {
 type NotificationType =
   | "registration_open"
   | "local_instructions_updated"
-  | "venue_updated";
+  | "venue_updated"
+  | "event_cancelled";
 
 type Recipient = {
   id: string;
@@ -211,6 +212,8 @@ Deno.serve(async (req: Request) => {
       body?.notificationType ?? "registration_open",
     ).trim() as NotificationType;
 
+    const isCancellation = notificationType === "event_cancelled";
+
     if (!eventMunicipalityId) {
       return jsonResponse(
         {
@@ -223,7 +226,8 @@ Deno.serve(async (req: Request) => {
     if (
       notificationType !== "registration_open" &&
       notificationType !== "local_instructions_updated" &&
-      notificationType !== "venue_updated"
+      notificationType !== "venue_updated" &&
+      !isCancellation
     ) {
       return jsonResponse(
         {
@@ -316,7 +320,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (normalizeValue(assignment.municipal_status) !== "prepared") {
+    if (
+      !isCancellation && normalizeValue(assignment.municipal_status) !== "prepared"
+    ) {
       return jsonResponse(
         {
           error:
@@ -383,7 +389,9 @@ Deno.serve(async (req: Request) => {
         status,
         audience_type,
         audience_categories,
-        audience_category_other
+        audience_category_other,
+        event_origin,
+        owner_municipality
       `,
       )
       .eq("id", assignment.event_id)
@@ -400,7 +408,15 @@ Deno.serve(async (req: Request) => {
 
     const eventStatus = normalizeValue(event.status);
 
-    if (eventStatus !== "published" && eventStatus !== "upcoming") {
+    if (isCancellation) {
+      if (
+        eventStatus !== "cancelled" ||
+        event.event_origin !== "municipal" ||
+        normalizeValue(event.owner_municipality) !== normalizeValue(assignment.municipality)
+      ) {
+        return jsonResponse({ error: "This municipal event is not cancelled." }, 409);
+      }
+    } else if (eventStatus !== "published" && eventStatus !== "upcoming") {
       return jsonResponse(
         {
           error: `Participant email cannot be sent while event status is "${eventStatus}".`,
@@ -430,6 +446,32 @@ Deno.serve(async (req: Request) => {
      * BUILD RECIPIENT LIST
      */
     let recipients: Recipient[] = [];
+
+    if (isCancellation) {
+      const pageSize = 250;
+
+      for (let offset = 0; ; offset += pageSize) {
+        const { data: rows, error } = await adminClient
+          .from("municipal_event_cancellation_recipients")
+          .select("participant_id, profile:profiles(id, full_name, email)")
+          .eq("event_municipality_id", assignment.id)
+          .order("participant_id")
+          .range(offset, offset + pageSize - 1);
+
+        if (error) throw new Error(error.message);
+
+        for (const row of rows ?? []) {
+          const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
+          const email = profile?.email?.trim().toLowerCase();
+
+          if (profile && email) {
+            recipients.push({ id: profile.id, full_name: profile.full_name, email });
+          }
+        }
+
+        if (!rows || rows.length < pageSize) break;
+      }
+    }
 
     /*
      * REGISTRATION OPEN:
@@ -585,7 +627,7 @@ Deno.serve(async (req: Request) => {
     /*
      * BUILD NOTIFICATION KEY
      */
-    let notificationKey = "registration_open";
+    let notificationKey = isCancellation ? "event_cancelled" : "registration_open";
 
     if (notificationType === "local_instructions_updated") {
       const instructionsHash = await sha256Hex(currentInstructions);
@@ -679,7 +721,7 @@ Deno.serve(async (req: Request) => {
        * RETRY FAILED DELIVERY
        */
       if (deliveryId && existingDelivery?.status === "failed") {
-        const { error: resetError } = await adminClient
+        const { data: reserved, error: resetError } = await adminClient
           .from("email_notification_deliveries")
           .update({
             status: "pending",
@@ -689,11 +731,18 @@ Deno.serve(async (req: Request) => {
             last_error: null,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", deliveryId);
+          .eq("id", deliveryId)
+          .eq("status", "failed")
+          .select("id")
+          .maybeSingle();
 
         if (resetError) {
           failed.push(`${recipient.email}: ${resetError.message}`);
 
+          continue;
+        }
+        if (!reserved) {
+          skippedInProgress += 1;
           continue;
         }
       }
@@ -743,7 +792,11 @@ Deno.serve(async (req: Request) => {
       let heading = "";
       let intro = "";
 
-      if (notificationType === "registration_open") {
+      if (isCancellation) {
+        subject = `Event Cancelled: ${event.title}`;
+        heading = "Event Cancelled";
+        intro = "The event you registered for has been cancelled. Please do not travel to the venue for this event.";
+      } else if (notificationType === "registration_open") {
         subject = `Registration Open: ${event.title}`;
 
         heading = "Event Registration Is Now Open";
@@ -869,7 +922,7 @@ Deno.serve(async (req: Request) => {
               </p>
 
               ${
-                currentInstructions
+                !isCancellation && currentInstructions
                   ? `
                     <div
                       style="
@@ -898,7 +951,7 @@ Deno.serve(async (req: Request) => {
               }
 
               ${
-                event.description
+                !isCancellation && event.description
                   ? `
                     <div
                       style="
@@ -924,7 +977,7 @@ Deno.serve(async (req: Request) => {
             </div>
 
             ${
-              participantEventsUrl
+              !isCancellation && participantEventsUrl
                 ? `
                   <a
                     href="${escapeHtml(participantEventsUrl)}"

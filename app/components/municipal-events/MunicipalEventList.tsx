@@ -16,6 +16,7 @@ import ProvincialPageHeader, {
 import { municipalEventRequest, phDate } from "@/lib/municipal-events/client";
 import type { MunicipalEvent } from "@/lib/municipal-events/types";
 import { MUNICIPALITIES } from "@/lib/municipalities";
+import { supabase } from "@/lib/supabase";
 import { CalendarDays, Search, UserRoundPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -56,6 +57,7 @@ export default function MunicipalEventList({
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState("");
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState("all"),
     [town, setTown] = useState("all"),
@@ -105,30 +107,82 @@ export default function MunicipalEventList({
     current = Math.min(page, pages);
   const visible = filtered.slice((current - 1) * 10, current * 10);
   async function cancel(event: MunicipalEvent) {
+    const retry = event.status === "cancelled";
+    const assignmentId = event.event_municipalities[0]?.id;
     if (
       busy ||
-      !window.confirm(
-        `Cancel "${event.title}"? Registration will close. This cannot be undone.`,
-      )
-    )
+      (!retry &&
+        !window.confirm(
+          `Cancel "${event.title}"? Registration will close. This cannot be undone.`,
+        ))
+    ) {
       return;
+    }
+
     setBusy(event.id);
     setError("");
     setMessage("");
+    setEmailError("");
+    let cancelled = retry;
+
     try {
-      const form = new FormData();
-      form.set("id", event.id);
-      form.set("expected", event.updated_at);
-      form.set("payload", JSON.stringify({ action: "cancelled" }));
-      await municipalEventRequest("/api/municipal/events", {
-        method: "POST",
-        body: form,
+      if (!retry) {
+        const form = new FormData();
+        form.set("id", event.id);
+        form.set("expected", event.updated_at);
+        form.set("payload", JSON.stringify({ action: "cancelled" }));
+        await municipalEventRequest("/api/municipal/events", {
+          method: "POST",
+          body: form,
+        });
+        cancelled = true;
+      }
+
+      if (event.status === "draft") {
+        setMessage("Event cancelled successfully.");
+        return;
+      }
+
+      if (!assignmentId) throw new Error("Missing municipal assignment.");
+
+      const { data, error } = await supabase.functions.invoke<{
+        sent: number;
+        totalRecipients: number;
+        skippedAlreadySent: number;
+        skippedInProgress: number;
+        failed: string[];
+      }>("send-participant-event-email", {
+        body: {
+          eventMunicipalityId: assignmentId,
+          notificationType: "event_cancelled",
+        },
       });
-      setMessage("Event cancelled successfully.");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to cancel event.");
+
+      if (error || !data) throw error ?? new Error("Email result unavailable.");
+
+      if (data.failed.length > 0) {
+        setEmailError(
+          `Event cancelled. ${data.sent} email(s) accepted by the email provider and ${data.failed.length} failed. Use Retry Cancellation Emails for failed sends.`,
+        );
+      } else if (data.skippedInProgress > 0) {
+        setMessage("Event cancelled. Some cancellation emails are still pending.");
+      } else if (data.totalRecipients === 0) {
+        setMessage("Event cancelled. No registered recipients with email addresses were found for this cancellation.");
+      } else {
+        setMessage(
+          `Event cancelled. ${data.sent + data.skippedAlreadySent} cancellation email(s) accepted by the email provider.`,
+        );
+      }
+    } catch (error) {
+      if (cancelled) {
+        setEmailError(
+          "Event cancelled. Email status could not be confirmed. Use Retry Cancellation Emails to check or retry failed sends.",
+        );
+      } else {
+        setError(error instanceof Error ? error.message : "Unable to cancel event.");
+      }
     } finally {
+      if (cancelled) await load();
       setBusy(null);
     }
   }
@@ -137,6 +191,7 @@ export default function MunicipalEventList({
     setBusy(event.id);
     setError("");
     setMessage("");
+    setEmailError("");
     try {
       const form = new FormData();
       form.set("id", event.id);
@@ -221,9 +276,9 @@ export default function MunicipalEventList({
           </p>
         </section>
       )}
-      {error && (
+      {(error || emailError) && (
         <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">
-          {error}
+          {error || emailError}
         </p>
       )}
       {message && (
@@ -333,6 +388,19 @@ export default function MunicipalEventList({
                         "prepared"
                       }
                     />
+                  );
+                }
+
+                if (event.status === "cancelled" && event.event_municipalities[0]?.id) {
+                  return (
+                    <button
+                      type="button"
+                      disabled={Boolean(busy)}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                      onClick={() => void cancel(event)}
+                    >
+                      {busy === event.id ? "Checking emails…" : "Retry Cancellation Emails"}
+                    </button>
                   );
                 }
 
