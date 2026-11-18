@@ -56,7 +56,7 @@ const rate = (e: EventRow) =>
     ? "—"
     : `${Math.round(((e.present + e.late) / e.registered) * 100)}%${e.status === "ongoing" ? " · Live" : ""}`;
 const note =
-  "Attended = Present + Late. Final attendance rate uses completed events only. A dash means no eligible registrations. Upcoming and ongoing results are not final. Drafts and cancelled events/registrations are excluded. Counts are registrations per event, not unique people.";
+  "Attended = Present + Late. Absent and final attendance rate use completed events only. A dash means no eligible registrations. Upcoming and ongoing results are not final. Drafts and cancelled events/registrations are excluded. Counts are registrations per event, not unique people.";
 
 export default function ReportWorkspace({
   provincial,
@@ -115,6 +115,7 @@ export default function ReportWorkspace({
   const attended = events.reduce((n, e) => n + e.present + e.late, 0);
   const registered = events.reduce((n, e) => n + e.registered, 0);
   const completed = events.filter((e) => e.status === "completed");
+  const absent = completed.reduce((n, e) => n + e.absent, 0);
   const finalRegistered = completed.reduce((n, e) => n + e.registered, 0);
   const finalAttended = completed.reduce((n, e) => n + e.present + e.late, 0);
   const finalRate = finalRegistered
@@ -204,6 +205,7 @@ export default function ReportWorkspace({
     ["Events", String(events.length)],
     ["Registered", String(registered)],
     ["Attended", String(attended)],
+    ["Absent", String(absent)],
     ["Final Attendance Rate", finalRate],
   ];
   async function download(pdf: boolean) {
@@ -394,7 +396,7 @@ export default function ReportWorkspace({
           {error} Automatic updates will retry when connected.
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {metrics.map(([label, value]) => (
           <article
             key={label}

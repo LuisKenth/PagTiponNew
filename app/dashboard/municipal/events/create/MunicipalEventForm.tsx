@@ -1,4 +1,5 @@
 "use client";
+import { canEditMunicipalEvent } from "@/app/components/municipal-events/canEditMunicipalEvent";
 import CertificateOption from "@/app/components/certificates/CertificateOption";
 import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalPageHeader";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -64,7 +65,8 @@ export default function MunicipalEventForm({
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [success, setSuccess] = useState("");
+    [success, setSuccess] = useState(""),
+    [savedEdit, setSavedEdit] = useState(false);
   const successDialog = useRef<HTMLDialogElement>(null),
     saving = useRef(false);
   const load = useCallback(async () => {
@@ -97,6 +99,7 @@ export default function MunicipalEventForm({
         const e = result.events[0] as MunicipalEvent | undefined;
         if (!e) throw new Error("Event is unavailable in your municipality.");
         setRecord(e);
+        setApproved(Boolean(e.municipal_approval_recorded_at && e.memo_url));
         setTitle(e.title);
         setCertificatesEnabled(e.certificates_enabled === true);
         setDescription(e.description || "");
@@ -122,9 +125,35 @@ export default function MunicipalEventForm({
       ++loadGeneration.current;
     };
   }, [load]);
-  const readOnly = Boolean(record && record.status !== "draft");
+  const editingPublished = Boolean(record && record.status !== "draft");
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timeout = window.setTimeout(update, 0);
+    const interval = window.setInterval(update, 1000);
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const readOnly = Boolean(
+    record &&
+      !canEditMunicipalEvent(
+        record.status,
+        record.start_at,
+        now ?? Number.POSITIVE_INFINITY,
+      ),
+  );
   async function save(action: "draft" | "published") {
-    if (saving.current || loading || readOnly || (requestedId && !record))
+    if (
+      saving.current ||
+      loading ||
+      (record && !canEditMunicipalEvent(record.status, record.start_at, Date.now())) ||
+      (requestedId && !record) ||
+      (editingPublished && action !== "published")
+    )
       return;
     if (!title.trim()) {
       setError("Enter the event title before saving.");
@@ -141,7 +170,7 @@ export default function MunicipalEventForm({
         (!document && !record?.memo_url))
     ) {
       setError(
-        "Complete the description, audience, schedule, venue, approved document and confirmation before publishing.",
+        "Complete the description, audience, schedule, venue, approved document and confirmation before saving.",
       );
       return;
     }
@@ -167,7 +196,7 @@ export default function MunicipalEventForm({
       };
       const form = new FormData();
       form.set("id", id.current);
-      form.set("payload", JSON.stringify(payload));
+      form.set("payload", JSON.stringify({ ...payload, action: editingPublished ? "edited" : action }));
       if (record) form.set("expected", record.updated_at);
       if (document) form.set("document", document);
       const result = await municipalEventRequest("/api/municipal/events", {
@@ -181,10 +210,13 @@ export default function MunicipalEventForm({
         event_municipalities: record?.event_municipalities ?? [],
       });
       setDocument(null);
+      setSavedEdit(editingPublished);
       setSuccess(
         action === "draft"
           ? "Draft saved successfully. You can continue editing now or return to Municipal Events later."
-          : "Event published successfully. Next, confirm its preparation as Ready, then assign Event Staff for attendance.",
+          : editingPublished
+            ? "Event changes saved successfully."
+            : "Event published successfully. Next, confirm its preparation as Ready, then assign Event Staff for attendance.",
       );
       if (onSaved) onSaved();
       else successDialog.current?.showModal();
@@ -210,8 +242,9 @@ export default function MunicipalEventForm({
         footer={
           <>
             <FilePenLine className="h-4 w-4 shrink-0" aria-hidden="true" />{" "}
-            Complete the sections below, then review your event before
-            publishing.
+            {editingPublished
+              ? "Review and save your changes before the event starts."
+              : "Complete the sections below, then review your event before publishing."}
           </>
         }
         actions={
@@ -419,6 +452,10 @@ export default function MunicipalEventForm({
                           setDocument(null);
                         } else {
                           setDocument(file ?? null);
+                          setApproved(
+                            !file &&
+                              Boolean(record?.memo_url && record.municipal_approval_recorded_at),
+                          );
                           setError("");
                         }
                       }}
@@ -438,61 +475,73 @@ export default function MunicipalEventForm({
                 </section>
               </div>
               <aside className="min-w-0 xl:sticky xl:top-6">
-                <CreateEventActions
-                  submitAction={submitAction}
-                  title={title}
-                  description={description}
-                  startAt={start}
-                  endAt={end}
-                  memoCount={document || record?.memo_url ? 1 : 0}
-                  municipalityCount={1}
-                  audienceComplete={Boolean(audience)}
-                  onCancel={() =>
-                    onClose
-                      ? onClose()
-                      : router.push("/dashboard/municipal/local-events")
-                  }
-                  onSaveDraft={() => void save("draft")}
-                  onPublish={() => void save("published")}
-                  footerText={`Publishing makes this event available in ${municipality}. Registration remains closed until you open it using Manage Preparation.`}
-                  requirementsOverride={[
-                    { label: "Event title", complete: Boolean(title.trim()) },
-                    {
-                      label: "Event description",
-                      complete: Boolean(description.trim()),
-                    },
-                    {
-                      label: "Participant audience",
-                      complete:
-                        audience === "all" ||
-                        (audience === "categories" &&
-                          categories.length > 0 &&
-                          (!categories.includes("others") ||
-                            Boolean(other.trim()))),
-                    },
-                    {
-                      label: "Event schedule",
-                      complete: Boolean(start && end && end > start),
-                    },
-                    {
-                      label: "Active municipal venue",
-                      complete: venues.some(
-                        (v) =>
-                          v.id === venueId &&
-                          v.status === "active" &&
-                          v.capacity > 0,
-                      ),
-                    },
-                    {
-                      label: "Approved PDF document",
-                      complete: Boolean(document || record?.memo_url),
-                    },
-                    {
-                      label: "Municipal approval confirmation",
-                      complete: approved,
-                    },
-                  ]}
-                />
+                {editingPublished ? (
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => void save("published")}
+                      className="min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {busy ? "Saving Changes…" : "Save Changes"}
+                    </button>
+                  </section>
+                ) : (
+                  <CreateEventActions
+                    submitAction={submitAction}
+                    title={title}
+                    description={description}
+                    startAt={start}
+                    endAt={end}
+                    memoCount={document || record?.memo_url ? 1 : 0}
+                    municipalityCount={1}
+                    audienceComplete={Boolean(audience)}
+                    onCancel={() =>
+                      onClose
+                        ? onClose()
+                        : router.push("/dashboard/municipal/local-events")
+                    }
+                    onSaveDraft={() => void save("draft")}
+                    onPublish={() => void save("published")}
+                    footerText={`Publishing makes this event available in ${municipality}. Registration remains closed until you open it using Manage Preparation.`}
+                    requirementsOverride={[
+                      { label: "Event title", complete: Boolean(title.trim()) },
+                      {
+                        label: "Event description",
+                        complete: Boolean(description.trim()),
+                      },
+                      {
+                        label: "Participant audience",
+                        complete:
+                          audience === "all" ||
+                          (audience === "categories" &&
+                            categories.length > 0 &&
+                            (!categories.includes("others") ||
+                              Boolean(other.trim()))),
+                      },
+                      {
+                        label: "Event schedule",
+                        complete: Boolean(start && end && end > start),
+                      },
+                      {
+                        label: "Active municipal venue",
+                        complete: venues.some(
+                          (v) =>
+                            v.id === venueId &&
+                            v.status === "active" &&
+                            v.capacity > 0,
+                        ),
+                      },
+                      {
+                        label: "Approved PDF document",
+                        complete: Boolean(document || record?.memo_url),
+                      },
+                      {
+                        label: "Municipal approval confirmation",
+                        complete: approved,
+                      },
+                    ]}
+                  />
+                )}
               </aside>
             </div>
           </fieldset>
@@ -552,7 +601,7 @@ export default function MunicipalEventForm({
           >
             {record?.status === "draft"
               ? "Your draft is saved"
-              : "Your event is published"}
+              : savedEdit ? "Your event is updated" : "Your event is published"}
           </h2>
 
           <p
@@ -562,7 +611,9 @@ export default function MunicipalEventForm({
           >
             {record?.status === "draft"
               ? "You can continue editing now or return to Municipal Events later."
-              : "Continue with preparation, then assign staff to manage attendance."}
+              : savedEdit
+                ? "Your changes are visible in Municipal Events."
+                : "Continue with preparation, then assign staff to manage attendance."}
           </p>
         </div>
 
@@ -586,11 +637,11 @@ export default function MunicipalEventForm({
             >
               {record?.status === "draft"
                 ? "Draft · Not published"
-                : "Published · Registration closed"}
+                : savedEdit ? "Changes saved" : "Published · Registration closed"}
             </span>
           </div>
 
-          {record?.status !== "draft" && (
+          {record?.status !== "draft" && !savedEdit && (
             <div>
               <h3 className="text-sm font-bold text-slate-900">What’s next?</h3>
 
@@ -634,7 +685,7 @@ export default function MunicipalEventForm({
         </div>
 
         <div className="sticky bottom-0 space-y-3 border-t border-slate-200 bg-white px-5 py-5 sm:px-7">
-          {record?.status !== "draft" && record?.id ? (
+          {record?.status !== "draft" && record?.id && !savedEdit ? (
             <Link
               autoFocus
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"

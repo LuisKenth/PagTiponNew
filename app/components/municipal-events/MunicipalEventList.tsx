@@ -1,4 +1,5 @@
 "use client";
+import { canEditMunicipalEvent } from "./canEditMunicipalEvent";
 import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 import VenueLocationButton from "@/app/components/VenueLocationButton";
 import EventPreparationDialog from "@/app/dashboard/municipal/components/EventPreparationDialog";
@@ -47,6 +48,17 @@ export default function MunicipalEventList({
   monitor?: boolean;
 }) {
   const router = useRouter();
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timeout = window.setTimeout(update, 0);
+    const interval = window.setInterval(update, 1000);
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(interval);
+    };
+  }, []);
   // Keep Provincial monitoring navy; use shared white header for Municipal Admin.
   const PageHeader = monitor ? ProvincialPageHeader : MunicipalPageHeader;
   const [preparationId, setPreparationId] = useState<string | null>(null);
@@ -374,20 +386,35 @@ export default function MunicipalEventList({
                   (event) => event.id === item.event_id,
                 );
                 if (!event) return null;
+                const editLink = canEditMunicipalEvent(
+                  event.status,
+                  event.start_at,
+                  now ?? Number.POSITIVE_INFINITY,
+                ) && (
+                  <Link
+                    href={`/dashboard/municipal/events/create?id=${encodeURIComponent(event.id)}`}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+                  >
+                    Edit Event
+                  </Link>
+                );
 
                 if (
                   ["published", "upcoming", "ongoing"].includes(event.status)
                 ) {
                   return (
-                    <EventStaffAction
-                      eventId={event.id}
-                      assignmentId={event.event_municipalities[0]?.id}
-                      title={event.title}
-                      ready={
-                        event.event_municipalities[0]?.municipal_status ===
-                        "prepared"
-                      }
-                    />
+                    <>
+                      {editLink}
+                      <EventStaffAction
+                        eventId={event.id}
+                        assignmentId={event.event_municipalities[0]?.id}
+                        title={event.title}
+                        ready={
+                          event.event_municipalities[0]?.municipal_status ===
+                          "prepared"
+                        }
+                      />
+                    </>
                   );
                 }
 
@@ -408,18 +435,7 @@ export default function MunicipalEventList({
 
                 return (
                   <>
-                    <button
-                      type="button"
-                      disabled={Boolean(busy)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard/municipal/events/create?id=${encodeURIComponent(event.id)}`,
-                        )
-                      }
-                    >
-                      Edit
-                    </button>
+                    {editLink}
                     <button
                       type="button"
                       disabled={Boolean(busy)}

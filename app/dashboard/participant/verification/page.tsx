@@ -610,7 +610,7 @@ export default function ParticipantVerificationPage() {
                                 [type]: event.target.value,
                               }))
                             }
-                            className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            className="w-full rounded-xl border border-slate-400 bg-white px-3 py-2.5 text-base text-slate-950 placeholder:text-slate-600 placeholder:opacity-100 [color-scheme:light] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 sm:text-sm"
                           />
                         </div>
 

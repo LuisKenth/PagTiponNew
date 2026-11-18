@@ -83,6 +83,17 @@ function isActiveRegistration(item: RegistrationItem) {
   );
 }
 
+function canUnregister(item: RegistrationItem, now: number | null) {
+  return (
+    now !== null &&
+    normalizeStatus(item.rsvp.status) === "registered" &&
+    ["published", "upcoming"].includes(normalizeStatus(item.event.status)) &&
+    normalizeStatus(item.assignment.municipal_status) !== "cancelled" &&
+    item.event.start_at !== null &&
+    Date.parse(item.event.start_at) > now
+  );
+}
+
 function isCompletedRegistration(item: RegistrationItem) {
   return (
     !isCancelledRegistration(item) &&
@@ -150,6 +161,20 @@ export default function ParticipantRegistrationsPage() {
   const [activeFilter, setActiveFilter] = useState<RegistrationFilter>("all");
 
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [now, setNow] = useState<number | null>(null);
+const [unregisteringId, setUnregisteringId] = useState<string | null>(null);
+const [unregisterMessage, setUnregisterMessage] = useState("");
+const [unregisterError, setUnregisterError] = useState("");
+
+useEffect(() => {
+  const updateTime = () => setNow(Date.now());
+
+  updateTime();
+
+  const interval = window.setInterval(updateTime, 1000);
+  return () => window.clearInterval(interval);
+}, []);
 
   const fetchRegistrations = useCallback(async (refreshOnly = false) => {
     if (refreshOnly) {
@@ -329,6 +354,48 @@ export default function ParticipantRegistrationsPage() {
     void fetchRegistrations();
   }, [fetchRegistrations]);
 
+  async function unregister(item: RegistrationItem) {
+  if (refreshing || unregisteringId || !canUnregister(item, Date.now())) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Unregister from ${item.event.title}? Your attendance pass for this event will be removed.`,
+  );
+
+  if (!confirmed) return;
+
+  setUnregisteringId(item.rsvp.id);
+  setUnregisterMessage("");
+  setUnregisterError("");
+
+  try {
+    const { error } = await supabase.rpc("participant_unregister_from_event", {
+      p_rsvp_id: item.rsvp.id,
+    });
+
+    if (error) {
+      throw new Error(
+        error.code === "P0001"
+          ? error.message
+          : "Unable to unregister. Please refresh and try again.",
+      );
+    }
+
+    setRegistrations((items) =>
+      items.filter((registration) => registration.rsvp.id !== item.rsvp.id),
+    );
+    setUnregisterMessage(`You unregistered from ${item.event.title}.`);
+    await fetchRegistrations(true);
+  } catch (error) {
+    setUnregisterError(
+      error instanceof Error ? error.message : "Unable to unregister.",
+    );
+  } finally {
+    setUnregisteringId(null);
+  }
+}
+
   const registrationCounts = useMemo(() => {
     return {
       total: registrations.length,
@@ -452,7 +519,7 @@ export default function ParticipantRegistrationsPage() {
 
             <BackgroundDataSync
               onUpdate={() => fetchRegistrations(true)}
-              disabled={refreshing}
+              disabled={refreshing || unregisteringId !== null}
             />
           </div>
         </section>
@@ -496,6 +563,24 @@ export default function ParticipantRegistrationsPage() {
               })}
             </div>
           </div>
+
+          {unregisterMessage && (
+  <p
+    role="status"
+    className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800"
+  >
+    {unregisterMessage}
+  </p>
+)}
+
+{unregisterError && (
+  <p
+    role="alert"
+    className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800"
+  >
+    {unregisterError}
+  </p>
+)}
 
           {loading ? (
             <div
@@ -622,6 +707,17 @@ export default function ParticipantRegistrationsPage() {
                               View QR Code
                             </Link>
                           )}
+
+                          {canUnregister(item, now) && (
+  <button
+    type="button"
+    onClick={() => void unregister(item)}
+    disabled={refreshing || unregisteringId !== null}
+    className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    {unregisteringId === item.rsvp.id ? "Unregistering…" : "Unregister"}
+  </button>
+)}
 
                           {completed && (
                             <Link
