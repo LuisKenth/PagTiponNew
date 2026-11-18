@@ -12,6 +12,8 @@ import { useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
+import { sendProvincialParticipantCancellationEmails } from "../participantCancellationEmails";
+
 import { getAutomaticEventStatus, getStatusClass } from "../utils";
 
 import CertificateSignatoriesCard from "./components/CertificateSignatoriesCard";
@@ -445,6 +447,8 @@ export default function ProvincialEventDetailsPage() {
           : currentEvent,
       );
 
+      const participantEmails = sendProvincialParticipantCancellationEmails(event.id);
+
       try {
         const { data: emailResult, error: emailError } =
           await supabase.functions.invoke("send-event-email", {
@@ -477,6 +481,13 @@ export default function ProvincialEventDetailsPage() {
           `"${event.title}" was cancelled successfully.\n\nThe municipal email delivery status could not be tracked. Check the email delivery logs.`,
         );
       }
+
+      const participantResult = await participantEmails;
+      if (participantResult.needsAttention) {
+        alert(
+          "Event cancelled. Some participant emails could not be confirmed. Open Event Details and choose Retry Participant Cancellation Emails.",
+        );
+      }
     } catch (error) {
       console.error("Cancel event error:", error);
 
@@ -484,6 +495,22 @@ export default function ProvincialEventDetailsPage() {
         error instanceof Error ? error.message : "Unable to cancel the event.";
 
       alert(`Failed to cancel event.\n\n${message}`);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const retryParticipantCancellationEmails = async () => {
+    if (!event || cancelling) return;
+
+    setCancelling(true);
+    try {
+      const result = await sendProvincialParticipantCancellationEmails(event.id);
+      if (result.needsAttention) {
+        alert("Some participant cancellation emails are pending or could not be confirmed.");
+      } else {
+        alert(`${result.sent} participant cancellation email(s) accepted by the email provider.`);
+      }
     } finally {
       setCancelling(false);
     }
@@ -712,6 +739,16 @@ export default function ProvincialEventDetailsPage() {
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {cancelling ? "Cancelling..." : "Cancel Event"}
+              </button>
+            )}
+            {automaticStatus === "cancelled" && (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={retryParticipantCancellationEmails}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                {cancelling ? "Checking emails…" : "Retry Participant Cancellation Emails"}
               </button>
             )}
             {/* DELETE */}

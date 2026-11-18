@@ -262,14 +262,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const callerRole = normalizeValue(callerProfile.role);
+    const isProvincialCancellation = isCancellation && callerRole === "provincial_admin";
+
     if (
-      normalizeValue(callerProfile.role) !== "municipal_admin" ||
+      (callerRole !== "municipal_admin" && !isProvincialCancellation) ||
       normalizeValue(callerProfile.verification_status) !== "approved"
     ) {
       return jsonResponse(
         {
           error:
-            "Only approved Municipal Administrators can send participant event emails.",
+            "This administrator is not authorized to send this participant event email.",
         },
         403,
       );
@@ -309,6 +312,7 @@ Deno.serve(async (req: Request) => {
      * for their own municipality.
      */
     if (
+      !isProvincialCancellation &&
       normalizeValue(callerProfile.municipality) !==
       normalizeValue(assignment.municipality)
     ) {
@@ -400,7 +404,7 @@ Deno.serve(async (req: Request) => {
     if (eventError || !event) {
       return jsonResponse(
         {
-          error: "Provincial event not found.",
+          error: "Event not found.",
         },
         404,
       );
@@ -409,12 +413,17 @@ Deno.serve(async (req: Request) => {
     const eventStatus = normalizeValue(event.status);
 
     if (isCancellation) {
-      if (
-        eventStatus !== "cancelled" ||
-        event.event_origin !== "municipal" ||
-        normalizeValue(event.owner_municipality) !== normalizeValue(assignment.municipality)
-      ) {
-        return jsonResponse({ error: "This municipal event is not cancelled." }, 409);
+      const canSendCancellation = isProvincialCancellation
+        ? event.event_origin === "provincial"
+        : event.event_origin === "municipal" &&
+          normalizeValue(event.owner_municipality) === normalizeValue(assignment.municipality);
+
+      if (!canSendCancellation) {
+        return jsonResponse({ error: "Event access denied." }, 403);
+      }
+
+      if (eventStatus !== "cancelled") {
+        return jsonResponse({ error: "This event is not cancelled." }, 409);
       }
     } else if (eventStatus !== "published" && eventStatus !== "upcoming") {
       return jsonResponse(

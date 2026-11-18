@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { MUNICIPALITIES } from "@/lib/municipalities";
 import { supabase } from "@/lib/supabase";
 
+import { sendProvincialParticipantCancellationEmails } from "./participantCancellationEmails";
+
 import Pagination from "../components/Pagination";
 import EventsFilters from "./components/EventsFilters";
 import EventsHeader from "./components/EventsHeader";
@@ -478,6 +480,8 @@ export default function ProvincialEventsPage() {
         ),
       );
 
+      const participantEmails = sendProvincialParticipantCancellationEmails(event.id);
+
       try {
         const {
           data: emailResult,
@@ -511,6 +515,13 @@ export default function ProvincialEventsPage() {
 
         alert(
           `"${eventName}" was cancelled successfully.\n\nThe municipal email delivery status could not be tracked. Check the email delivery logs.`,
+        );
+      }
+
+      const participantResult = await participantEmails;
+      if (participantResult.needsAttention) {
+        alert(
+          "Event cancelled. Some participant emails could not be confirmed. Open Event Details and choose Retry Participant Cancellation Emails.",
         );
       }
     } catch (error) {
