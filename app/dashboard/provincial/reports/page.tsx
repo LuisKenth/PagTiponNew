@@ -17,21 +17,65 @@ export default function ProvincialReportsPage() {
     ...emptyReportFilters,
     source: "all",
   });
+  const eventOptionsFor = (municipality: string, source: string) => {
+    const assignedIds = new Set(
+      data.targets
+        .filter(
+          (target) =>
+            target.municipality === municipality &&
+            target.municipal_status !== "cancelled",
+        )
+        .map((target) => target.event_id),
+    );
+
+    return data.events
+      .filter(
+        (event) =>
+          !["draft", "cancelled"].includes(
+            (event.status || "").trim().toLowerCase(),
+          ) &&
+          (municipality === "all" || assignedIds.has(event.id)) &&
+          (source === "all" || event.event_origin === source),
+      )
+      .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  };
+
+  const eventOptions = eventOptionsFor(filters.municipality, filters.source);
+  const eventId = eventOptions.some((event) => event.id === filters.eventId)
+    ? filters.eventId
+    : "all";
+
   const update = (key: string, value: string) =>
-    setFilters((f) => ({ ...f, [key]: value }));
+    setFilters((previous) => {
+      const next = { ...previous, [key]: value, eventId };
+
+      if (
+        (key === "municipality" || key === "source") &&
+        !eventOptionsFor(next.municipality, next.source).some(
+          (event) => event.id === next.eventId,
+        )
+      ) {
+        next.eventId = "all";
+      }
+
+      return next;
+    });
+
   const invalid = Boolean(
     filters.from && filters.to && filters.from > filters.to,
   );
-  const result = useMemo(
-    () => buildSimpleReports(data, filters, false, loadedAt || 0),
-    [data, filters, loadedAt],
-  );
-  const selectedEventTitle =
-    filters.eventId === "all"
-      ? "All"
-      : data.events.find((event) => event.id === filters.eventId)?.title ||
-        "Selected event";
 
+  const result = useMemo(
+    () =>
+      buildSimpleReports(data, { ...filters, eventId }, false, loadedAt || 0),
+    [data, filters, eventId, loadedAt],
+  );
+
+  const selectedEventTitle =
+    eventId === "all"
+      ? "All"
+      : eventOptions.find((event) => event.id === eventId)?.title ||
+        "Selected event";
   const description = [
     `Event: ${selectedEventTitle}`,
     `Municipality: ${
@@ -52,15 +96,8 @@ export default function ProvincialReportsPage() {
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <div className="min-w-0">
         <SearchableEventSelect
-          events={data.events
-            .filter(
-              (event) =>
-                !["draft", "cancelled"].includes(
-                  (event.status || "").trim().toLowerCase(),
-                ),
-            )
-            .sort((a, b) => (a.title || "").localeCompare(b.title || ""))}
-          value={filters.eventId}
+          events={eventOptions}
+          value={eventId}
           onChange={(eventId) =>
             setFilters((previous) => ({
               ...previous,

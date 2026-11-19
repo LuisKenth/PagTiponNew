@@ -24,6 +24,7 @@ type RawRelatedEvent = {
   start_at?: string | null;
   end_at?: string | null;
   event_origin?: "provincial" | "municipal";
+  owner_municipality?: string | null;
 };
 
 type RawAssignment = {
@@ -520,7 +521,9 @@ export default function useMunicipalReports() {
         const batch = assignmentEventIds.slice(start, start + 100);
         const { data: verifiedRows, error: verifiedError } = await supabase
           .from("events")
-          .select("id,title,status,start_at,end_at,event_origin")
+          .select(
+            "id,title,status,start_at,end_at,event_origin,owner_municipality",
+          )
           .in("id", batch);
 
         if (verifiedError) {
@@ -673,9 +676,14 @@ export default function useMunicipalReports() {
             !status ||
             status === "draft" ||
             status === "cancelled" ||
-            base.municipalStatus === "cancelled"
-          )
+            base.municipalStatus === "cancelled" ||
+            (verified.event_origin === "municipal" &&
+              Boolean(verified.owner_municipality) &&
+              normalizeValue(verified.owner_municipality) !==
+                normalizeValue(profile.municipality))
+          ) {
             return null;
+          }
 
           return {
             ...base,
