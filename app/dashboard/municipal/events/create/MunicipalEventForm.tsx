@@ -5,6 +5,7 @@ import MunicipalPageHeader from "@/app/dashboard/municipal/components/MunicipalP
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 import {
   ArrowLeft,
   ArrowRight,
@@ -56,6 +57,12 @@ export default function MunicipalEventForm({
     [end, setEnd] = useState(""),
     [venueId, setVenueId] = useState(""),
     [instructions, setInstructions] = useState("");
+  const [venueCheck, setVenueCheck] = useState<{
+    key: string;
+    message: string;
+  } | null>(null);
+
+  const venueCheckKey = JSON.stringify([record?.id, venueId, start, end]);
   const [certificatesEnabled, setCertificatesEnabled] = useState(false);
   const [audience, setAudience] = useState<"all" | "categories" | null>(null),
     [categories, setCategories] = useState<string[]>([]),
@@ -67,6 +74,7 @@ export default function MunicipalEventForm({
     [error, setError] = useState(""),
     [success, setSuccess] = useState(""),
     [savedEdit, setSavedEdit] = useState(false);
+  const venueConflictDialog = useRef<HTMLDialogElement>(null);
   const successDialog = useRef<HTMLDialogElement>(null),
     saving = useRef(false);
   const load = useCallback(async () => {
@@ -125,6 +133,53 @@ export default function MunicipalEventForm({
       ++loadGeneration.current;
     };
   }, [load]);
+
+  useEffect(() => {
+    setVenueCheck(null);
+
+    if (loading || !venueId || !start || !end || end <= start) return;
+
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(async () => {
+      let message = "";
+
+      try {
+        const { data, error } = await supabase
+          .rpc("check_local_venue_schedule_conflict", {
+            p_event_municipality_id: null,
+            // A new event has no ID yet. The RPC needs a non-null ID for its exclusion check.
+            p_event_id: record?.id ?? "00000000-0000-0000-0000-000000000000",
+            p_local_venue_id: venueId,
+            p_start_at: phISO(start),
+            p_end_at: phISO(end),
+          })
+          .abortSignal(controller.signal);
+
+        if (error || !Array.isArray(data) || !data.length) {
+          throw new Error("Venue availability check failed.");
+        }
+
+        if (data[0].has_conflict === true) {
+          message =
+            "Venue schedule conflict. This venue is already booked during the selected schedule. Choose a different venue or change the event schedule.";
+        }
+      } catch {
+        message =
+          "Unable to check venue availability. Publishing will still verify the schedule.";
+      }
+
+      if (!controller.signal.aborted) {
+        setVenueCheck(message ? { key: venueCheckKey, message } : null);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [loading, record?.id, venueId, start, end, venueCheckKey]);
+
   const editingPublished = Boolean(record && record.status !== "draft");
   const [now, setNow] = useState<number | null>(null);
 
@@ -140,17 +195,18 @@ export default function MunicipalEventForm({
 
   const readOnly = Boolean(
     record &&
-      !canEditMunicipalEvent(
-        record.status,
-        record.start_at,
-        now ?? Number.POSITIVE_INFINITY,
-      ),
+    !canEditMunicipalEvent(
+      record.status,
+      record.start_at,
+      now ?? Number.POSITIVE_INFINITY,
+    ),
   );
   async function save(action: "draft" | "published") {
     if (
       saving.current ||
       loading ||
-      (record && !canEditMunicipalEvent(record.status, record.start_at, Date.now())) ||
+      (record &&
+        !canEditMunicipalEvent(record.status, record.start_at, Date.now())) ||
       (requestedId && !record) ||
       (editingPublished && action !== "published")
     )
@@ -196,7 +252,13 @@ export default function MunicipalEventForm({
       };
       const form = new FormData();
       form.set("id", id.current);
-      form.set("payload", JSON.stringify({ ...payload, action: editingPublished ? "edited" : action }));
+      form.set(
+        "payload",
+        JSON.stringify({
+          ...payload,
+          action: editingPublished ? "edited" : action,
+        }),
+      );
       if (record) form.set("expected", record.updated_at);
       if (document) form.set("document", document);
       const result = await municipalEventRequest("/api/municipal/events", {
@@ -221,11 +283,17 @@ export default function MunicipalEventForm({
       if (onSaved) onSaved();
       else successDialog.current?.showModal();
     } catch (e) {
-      setError(
+      const message =
         e instanceof Error
           ? e.message
-          : "Unable to save event. Check the event list before retrying.",
-      );
+          : "Unable to save event. Check the event list before retrying.";
+
+      const dialog = venueConflictDialog.current;
+      if (/venue schedule conflict/i.test(message) && dialog) {
+        if (!dialog.open) dialog.showModal();
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
       setSubmitAction(null);
@@ -377,6 +445,14 @@ export default function MunicipalEventForm({
                         ))}
                     </select>
                   </label>
+                  {venueCheck?.key === venueCheckKey && (
+                    <p
+                      role="status"
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                    >
+                      {venueCheck.message}
+                    </p>
+                  )}
                   {venueId && (
                     <VenueLocationButton
                       venueId={venueId}
@@ -454,7 +530,10 @@ export default function MunicipalEventForm({
                           setDocument(file ?? null);
                           setApproved(
                             !file &&
-                              Boolean(record?.memo_url && record.municipal_approval_recorded_at),
+                              Boolean(
+                                record?.memo_url &&
+                                record.municipal_approval_recorded_at,
+                              ),
                           );
                           setError("");
                         }
@@ -554,6 +633,30 @@ export default function MunicipalEventForm({
         </form>
       )}
       <dialog
+        ref={venueConflictDialog}
+        aria-label="Venue schedule conflict"
+        className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-amber-200 bg-white p-0 shadow-xl backdrop:bg-slate-950/50"
+      >
+        <div className="space-y-4 p-6">
+          <h2 className="text-lg font-semibold text-amber-900">
+            Venue schedule conflict
+          </h2>
+          <p className="text-sm leading-6 text-slate-700">
+            The event was not saved because this venue is already booked during
+            the selected schedule. Choose another venue or change the event
+            schedule, then try again.
+          </p>
+          <form method="dialog" className="flex justify-end">
+            <button
+              type="submit"
+              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Back to form
+            </button>
+          </form>
+        </div>
+      </dialog>
+      <dialog
         ref={successDialog}
         className="m-auto max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto rounded-3xl border-0 bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/60"
         style={{ width: "calc(100% - 2rem)" }}
@@ -601,7 +704,9 @@ export default function MunicipalEventForm({
           >
             {record?.status === "draft"
               ? "Your draft is saved"
-              : savedEdit ? "Your event is updated" : "Your event is published"}
+              : savedEdit
+                ? "Your event is updated"
+                : "Your event is published"}
           </h2>
 
           <p
@@ -637,7 +742,9 @@ export default function MunicipalEventForm({
             >
               {record?.status === "draft"
                 ? "Draft · Not published"
-                : savedEdit ? "Changes saved" : "Published · Registration closed"}
+                : savedEdit
+                  ? "Changes saved"
+                  : "Published · Registration closed"}
             </span>
           </div>
 

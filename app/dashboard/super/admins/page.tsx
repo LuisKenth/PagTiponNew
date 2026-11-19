@@ -1,4 +1,5 @@
 "use client";
+
 import BackgroundDataSync from "@/app/components/live/BackgroundDataSync";
 import { message, superRequest } from "@/lib/super/client";
 import {
@@ -35,7 +36,9 @@ import {
   primaryClass,
   secondaryClass,
 } from "../components/ui";
+
 type Credentials = { email: string; password: string };
+
 export default function ProvincialAdmins() {
   const [result, setResult] = useState<AccountResult>({
     admins: [],
@@ -48,6 +51,7 @@ export default function ProvincialAdmins() {
     [status, setStatus] = useState("all"),
     [page, setPage] = useState(1),
     [revision, setRevision] = useState(0);
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null);
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -66,9 +70,12 @@ export default function ProvincialAdmins() {
   );
   const inFlight = useRef(false),
     credentialsRef = useRef<HTMLDivElement>(null);
+  const queryKey = JSON.stringify([page, search, status]);
+  const showLoading = loading && loadedQuery !== queryKey;
   const capacity = result.capacity;
   const slotAvailable =
     !!capacity && capacity.remaining > 0 && !loading && !error;
+
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -94,6 +101,7 @@ export default function ProvincialAdmins() {
             return;
           }
           setResult(data);
+          setLoadedQuery(queryKey);
           setError("");
         } catch (e) {
           if (active) setError(message(e));
@@ -108,7 +116,8 @@ export default function ProvincialAdmins() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [page, search, status, revision]);
+  }, [page, search, status, revision, queryKey]);
+
   useEffect(() => {
     if (credentials)
       credentialsRef.current?.scrollIntoView({
@@ -116,6 +125,7 @@ export default function ProvincialAdmins() {
         block: "center",
       });
   }, [credentials]);
+
   async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (inFlight.current) return;
@@ -156,6 +166,7 @@ export default function ProvincialAdmins() {
       setBusy(false);
     }
   }
+
   async function accountAction(account: ProvincialAccount, action: string) {
     if (inFlight.current) return;
     if (
@@ -192,6 +203,7 @@ export default function ProvincialAdmins() {
       setBusy(false);
     }
   }
+
   async function correctEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (inFlight.current || !recoveryTarget) return;
@@ -235,6 +247,7 @@ export default function ProvincialAdmins() {
       setBusy(false);
     }
   }
+
   async function copyCredentials(value: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -245,6 +258,7 @@ export default function ProvincialAdmins() {
       );
     }
   }
+
   async function deleteAccount(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (inFlight.current || !deleteTarget) return;
@@ -287,6 +301,7 @@ export default function ProvincialAdmins() {
       setBusy(false);
     }
   }
+
   return (
     <>
       <PageHeader
@@ -309,6 +324,7 @@ export default function ProvincialAdmins() {
           Add Provincial Admin
         </button>
       </PageHeader>
+
       <section
         aria-label="Provincial Admin account limit"
         role="status"
@@ -331,7 +347,7 @@ export default function ProvincialAdmins() {
           </span>
         </div>
         <p className="mt-3 text-sm font-semibold text-slate-700">
-          {loading
+          {showLoading
             ? "Checking available slots…"
             : error
               ? "Slots unavailable. Refresh before adding or activating an account."
@@ -340,8 +356,10 @@ export default function ProvincialAdmins() {
                 : `${capacity?.remaining ?? 0} available slot${capacity?.remaining === 1 ? "" : "s"}.`}
         </p>
       </section>
+
       {error && <ErrorMessage>{error}</ErrorMessage>}
       {success && <SuccessMessage>{success}</SuccessMessage>}
+
       {credentials && (
         <div
           ref={credentialsRef}
@@ -401,6 +419,7 @@ export default function ProvincialAdmins() {
           </button>
         </div>
       )}
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-5">
           <div className="mb-4 flex items-center justify-between">
@@ -440,7 +459,8 @@ export default function ProvincialAdmins() {
             </label>
           </div>
         </div>
-        {loading ? (
+
+        {showLoading ? (
           <Loading />
         ) : result.admins.length === 0 ? (
           <div className="p-12 text-center">
@@ -510,7 +530,7 @@ export default function ProvincialAdmins() {
 
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || loading}
                     onClick={() => void accountAction(account, "recovery")}
                     className={secondaryClass}
                   >
@@ -520,7 +540,7 @@ export default function ProvincialAdmins() {
 
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || loading}
                     onClick={() => setRecoveryTarget(account)}
                     className={secondaryClass}
                   >
@@ -532,6 +552,7 @@ export default function ProvincialAdmins() {
                     type="button"
                     disabled={
                       busy ||
+                      loading ||
                       (account.verification_status !== "approved" &&
                         !slotAvailable)
                     }
@@ -559,7 +580,7 @@ export default function ProvincialAdmins() {
                   {account.verification_status !== "approved" && (
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || loading}
                       className={`${secondaryClass} text-red-600`}
                       onClick={() => setDeleteTarget(account)}
                     >
@@ -572,7 +593,8 @@ export default function ProvincialAdmins() {
             ))}
           </div>
         )}
-        {!loading && (
+
+        {!showLoading && (
           <Pagination
             page={page}
             total={result.total}
@@ -581,6 +603,7 @@ export default function ProvincialAdmins() {
           />
         )}
       </section>
+
       <Modal
         open={createOpen}
         busy={busy}
@@ -670,6 +693,7 @@ export default function ProvincialAdmins() {
           </button>
         </form>
       </Modal>
+
       <Modal
         open={!!recoveryTarget}
         busy={busy}
@@ -777,16 +801,13 @@ export default function ProvincialAdmins() {
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-700">
                   <UserRound size={27} />
                 </div>
-
                 <div className="min-w-0">
                   <h3 className="break-words text-lg font-bold text-slate-900">
                     {selectedAdmin.full_name || "Unnamed Admin"}
                   </h3>
-
                   <p className="text-sm text-slate-500">
                     Provincial Administrator
                   </p>
-
                   <div className="mt-2">
                     <StatusBadge status={selectedAdmin.verification_status} />
                   </div>
@@ -801,12 +822,10 @@ export default function ProvincialAdmins() {
                     size={18}
                     className="mt-0.5 shrink-0 text-slate-400"
                   />
-
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-500">
                       Full Name
                     </p>
-
                     <p className="mt-1 break-words text-sm font-semibold text-slate-900">
                       {selectedAdmin.full_name || "Not provided"}
                     </p>
@@ -816,12 +835,10 @@ export default function ProvincialAdmins() {
                 {/* Email Address */}
                 <div className="flex items-start gap-3">
                   <Mail size={18} className="mt-0.5 shrink-0 text-slate-400" />
-
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-500">
                       Email Address
                     </p>
-
                     <p className="mt-1 break-all text-sm font-semibold text-slate-900">
                       {selectedAdmin.email || "Not provided"}
                     </p>
@@ -834,12 +851,10 @@ export default function ProvincialAdmins() {
                     size={18}
                     className="mt-0.5 shrink-0 text-slate-400"
                   />
-
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-500">
                       Account Role / Status
                     </p>
-
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       Provincial Admin —{" "}
                       {selectedAdmin.verification_status === "approved"
@@ -861,12 +876,10 @@ export default function ProvincialAdmins() {
                     size={18}
                     className="mt-0.5 shrink-0 text-slate-400"
                   />
-
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-500">
                       Registration Date
                     </p>
-
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       {formatDate(selectedAdmin.created_at)}
                     </p>
@@ -879,12 +892,10 @@ export default function ProvincialAdmins() {
                     size={18}
                     className="mt-0.5 shrink-0 text-slate-400"
                   />
-
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-500">
                       Account ID
                     </p>
-
                     <p className="mt-1 break-all font-mono text-xs text-slate-700">
                       {selectedAdmin.id}
                     </p>

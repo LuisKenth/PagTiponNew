@@ -107,13 +107,12 @@ export function useDashboardAccess<T = undefined>(
         update({ status: "checking", message: "" });
         router.replace("/login");
       } else if (
-        event === "SIGNED_IN" &&
+        (event === "SIGNED_IN" || event === "USER_UPDATED") &&
         session?.user.id &&
         session.user.id === verifiedUserId
       ) {
-        // Returning to a browser tab can emit SIGNED_IN for the same account.
-        // Revalidate without unmounting the dashboard and its unsaved forms.
-        schedule();
+        // Revalidate the same account without unmounting the dashboard.
+        schedule(event === "USER_UPDATED");
       } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         verifiedUserId = undefined;
         ++version;
