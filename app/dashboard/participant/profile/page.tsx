@@ -20,6 +20,7 @@ import {
 
 import { supabase } from "@/lib/supabase";
 
+import PasswordChangeCard from "@/app/dashboard/municipal/settings/components/PasswordChangeCard";
 import ParticipantNameFields from "@/app/components/ParticipantNameFields";
 import {
   normalizeParticipantName,
@@ -109,6 +110,7 @@ async function getAuthenticatedUser() {
 }
 
 export default function ParticipantProfilePage() {
+  const [accountEmail, setAccountEmail] = useState("");
   const [profile, setProfile] = useState<ParticipantProfile | null>(null);
 
   const [firstName, setFirstName] = useState("");
@@ -154,6 +156,7 @@ export default function ParticipantProfilePage() {
 
     try {
       const user = await getAuthenticatedUser();
+      setAccountEmail(user.email ?? "");
 
       const { data, error } = await supabase
         .from("profiles")
@@ -771,6 +774,7 @@ export default function ParticipantProfilePage() {
 
             {/* SIDE INFORMATION */}
             <div className="space-y-6">
+              <PasswordChangeCard email={accountEmail} />
               {/* PARTICIPANT CATEGORY */}
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">

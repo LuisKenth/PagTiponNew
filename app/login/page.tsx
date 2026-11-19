@@ -85,7 +85,15 @@ export default function LoginPage() {
       if (loginError) {
         const loginErrorMessage = loginError.message.toLowerCase();
 
-        if (loginErrorMessage.includes("invalid login credentials")) {
+        if (loginError.code === "email_not_confirmed") {
+          setErrorMessage(
+            "Please confirm your email before signing in. Check your inbox for the confirmation link.",
+          );
+        } else if (
+          loginError.code === "invalid_credentials" ||
+          (!loginError.code &&
+            loginErrorMessage.includes("invalid login credentials"))
+        ) {
           setErrorMessage(
             "Incorrect email or password. Please check your credentials and try again.",
           );

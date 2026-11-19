@@ -69,7 +69,7 @@ export default function ProvincialSettingsPage() {
 
       if (userError || !user) {
         if (active) {
-          setProfileError("Hindi ma-load ang account. Mag-log in ulit.");
+          setProfileError("Unable to load your account. Please sign in again.");
           setLoading(false);
         }
         return;
@@ -84,7 +84,7 @@ export default function ProvincialSettingsPage() {
       if (!active) return;
 
       if (error) {
-        setProfileError(error.message || "Hindi ma-load ang profile.");
+        setProfileError(error.message || "Unable to load your profile.");
         setLoading(false);
         return;
       }
@@ -107,23 +107,23 @@ export default function ProvincialSettingsPage() {
   const passwordChecks = useMemo(
     () => [
       {
-        label: "Hindi bababa sa 8 character",
+        label: "8–16 characters",
         valid: newPassword.length >= 8 && newPassword.length <= 16,
       },
       {
-        label: "May malaking titik (A–Z)",
+        label: "At least one uppercase letter (A–Z)",
         valid: /[A-Z]/.test(newPassword),
       },
       {
-        label: "May maliit na titik (a–z)",
+        label: "At least one lowercase letter (a–z)",
         valid: /[a-z]/.test(newPassword),
       },
       {
-        label: "May numero (0–9)",
+        label: "At least one number (0–9)",
         valid: /\d/.test(newPassword),
       },
       {
-        label: "May special character",
+        label: "At least one special character",
         valid: /[^A-Za-z0-9]/.test(newPassword),
       },
     ],
@@ -157,7 +157,7 @@ export default function ProvincialSettingsPage() {
     const nextName = fullName.trim();
 
     if (!nextName) {
-      setProfileError("Ilagay ang buong pangalan.");
+      setProfileError("Enter your full name.");
       return;
     }
 
@@ -174,7 +174,7 @@ export default function ProvincialSettingsPage() {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      setProfileError("Hindi ma-verify ang account. Mag-log in ulit.");
+      setProfileError("Unable to verify your account. Please sign in again.");
       setSavingProfile(false);
       return;
     }
@@ -185,7 +185,7 @@ export default function ProvincialSettingsPage() {
       .eq("id", user.id);
 
     if (error) {
-      setProfileError(error.message || "Hindi na-save ang pangalan.");
+      setProfileError(error.message || "Unable to save your name.");
       setSavingProfile(false);
       return;
     }
@@ -195,7 +195,7 @@ export default function ProvincialSettingsPage() {
     );
     setFullName(nextName);
     setEditingName(false);
-    setProfileSuccess("Na-save na ang profile.");
+    setProfileSuccess("Profile saved successfully.");
     setSavingProfile(false);
   }
 
@@ -205,22 +205,22 @@ export default function ProvincialSettingsPage() {
     setPasswordSuccess("");
 
     if (!email) {
-      setPasswordError("Walang email address ang account na ito.");
+      setPasswordError("This account has no email address.");
       return;
     }
 
     if (!currentPassword) {
-      setPasswordError("Ilagay ang current password.");
+      setPasswordError("Enter your current password.");
       return;
     }
 
     if (!isPasswordValid) {
-      setPasswordError("Sundin muna ang lahat ng password requirements.");
+      setPasswordError("Your new password must meet all password requirements.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError("Hindi magkapareho ang new at confirm password.");
+      setPasswordError("The new password and confirmation do not match.");
       return;
     }
 
@@ -232,7 +232,7 @@ export default function ProvincialSettingsPage() {
     });
 
     if (verifyError) {
-      setPasswordError("Hindi tama ang current password.");
+      setPasswordError("The current password is incorrect.");
       setSavingPassword(false);
       return;
     }
@@ -242,7 +242,7 @@ export default function ProvincialSettingsPage() {
     });
 
     if (updateError) {
-      setPasswordError(updateError.message || "Hindi napalitan ang password.");
+      setPasswordError(updateError.message || "Unable to change your password.");
       setSavingPassword(false);
       return;
     }
@@ -250,7 +250,7 @@ export default function ProvincialSettingsPage() {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-    setPasswordSuccess("Matagumpay na napalitan ang password.");
+    setPasswordSuccess("Password changed successfully.");
     setSavingPassword(false);
   }
 
@@ -528,12 +528,12 @@ export default function ProvincialSettingsPage() {
 
             {confirmPassword && newPassword !== confirmPassword && (
               <p className="text-sm text-amber-700">
-                Hindi magkapareho ang new at confirm password.
+                The new password and confirmation do not match.
               </p>
             )}
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
-              Gumamit ng malakas na password na hindi mo ginagamit sa ibang
+              Use a strong password that you do not use for another
               account.
             </div>
 

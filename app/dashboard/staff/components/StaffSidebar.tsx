@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   ScanLine,
+  Settings,
   X,
 } from "lucide-react";
 
@@ -58,6 +59,16 @@ const navigationGroups: NavigationGroup[] = [
         name: "Attendance Records",
         href: "/dashboard/staff/attendance-records",
         icon: ScanLine,
+      },
+    ],
+  },
+  {
+    label: "Account",
+    links: [
+      {
+        name: "Settings",
+        href: "/dashboard/staff/settings",
+        icon: Settings,
       },
     ],
   },
